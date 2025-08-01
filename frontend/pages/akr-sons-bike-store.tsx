@@ -345,35 +345,44 @@ export default function AKRSonsBikeStore() {
           <img
             key={img}
             src={img}
-            alt="Pulsar NS400Z Hero"
+            alt="AKR & SONS Hero"
             className={`absolute inset-0 w-full h-full object-cover transition-opacity duration-1000 ${heroIndex === idx ? 'opacity-100 z-0' : 'opacity-0 z-0'}`}
             style={{ transition: 'opacity 1s' }}
           />
         ))}
         {/* Overlay */}
         <div className="absolute inset-0 bg-black/40 z-10" />
-        {/* Hero Content */}
-        <div className="relative z-20 w-full text-center text-white px-4">
-          <h1 className="text-4xl md:text-6xl font-bold mb-6 drop-shadow-lg">Premium Bike Collection</h1>
-          <p className="text-xl mb-8 max-w-2xl mx-auto drop-shadow">
-            Discover our extensive range of motorcycles from top brands. Quality, performance, and style combined.
-          </p>
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
-            <div className="text-center">
-              <div className="text-3xl font-bold">200+</div>
-              <div className="text-sm opacity-90">NS Series</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">160+</div>
-              <div className="text-sm opacity-90">N Series</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">100+</div>
-              <div className="text-sm opacity-90">CT Series</div>
-            </div>
-            <div className="text-center">
-              <div className="text-3xl font-bold">16+</div>
-              <div className="text-sm opacity-90">Premium Models</div>
+        {/* Hero Content - Left Side */}
+        <div className="relative z-20 w-full h-full flex items-center">
+          <div className="container mx-auto px-6">
+            <div className="max-w-md md:max-w-lg">
+              <div className="bg-white/95 backdrop-blur-sm rounded-3xl p-8 md:p-10 shadow-2xl border border-white/30">
+                <h1 className="text-3xl md:text-5xl font-bold mb-4 text-emerald-800">
+                  AKR & SONS (PVT) LTD
+                </h1>
+                <p className="text-base md:text-lg mb-6 text-gray-700 leading-relaxed">
+                  Trusted Bajaj dealership offering reliable, fuel-efficient bikes and three-wheelers with flexible financing, genuine after-sales support, and a commitment to quality — for every ride, commute, or adventure.
+                </p>
+                <p className="text-sm md:text-base text-emerald-700 font-semibold mb-8">
+                  Your trusted mobility partner in Mannar and beyond.
+                </p>
+                
+                {/* Prominent CTA Button */}
+                <div className="flex flex-col sm:flex-row gap-4 justify-start items-start mb-6">
+                  <Button 
+                    className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-base md:text-lg px-6 py-3 rounded-xl shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+                    onClick={() => document.getElementById('bike-grid')?.scrollIntoView({ behavior: 'smooth' })}
+                  >
+                    <ShoppingCart className="w-4 h-4 md:w-5 md:h-5" />
+                    Explore Our Bikes
+                  </Button>
+                </div>
+                
+                {/* Promotional Banner */}
+                <div className="bg-yellow-400 text-yellow-900 font-bold text-xs md:text-sm px-4 py-2 rounded-full inline-block shadow-lg">
+                  20% off for your first purchase!
+                </div>
+              </div>
             </div>
           </div>
         </div>
@@ -401,7 +410,7 @@ export default function AKRSonsBikeStore() {
       </section>
 
       {/* Bike Grid */}
-      <section className="py-12">
+      <section id="bike-grid" className="py-12">
         <div className="relative w-screen left-1/2 right-1/2 -translate-x-1/2 px-0">
           <div className="overflow-hidden w-full">
             <div

@@ -371,8 +371,31 @@ export default function AdminDashboard() {
   const [rawCustomerData, setRawCustomerData] = useState<any[]>([]);
   const [customerSearch, setCustomerSearch] = useState('');
   // Settings state
-  type SettingsType = { mode: string; bannerImages: string[]; bannerText: string; bannerHeading: string; bannerSubheading: string; phone: string; email: string; address: string; companyName: string; socialLinks?: { facebook: string; instagram: string; whatsapp: string; twitter: string }; openingHours?: string[] };
-  const [settings, setSettings] = useState<SettingsType>({ mode: 'online', bannerImages: [], bannerText: '', bannerHeading: '', bannerSubheading: '', phone: '', email: '', address: '', companyName: '', socialLinks: { facebook: '', instagram: '', whatsapp: '', twitter: '' }, openingHours: [] });
+  type SettingsType = { 
+    mode: string; 
+    bannerImages: string[]; 
+    bannerText: string; 
+    bannerHeading: string; 
+    bannerSubheading: string; 
+    phone: string; 
+    email: string; 
+    address: string; 
+    companyName: string; 
+    socialLinks?: { 
+      facebook: string; 
+      instagram: string; 
+      whatsapp: string; 
+      twitter: string 
+    }; 
+    openingHours?: string[];
+    specialOffers?: Array<{
+      title: string;
+      description: string;
+      condition: string;
+      icon: string;
+    }>;
+  };
+  const [settings, setSettings] = useState<SettingsType>({ mode: 'online', bannerImages: [], bannerText: '', bannerHeading: '', bannerSubheading: '', phone: '', email: '', address: '', companyName: '', socialLinks: { facebook: '', instagram: '', whatsapp: '', twitter: '' }, openingHours: [], specialOffers: [] });
   const [settingsLoading, setSettingsLoading] = useState(false);
   const [settingsSaving, setSettingsSaving] = useState(false);
   const [bannerImageFiles, setBannerImageFiles] = useState<File[]>([]);
@@ -435,14 +458,35 @@ export default function AdminDashboard() {
       }
       bannerImageUrls = urls;
     }
+    
+    const requestBody = { 
+      ...settings, 
+      bannerImages: bannerImageUrls, 
+      bannerHeading: settings.bannerHeading, 
+      bannerSubheading: settings.bannerSubheading, 
+      socialLinks: settings.socialLinks, 
+      openingHours: settings.openingHours,
+      specialOffers: settings.specialOffers || []
+    };
+    
+    console.log('Saving settings with special offers:', requestBody.specialOffers);
+    
     await fetch(`${import.meta.env.VITE_API_URL}/api/settings`, {
       method: 'PUT',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ ...settings, bannerImages: bannerImageUrls, bannerHeading: settings.bannerHeading, bannerSubheading: settings.bannerSubheading, socialLinks: settings.socialLinks, openingHours: settings.openingHours })
+      body: JSON.stringify(requestBody)
     })
       .then(res => res.json())
-      .then(data => { setSettings(data); setBannerImageFiles([]); message.success('Settings saved'); })
-      .catch(() => message.error('Failed to save settings'))
+      .then(data => { 
+        console.log('Settings saved successfully:', data);
+        setSettings(data); 
+        setBannerImageFiles([]); 
+        message.success('Settings saved'); 
+      })
+      .catch((error) => {
+        console.error('Failed to save settings:', error);
+        message.error('Failed to save settings');
+      })
       .finally(() => setSettingsSaving(false));
   };
 
@@ -1601,13 +1645,13 @@ export default function AdminDashboard() {
                   </div>
               {preBookingLoading ? <Spin /> : preBookingError ? <div className="text-red-500">{preBookingError}</div> : (
                   <div className="overflow-x-auto md:overflow-visible">
-                    <Table
-                      dataSource={filteredPreBookings}
-                      columns={preBookingColumns}
-                      rowKey="_id"
-                      pagination={{ pageSize: 8 }}
+                  <Table
+                    dataSource={filteredPreBookings}
+                    columns={preBookingColumns}
+                    rowKey="_id"
+                    pagination={{ pageSize: 8 }}
                       className="rounded-xl overflow-hidden shadow-lg bg-white w-full min-w-max"
-                    />
+                  />
                   </div>
                 )}
               <Modal
@@ -1673,10 +1717,10 @@ export default function AdminDashboard() {
                       align: 'center',
                       render: (_, record) => (
                         <>
-                          <Button type="link" onClick={() => {
-                            setSelectedCustomer(record);
-                            setSelectedPurchase(record.latestPurchase);
-                          }}>View</Button>
+                        <Button type="link" onClick={() => {
+                          setSelectedCustomer(record);
+                          setSelectedPurchase(record.latestPurchase);
+                        }}>View</Button>
                           <Button type="link" danger onClick={() => handleDeleteCustomer(record._id)}>Delete</Button>
                         </>
                       )
@@ -2011,6 +2055,135 @@ export default function AdminDashboard() {
                 <label className="block font-medium mb-2">Company Name</label>
                 <input type="text" className="border px-3 py-2 rounded w-full" placeholder="Enter company name..." value={settings.companyName || ''} onChange={e => setSettings(s => ({ ...s, companyName: e.target.value }))} />
               </div>
+
+              {/* Special Offers Management */}
+              <div className="mb-6">
+                <div className="flex items-center justify-between mb-4">
+                  <label className="block font-medium">Bike Store Special Offers</label>
+                  <Button 
+                    type="primary" 
+                    size="small"
+                    onClick={() => {
+                      const newOffer = {
+                        title: '',
+                        description: '',
+                        condition: 'Only for Ready Cash Payments',
+                        icon: 'GiftOutlined'
+                      };
+                      setSettings(s => ({ 
+                        ...s, 
+                        specialOffers: [...(s.specialOffers || []), newOffer] 
+                      }));
+                    }}
+                  >
+                    Add Bike Offer
+                  </Button>
+                </div>
+                
+                <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Bike Store Special Offers:</strong> These offers will be displayed on the AKR & SONS Bike Store page. 
+                    They appear in the hero section to attract customers with exclusive deals.
+                  </p>
+                </div>
+                
+                <div className="space-y-4">
+                  {(settings.specialOffers || []).map((offer, index) => (
+                    <div key={index} className="border border-gray-200 rounded-lg p-4 bg-gray-50">
+                      <div className="flex items-center justify-between mb-3">
+                        <h4 className="font-medium">Bike Offer {index + 1}</h4>
+                        <Button 
+                          type="text" 
+                          danger 
+                          size="small"
+                          onClick={() => {
+                            setSettings(s => ({
+                              ...s,
+                              specialOffers: s.specialOffers?.filter((_, i) => i !== index) || []
+                            }));
+                          }}
+                        >
+                          Remove
+                        </Button>
+                      </div>
+                      
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Offer Title</label>
+                          <input 
+                            type="text" 
+                            className="border px-3 py-2 rounded w-full" 
+                            placeholder="e.g., 15,000 LKR Discount, Free Helmet, Registration Fee Waived"
+                            value={offer.title}
+                            onChange={e => {
+                              const newOffers = [...(settings.specialOffers || [])];
+                              newOffers[index] = { ...newOffers[index], title: e.target.value };
+                              setSettings(s => ({ ...s, specialOffers: newOffers }));
+                            }}
+                          />
+                        </div>
+                        
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Icon</label>
+                          <select 
+                            className="border px-3 py-2 rounded w-full"
+                            value={offer.icon}
+                            onChange={e => {
+                              const newOffers = [...(settings.specialOffers || [])];
+                              newOffers[index] = { ...newOffers[index], icon: e.target.value };
+                              setSettings(s => ({ ...s, specialOffers: newOffers }));
+                            }}
+                          >
+                            <option value="GiftOutlined">🎁 Gift Icon</option>
+                            <option value="DollarOutlined">💰 Dollar Icon</option>
+                            <option value="CarOutlined">🚗 Car Icon</option>
+                            <option value="ThunderboltOutlined">⚡ Lightning Icon</option>
+                            <option value="StarOutlined">⭐ Star Icon</option>
+                          </select>
+                        </div>
+                      </div>
+                      
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium mb-1">Description</label>
+                        <textarea 
+                          className="border px-3 py-2 rounded w-full" 
+                          rows={2}
+                          placeholder="e.g., Enjoy an instant discount of 15,000 LKR on your purchase. Get a full tank of petrol, a stylish jacket, and a helmet with your new ride."
+                          value={offer.description}
+                          onChange={e => {
+                            const newOffers = [...(settings.specialOffers || [])];
+                            newOffers[index] = { ...newOffers[index], description: e.target.value };
+                            setSettings(s => ({ ...s, specialOffers: newOffers }));
+                          }}
+                        />
+                      </div>
+                      
+                      <div className="mt-3">
+                        <label className="block text-sm font-medium mb-1">Condition</label>
+                        <input 
+                          type="text" 
+                          className="border px-3 py-2 rounded w-full" 
+                          placeholder="e.g., Only for Ready Cash Payments, Valid until December 2024"
+                          value={offer.condition}
+                          onChange={e => {
+                            const newOffers = [...(settings.specialOffers || [])];
+                            newOffers[index] = { ...newOffers[index], condition: e.target.value };
+                            setSettings(s => ({ ...s, specialOffers: newOffers }));
+                          }}
+                        />
+                      </div>
+                    </div>
+                  ))}
+                  
+                  {(settings.specialOffers || []).length === 0 && (
+                    <div className="text-center py-8 text-gray-500 border-2 border-dashed border-gray-200 rounded-lg">
+                      <p>No bike store special offers configured</p>
+                      <p className="text-sm">Click "Add Bike Offer" to create your first special offer for the bike store</p>
+                    </div>
+                  )}
+                </div>
+              </div>
+
               <Button type="primary" loading={settingsSaving} onClick={handleSaveSettings}>Save Settings</Button>
               </>}
             </div>

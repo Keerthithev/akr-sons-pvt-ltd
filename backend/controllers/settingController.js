@@ -47,6 +47,10 @@ exports.updateSettings = async (req, res, next) => {
     if (Array.isArray(req.body.openingHours)) {
       setting.openingHours = req.body.openingHours;
     }
+    // Handle specialOffers
+    if (Array.isArray(req.body.specialOffers)) {
+      setting.specialOffers = req.body.specialOffers;
+    }
     await setting.save();
     res.json(setting);
   } catch (err) {

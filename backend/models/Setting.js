@@ -15,7 +15,16 @@ const settingSchema = new mongoose.Schema({
     whatsapp: { type: String, default: '' },
     twitter: { type: String, default: '' }
   },
-  openingHours: { type: [String], default: [] }
+  openingHours: { type: [String], default: [] },
+  specialOffers: {
+    type: [{
+      title: { type: String, required: true },
+      description: { type: String, required: true },
+      condition: { type: String, required: true },
+      icon: { type: String, required: true }
+    }],
+    default: []
+  }
 });
 
 module.exports = mongoose.model('Setting', settingSchema); 

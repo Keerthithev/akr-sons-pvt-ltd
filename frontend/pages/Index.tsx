@@ -265,16 +265,44 @@ export default function Index() {
 
         <div className="container mx-auto px-6 relative z-10">
           <div className="mt-4">
-            {/* Left ads */}
+            {/* Main Hero Content */}
             <div className="relative w-full min-h-[320px] md:min-h-[500px] flex items-center justify-center">
               {/* Left ad cards (desktop only) */}
               <div className="hidden md:flex flex-col absolute left-4 top-1/2 -translate-y-1/2 z-10 w-56">
                 <FilmRollAdColumn companies={companies} direction="up" visibleCount={3} intervalMs={6000} />
               </div>
-              {/* Slideshow full width */}
-              <div className="w-full absolute inset-0 z-0">
-            <HeroSlideshow />
-          </div>
+              
+              {/* Main Hero Content */}
+              <div className="w-full max-w-4xl mx-auto text-center relative z-20">
+                <div className="bg-white/90 backdrop-blur-sm rounded-3xl p-8 md:p-12 shadow-2xl border border-emerald-200/50">
+                  <h1 className="text-4xl md:text-6xl font-bold text-emerald-800 mb-4">
+                    AKR Group of Companies
+                  </h1>
+                  <p className="text-lg md:text-xl text-gray-700 mb-6 max-w-2xl mx-auto">
+                    Discover, shop, and experience the best brands, vehicles, and services—all under one roof.
+                  </p>
+                  <p className="text-base md:text-lg text-emerald-700 font-semibold mb-8">
+                    Your trusted partner in Mannar and beyond.
+                  </p>
+                  
+                  {/* Prominent CTA Button */}
+                  <div className="flex flex-col sm:flex-row gap-4 justify-center items-center mb-8">
+                    <Button 
+                      className="bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-lg px-8 py-4 rounded-xl shadow-lg hover:scale-105 transition-all duration-300 flex items-center gap-2"
+                      onClick={() => window.location.href='/akr-sons-bike-store'}
+                    >
+                      <Car className="w-5 h-5" />
+                      Explore Our Services
+                    </Button>
+                  </div>
+                  
+                  {/* Promotional Banner */}
+                  <div className="bg-yellow-400 text-yellow-900 font-bold text-sm md:text-base px-6 py-3 rounded-full inline-block shadow-lg">
+                    20% off for your first purchase!
+                  </div>
+                </div>
+              </div>
+              
               {/* Quick Contact/CTA card (desktop only) */}
               <div className="hidden md:flex flex-col absolute right-4 top-1/2 -translate-y-1/2 z-10 w-72">
                 <div className="bg-white/90 rounded-xl shadow-2xl p-4 flex flex-col items-center gap-3 border border-primary/20 ring-1 ring-black/5">
@@ -302,7 +330,8 @@ export default function Index() {
                   <QuickActionSlideshow />
                 </div>
               </div>
-              {/* Mobile: show below slideshow */}
+              
+              {/* Mobile: show below hero content */}
               <div className="md:hidden flex flex-col gap-4 mt-6 w-full z-10 relative">
                 {companies.map(company => (
                   <AdCompanyCard key={company.name} company={company} />
@@ -366,12 +395,12 @@ export default function Index() {
                 ))}
               </Swiper>
             ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
-                {companies.map((company) => (
-                  <div key={company.name} className="w-full max-w-[320px] mx-auto">
-                    <CompanyCard {...company} />
-                  </div>
-                ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-8">
+            {companies.map((company) => (
+              <div key={company.name} className="w-full max-w-[320px] mx-auto">
+                  <CompanyCard {...company} />
+                </div>
+              ))}
               </div>
             )}
           </div>
