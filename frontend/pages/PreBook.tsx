@@ -530,7 +530,7 @@ export default function PreBook() {
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-700">Email</p>
-                      <p className="text-gray-600">{settings.email || 'info@akrsons.com'}</p>
+                      <p className="text-gray-600">{settings.email || 'akrfuture@gmail.com'}</p>
                     </div>
                     <div>
                       <p className="text-sm font-medium text-gray-700">Address</p>

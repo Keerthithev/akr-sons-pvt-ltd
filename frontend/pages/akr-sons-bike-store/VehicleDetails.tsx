@@ -106,7 +106,7 @@ const VehicleDetails: React.FC = () => {
   useEffect(() => {
     const fetchData = async () => {
       try {
-        setLoading(true);
+      setLoading(true);
         const [vehicleResponse, settingsResponse, prebookingsResponse] = await Promise.all([
           fetch(`${import.meta.env.VITE_API_URL}/api/vehicles/${id}`),
           fetch(`${import.meta.env.VITE_API_URL}/api/settings`),
@@ -300,7 +300,7 @@ const VehicleDetails: React.FC = () => {
               <div className="text-right">
                 <p className="text-xs text-gray-500">AKR & SONS</p>
                 <p className="text-sm font-medium text-gray-900">Bike Store</p>
-              </div>
+          </div>
             </div>
           </div>
         </div>
@@ -317,7 +317,7 @@ const VehicleDetails: React.FC = () => {
               <div className="relative aspect-[4/3] bg-white rounded-xl overflow-hidden shadow-lg">
                 <img
                   src={mainImage}
-                  alt={vehicle.name}
+                          alt={vehicle.name}
                   className="w-full h-full object-cover cursor-pointer"
                   onClick={() => {
                     // Show color-specific images in modal, not gallery images
@@ -330,29 +330,29 @@ const VehicleDetails: React.FC = () => {
                 />
                 <div className="absolute top-4 right-4 bg-white/90 backdrop-blur-sm rounded-full p-2">
                   <Camera className="h-5 w-5 text-gray-600" />
-                </div>
-              </div>
+                    </div>
+                  </div>
 
-              {/* Thumbnail Gallery */}
+                  {/* Thumbnail Gallery */}
               {vehicle.colors[selectedColor]?.images.length > 1 && (
                 <div className="grid grid-cols-4 gap-2">
                   {vehicle.colors[selectedColor].images.slice(0, 4).map((image, index) => (
                     <div
-                      key={index}
+                          key={index}
                       className="aspect-square bg-white rounded-lg overflow-hidden cursor-pointer hover:scale-105 transition-transform"
-                      onClick={() => setCurrentImageIndex(index)}
-                    >
-                      <img
+                          onClick={() => setCurrentImageIndex(index)}
+                        >
+                          <img
                         src={image}
                         alt={`${vehicle.name} ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
+                            className="w-full h-full object-cover"
+                          />
                     </div>
-                  ))}
+                      ))}
                 </div>
-              )}
+                  )}
 
-              {/* Color Selector */}
+                  {/* Color Selector */}
               {vehicle.colors.length > 1 && (
                 <div className="bg-white rounded-xl p-4 shadow-sm">
                   <div className="flex items-center justify-between mb-3">
@@ -369,33 +369,33 @@ const VehicleDetails: React.FC = () => {
                       {isAutoRotating ? "Auto" : "Manual"}
                     </button>
                   </div>
-                  <div className="flex gap-3">
+                          <div className="flex gap-3">
                     {vehicle.colors.map((color, index) => (
                       <button
-                        key={index}
-                        onClick={() => {
+                                key={index}
+                                onClick={() => {
                           setSelectedColor(index);
                           setCurrentImageIndex(0); // Reset to first image when color changes
                           setIsAutoRotating(false); // Stop auto-rotation when manually selecting
-                        }}
+                                }}
                         className={`flex-1 py-2 px-3 rounded-lg text-sm font-medium transition-colors ${
                           selectedColor === index
                             ? "bg-green-600 text-white"
                             : "bg-gray-100 text-gray-700 hover:bg-gray-200"
-                        }`}
+                                }`}
                       >
                         {color.name}
                       </button>
-                    ))}
-                  </div>
+                            ))}
+                          </div>
                   {isAutoRotating && (
                     <p className="text-xs text-gray-500 mt-2 text-center">
                       Colors will change automatically every 5 seconds
                     </p>
-                  )}
+                          )}
                 </div>
-              )}
-            </div>
+                  )}
+              </div>
 
             {/* Vehicle Info */}
             <div className="space-y-6">
@@ -406,7 +406,7 @@ const VehicleDetails: React.FC = () => {
                 <div className="flex items-center gap-4 mb-6">
                   <div className="text-3xl font-bold text-green-600">
                     {vehicle.price?.toLocaleString()} LKR
-                  </div>
+            </div>
                   <div className="flex items-center gap-1 text-sm text-gray-500">
                     <Calendar className="h-4 w-4" />
                     <span>{bookingCount} bookings</span>
@@ -509,23 +509,23 @@ const VehicleDetails: React.FC = () => {
                 {/* Mobile Gallery - Slideshow */}
                 <div className="md:hidden">
                   <div className="relative aspect-[4/3] bg-white rounded-xl overflow-hidden shadow-lg">
-                    <AnimatePresence mode="wait">
+                  <AnimatePresence mode="wait">
                       <motion.img
                         key={galleryImageIndex}
                         src={vehicle.galleryImages[galleryImageIndex] || "/hero-bg.jpg"}
                         alt={`${vehicle.name} gallery ${galleryImageIndex + 1}`}
                         className="w-full h-full object-cover cursor-pointer"
                         onClick={() => setShowGalleryModal(true)}
-                        initial={{ opacity: 0, scale: 1.1 }}
-                        animate={{ opacity: 1, scale: 1 }}
-                        exit={{ opacity: 0, scale: 0.9 }}
-                        transition={{ duration: 0.5 }}
+                      initial={{ opacity: 0, scale: 1.1 }}
+                      animate={{ opacity: 1, scale: 1 }}
+                      exit={{ opacity: 0, scale: 0.9 }}
+                      transition={{ duration: 0.5 }}
                       />
-                    </AnimatePresence>
+                  </AnimatePresence>
                     
                     {/* Navigation Buttons */}
                     {vehicle.galleryImages.length > 1 && (
-                      <>
+                    <>
                         <button
                           onClick={() => setGalleryImageIndex((galleryImageIndex - 1 + vehicle.galleryImages.length) % vehicle.galleryImages.length)}
                           className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/90 hover:bg-white text-gray-700 p-2 rounded-full shadow-lg transition-all hover:scale-110"
@@ -538,24 +538,24 @@ const VehicleDetails: React.FC = () => {
                         >
                           <ChevronRight className="h-4 w-4" />
                         </button>
-                      </>
-                    )}
+                    </>
+                  )}
 
-                    {/* Image Indicators */}
+                  {/* Image Indicators */}
                     {vehicle.galleryImages.length > 1 && (
-                      <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
+                  <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex gap-2">
                         {vehicle.galleryImages.map((_, index) => (
                           <button
-                            key={index}
+                        key={index}
                             onClick={() => setGalleryImageIndex(index)}
-                            className={`w-3 h-3 rounded-full transition-colors ${
+                        className={`w-3 h-3 rounded-full transition-colors ${
                               index === galleryImageIndex ? "bg-white" : "bg-white/50"
-                            }`}
-                          />
-                        ))}
-                      </div>
-                    )}
+                        }`}
+                      />
+                    ))}
                   </div>
+                    )}
+                </div>
                   
                   {/* Mobile Thumbnail Indicators */}
                   {vehicle.galleryImages.length > 1 && (
@@ -572,11 +572,11 @@ const VehicleDetails: React.FC = () => {
                       {vehicle.galleryImages.length > 5 && (
                         <span className="text-xs text-gray-500 ml-2">
                           +{vehicle.galleryImages.length - 5} more
-                        </span>
+                  </span>
                       )}
-                    </div>
-                  )}
                 </div>
+                  )}
+                    </div>
               </section>
             )}
 
@@ -588,11 +588,11 @@ const VehicleDetails: React.FC = () => {
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h3 className="font-semibold text-gray-900 mb-2">What's included in the price?</h3>
                     <p className="text-gray-600">The price includes basic registration, insurance, and standard accessories. Additional features may incur extra costs.</p>
-                  </div>
+                    </div>
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h3 className="font-semibold text-gray-900 mb-2">Is test drive available?</h3>
                     <p className="text-gray-600">Yes, test drives are available by appointment. Contact us to schedule your test drive.</p>
-                  </div>
+                    </div>
                   <div className="border border-gray-200 rounded-lg p-4">
                     <h3 className="font-semibold text-gray-900 mb-2">What's the warranty period?</h3>
                     <p className="text-gray-600">Standard warranty covers 2 years or 20,000 km, whichever comes first. Extended warranty options are available.</p>
@@ -622,10 +622,10 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key}</span>
                             <span className="text-gray-600">{value}</span>
-                          </div>
+                </div>
                         ))}
-                    </div>
-                  </div>
+              </div>
+            </div>
 
                   {/* Transmission & Brakes Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -642,10 +642,10 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key}</span>
                             <span className="text-gray-600">{value}</span>
-                          </div>
+                        </div>
                         ))}
-                    </div>
-                  </div>
+                      </div>
+                      </div>
 
                   {/* Dimensions & Comfort Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -662,9 +662,9 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key}</span>
                             <span className="text-gray-600">{value}</span>
-                          </div>
+                </div>
                         ))}
-                    </div>
+              </div>
                   </div>
 
                   {/* Features & Electricals Card */}
@@ -683,10 +683,10 @@ const VehicleDetails: React.FC = () => {
                             <span className="font-medium text-gray-700">{key}</span>
                             <span className="text-gray-600">{value}</span>
                           </div>
-                        ))}
-                    </div>
+                    ))}
                   </div>
                 </div>
+          </div>
 
                 {/* Other Specifications Card - Full Width */}
                 {Object.entries(vehicle.specs).some(([key]) => 
@@ -706,12 +706,12 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key}</span>
                             <span className="text-gray-600">{value}</span>
-                          </div>
+                                  </div>
                         ))}
-                    </div>
-                  </div>
+                                </div>
+                              </div>
                 )}
-              </div>
+                    </div>
             )}
           </div>
         </div>
@@ -720,7 +720,7 @@ const VehicleDetails: React.FC = () => {
       {/* Image Gallery Modal */}
       <AnimatePresence>
         {showImageGallery && (
-          <motion.div
+                        <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -779,33 +779,33 @@ const VehicleDetails: React.FC = () => {
                 <div className="flex justify-center gap-2 mt-4">
                   {currentImages.map((image, index) => (
                     <button
-                      key={index}
+                          key={index}
                       onClick={(e) => {
                         e.stopPropagation();
-                        setCurrentImageIndex(index);
-                      }}
+                            setCurrentImageIndex(index);
+                          }}
                       className={`w-16 h-12 rounded-lg overflow-hidden transition-all ${
                         index === currentImageIndex ? "ring-2 ring-white scale-110" : "opacity-60 hover:opacity-100"
                       }`}
-                    >
-                      <img
+                        >
+                          <img
                         src={image}
                         alt={`Thumbnail ${index + 1}`}
-                        className="w-full h-full object-cover"
-                      />
+                            className="w-full h-full object-cover"
+                          />
                     </button>
-                  ))}
-                </div>
-              )}
-            </div>
-          </motion.div>
+                      ))}
+                    </div>
+            )}
+          </div>
+              </motion.div>
         )}
       </AnimatePresence>
 
       {/* Gallery Modal */}
       <AnimatePresence>
         {showGalleryModal && (
-          <motion.div
+              <motion.div
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
@@ -861,9 +861,9 @@ const VehicleDetails: React.FC = () => {
               
               {/* Thumbnail Strip */}
               {vehicle.galleryImages.length > 1 && (
-                <div className="flex justify-center gap-2 mt-4">
+              <div className="flex justify-center gap-2 mt-4">
                   {vehicle.galleryImages.map((image, index) => (
-                    <button
+                  <button
                       key={index}
                       onClick={(e) => {
                         e.stopPropagation();
@@ -871,18 +871,18 @@ const VehicleDetails: React.FC = () => {
                       }}
                       className={`w-16 h-12 rounded-lg overflow-hidden transition-all ${
                         index === galleryImageIndex ? "ring-2 ring-white scale-110" : "opacity-60 hover:opacity-100"
-                      }`}
+                    }`}
                     >
                       <img
                         src={image}
                         alt={`Gallery Thumbnail ${index + 1}`}
                         className="w-full h-full object-cover"
-                      />
+                  />
                     </button>
-                  ))}
-                </div>
+                ))}
+              </div>
               )}
-            </div>
+          </div>
           </motion.div>
         )}
       </AnimatePresence>
@@ -901,7 +901,7 @@ const VehicleDetails: React.FC = () => {
               <ul className="space-y-1 text-sm">
                 <li><a href="/akr-sons-bike-store" className="hover:text-green-400">All Bikes</a></li>
                 <li><a href="/prebook" className="hover:text-green-400">Pre-Book Now</a></li>
-              </ul>
+            </ul>
           </div>
           <div>
             <div className="font-semibold mb-2">Contact</div>
@@ -935,9 +935,9 @@ const VehicleDetails: React.FC = () => {
                 {(!settings?.socialLinks?.facebook && !settings?.socialLinks?.instagram && !settings?.socialLinks?.whatsapp && !settings?.socialLinks?.twitter) && (
                   <div className="text-sm opacity-60">Social links coming soon</div>
                 )}
-              </div>
             </div>
           </div>
+        </div>
           <div className="text-center text-xs opacity-70 mt-8">© 2025 {settings?.bannerHeading}. All rights reserved.</div>
         </div>
       </footer>

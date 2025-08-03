@@ -420,11 +420,11 @@ export default function AkrSonsBikeStore() {
             <div className="space-y-2 text-sm text-gray-600">
               <div className="flex items-center space-x-2">
                 <PhoneOutlined className="text-green-600" />
-                <span>{settings?.phone || '+94 77 123 4567'}</span>
+                <span>{settings?.phone || '+94 77 311 1266'}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <MailOutlined className="text-green-600" />
-                <span>{settings?.email || 'info@akrsons.com'}</span>
+                <span>{settings?.email || 'akrfuture@gmail.com'}</span>
               </div>
               <div className="flex items-center space-x-2">
                 <EnvironmentOutlined className="text-green-600" />
