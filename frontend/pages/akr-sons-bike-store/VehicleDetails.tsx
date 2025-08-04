@@ -47,6 +47,7 @@ interface Vehicle {
   price: number;
   description: string;
   specs: Record<string, any>;
+  features?: string[];
   colors: Array<{
     name: string;
     images: string[];
@@ -57,6 +58,10 @@ interface Vehicle {
   rating?: number;
   reviewCount?: number;
   prebookCount?: number;
+  faqs?: Array<{
+    question: string;
+    answer: string;
+  }>;
 }
 
 interface SettingsType {
@@ -95,6 +100,51 @@ const VehicleDetails: React.FC = () => {
   const [bookingCount, setBookingCount] = useState(0);
   const heroRef = useRef<HTMLDivElement>(null);
   const heroImageRef = useRef<HTMLDivElement>(null);
+
+  // Function to get the appropriate unit for a spec
+  const getSpecUnit = (key: string, value: string) => {
+    const keyLower = key.toLowerCase();
+    const valueLower = value.toLowerCase();
+    
+    // If value already contains a unit, return as is
+    if (valueLower.includes('ps') || valueLower.includes('nm') || valueLower.includes('kmpl') || valueLower.includes('cc')) {
+      return value;
+    }
+    
+    // Determine unit based on key
+    if (keyLower.includes('power') || keyLower.includes('max power')) {
+      return `${value} PS`;
+    }
+    if (keyLower.includes('torque') || keyLower.includes('max torque')) {
+      return `${value} Nm`;
+    }
+    if (keyLower.includes('mileage') || keyLower.includes('fuel efficiency')) {
+      return `${value} kmpl`;
+    }
+    if (keyLower.includes('engine') && keyLower.includes('cc')) {
+      return `${value} cc`;
+    }
+    if (keyLower.includes('weight') || keyLower.includes('mass')) {
+      return `${value} kg`;
+    }
+    if (keyLower.includes('length') || keyLower.includes('width') || keyLower.includes('height')) {
+      return `${value} mm`;
+    }
+    if (keyLower.includes('tank') || keyLower.includes('capacity')) {
+      return `${value} L`;
+    }
+    if (keyLower.includes('ground clearance')) {
+      return `${value} mm`;
+    }
+    if (keyLower.includes('seat height')) {
+      return `${value} mm`;
+    }
+    if (keyLower.includes('wheelbase')) {
+      return `${value} mm`;
+    }
+    
+    return value;
+  };
 
   // Fetch global settings for footer and theme
   useEffect(() => {
@@ -430,44 +480,59 @@ const VehicleDetails: React.FC = () => {
               <div className="bg-white rounded-xl p-6 shadow-sm">
                 <h3 className="font-semibold text-gray-900 mb-4">Key Specifications</h3>
                 <div className="grid grid-cols-2 gap-4">
-                  {vehicle.specs?.['Engine Type'] && (
+                  {vehicle.specs?.['Engine(cc)'] && (
                     <div className="flex items-center gap-3">
                       <Zap className="h-5 w-5 text-green-600" />
                       <div>
                         <p className="text-sm text-gray-500">Engine</p>
-                        <p className="font-medium">{vehicle.specs['Engine Type']}</p>
+                        <p className="font-medium">{vehicle.specs['Engine(cc)']} cc</p>
                       </div>
                     </div>
                   )}
-                  {vehicle.specs?.['Max Power'] && (
+                  {vehicle.specs?.Power && (
                     <div className="flex items-center gap-3">
                       <Gauge className="h-5 w-5 text-green-600" />
                       <div>
                         <p className="text-sm text-gray-500">Power</p>
-                        <p className="font-medium">{vehicle.specs['Max Power']}</p>
+                        <p className="font-medium">{vehicle.specs.Power} PS</p>
                       </div>
                     </div>
                   )}
-                  {vehicle.specs?.['Max Torque'] && (
+                  {vehicle.specs?.Torque && (
                     <div className="flex items-center gap-3">
                       <Settings className="h-5 w-5 text-green-600" />
                       <div>
                         <p className="text-sm text-gray-500">Torque</p>
-                        <p className="font-medium">{vehicle.specs['Max Torque']}</p>
+                        <p className="font-medium">{vehicle.specs.Torque} Nm</p>
                       </div>
                     </div>
                   )}
-                  {vehicle.specs?.['Mileage'] && (
+                  {vehicle.specs?.Mileage && (
                     <div className="flex items-center gap-3">
                       <Fuel className="h-5 w-5 text-green-600" />
                       <div>
                         <p className="text-sm text-gray-500">Mileage</p>
-                        <p className="font-medium">{vehicle.specs['Mileage']}</p>
+                        <p className="font-medium">{vehicle.specs.Mileage} kmpl</p>
                       </div>
                     </div>
                   )}
                 </div>
               </div>
+
+              {/* Features Section */}
+              {vehicle.features && vehicle.features.length > 0 && (
+                <div className="bg-white rounded-xl p-6 shadow-sm">
+                  <h3 className="font-semibold text-gray-900 mb-4">Features</h3>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                    {vehicle.features.map((feature: string, index: number) => (
+                      <div key={index} className="flex items-center gap-2">
+                        <CheckCircle className="h-4 w-4 text-green-600 flex-shrink-0" />
+                        <span className="text-gray-700">{feature}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
 
               {/* Pre-Book Button */}
               <button
@@ -580,27 +645,6 @@ const VehicleDetails: React.FC = () => {
               </section>
             )}
 
-            {/* FAQ Section */}
-            {vehicle.specs && Object.keys(vehicle.specs).length > 0 && (
-              <section className="bg-white rounded-xl p-6 shadow-sm">
-                <h2 className="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
-                <div className="space-y-4">
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">What's included in the price?</h3>
-                    <p className="text-gray-600">The price includes basic registration, insurance, and standard accessories. Additional features may incur extra costs.</p>
-                    </div>
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">Is test drive available?</h3>
-                    <p className="text-gray-600">Yes, test drives are available by appointment. Contact us to schedule your test drive.</p>
-                    </div>
-                  <div className="border border-gray-200 rounded-lg p-4">
-                    <h3 className="font-semibold text-gray-900 mb-2">What's the warranty period?</h3>
-                    <p className="text-gray-600">Standard warranty covers 2 years or 20,000 km, whichever comes first. Extended warranty options are available.</p>
-                  </div>
-                </div>
-              </section>
-            )}
-
             {/* Complete Specifications */}
             {vehicle.specs && Object.keys(vehicle.specs).length > 0 && (
               <div className="space-y-6">
@@ -616,16 +660,16 @@ const VehicleDetails: React.FC = () => {
                     <div className="space-y-3">
                       {Object.entries(vehicle.specs)
                         .filter(([key]) => 
-                          ['Engine Type', 'Max Power', 'Max Torque', 'Displacement', 'Clutch', 'Fuel Type', 'Cooling System', 'Starting Method', 'Compression Ratio'].includes(key)
+                          key.startsWith('Engine & Performance_') || ['Engine(cc)', 'Power', 'Torque', 'Mileage'].includes(key)
                         )
                         .map(([key, value]) => (
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">{key}</span>
-                            <span className="text-gray-600">{value}</span>
-                </div>
+                            <span className="font-medium text-gray-700">{key.replace('Engine & Performance_', '')}</span>
+                            <span className="text-gray-600">{getSpecUnit(key, value)}</span>
+                  </div>
                         ))}
-              </div>
-            </div>
+                </div>
+                </div>
 
                   {/* Transmission & Brakes Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -636,16 +680,16 @@ const VehicleDetails: React.FC = () => {
                     <div className="space-y-3">
                       {Object.entries(vehicle.specs)
                         .filter(([key]) => 
-                          ['Gearbox', 'Transmission', 'Front Brakes', 'Rear Brakes', 'Brakes Type', 'ABS', 'Traction Control', 'Gear Shifting Pattern'].includes(key)
+                          key.startsWith('Transmission & Brakes_')
                         )
                         .map(([key, value]) => (
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">{key}</span>
-                            <span className="text-gray-600">{value}</span>
-                        </div>
+                            <span className="font-medium text-gray-700">{key.replace('Transmission & Brakes_', '')}</span>
+                            <span className="text-gray-600">{getSpecUnit(key, value)}</span>
+              </div>
                         ))}
-                      </div>
-                      </div>
+            </div>
+                        </div>
 
                   {/* Dimensions & Comfort Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -656,16 +700,16 @@ const VehicleDetails: React.FC = () => {
                     <div className="space-y-3">
                       {Object.entries(vehicle.specs)
                         .filter(([key]) => 
-                          ['Length', 'Width', 'Height', 'Ground Clearance', 'Seat Height', 'Wheelbase', 'Kerb Weight', 'Fuel Tank', 'Suspension Front', 'Suspension Rear', 'Front Tyres', 'Rear Tyres'].includes(key)
+                          key.startsWith('Dimensions & Comfort_')
                         )
                         .map(([key, value]) => (
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">{key}</span>
-                            <span className="text-gray-600">{value}</span>
-                </div>
+                            <span className="font-medium text-gray-700">{key.replace('Dimensions & Comfort_', '')}</span>
+                            <span className="text-gray-600">{getSpecUnit(key, value)}</span>
+                      </div>
                         ))}
-              </div>
-                  </div>
+                      </div>
+                </div>
 
                   {/* Features & Electricals Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -674,48 +718,40 @@ const VehicleDetails: React.FC = () => {
                       Features & Electricals
                     </h3>
                     <div className="space-y-3">
-                      {Object.entries(vehicle.specs)
+                                            {Object.entries(vehicle.specs)
                         .filter(([key]) => 
-                          ['Head Lamp', 'Tail Lamp', 'Instrument Cluster', 'Speedometer', 'Tachometer', 'Odometer', 'Tripmeter', 'Fuel Gauge', 'Battery', 'Charging System', 'Ignition', 'Security System'].includes(key)
+                          key.startsWith('Features & Electricals_')
                         )
                         .map(([key, value]) => (
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">{key}</span>
-                            <span className="text-gray-600">{value}</span>
-                          </div>
+                            <span className="font-medium text-gray-700">{key.replace('Features & Electricals_', '')}</span>
+                            <span className="text-gray-600">{getSpecUnit(key, value)}</span>
+                </div>
                     ))}
                   </div>
                 </div>
           </div>
 
-                {/* Other Specifications Card - Full Width */}
-                {Object.entries(vehicle.specs).some(([key]) => 
-                  !['Engine Type', 'Max Power', 'Max Torque', 'Displacement', 'Clutch', 'Fuel Type', 'Cooling System', 'Starting Method', 'Compression Ratio', 'Gearbox', 'Transmission', 'Front Brakes', 'Rear Brakes', 'Brakes Type', 'ABS', 'Traction Control', 'Gear Shifting Pattern', 'Length', 'Width', 'Height', 'Ground Clearance', 'Seat Height', 'Wheelbase', 'Kerb Weight', 'Fuel Tank', 'Suspension Front', 'Suspension Rear', 'Front Tyres', 'Rear Tyres', 'Head Lamp', 'Tail Lamp', 'Instrument Cluster', 'Speedometer', 'Tachometer', 'Odometer', 'Tripmeter', 'Fuel Gauge', 'Battery', 'Charging System', 'Ignition', 'Security System'].includes(key)
-                ) && (
-                  <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
-                    <h3 className="text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
-                      <Package className="h-5 w-5 text-green-600" />
-                      Other Specifications
-                    </h3>
-                    <div className="grid md:grid-cols-2 gap-4">
-                      {Object.entries(vehicle.specs)
-                        .filter(([key]) => 
-                          !['Engine Type', 'Max Power', 'Max Torque', 'Displacement', 'Clutch', 'Fuel Type', 'Cooling System', 'Starting Method', 'Compression Ratio', 'Gearbox', 'Transmission', 'Front Brakes', 'Rear Brakes', 'Brakes Type', 'ABS', 'Traction Control', 'Gear Shifting Pattern', 'Length', 'Width', 'Height', 'Ground Clearance', 'Seat Height', 'Wheelbase', 'Kerb Weight', 'Fuel Tank', 'Suspension Front', 'Suspension Rear', 'Front Tyres', 'Rear Tyres', 'Head Lamp', 'Tail Lamp', 'Instrument Cluster', 'Speedometer', 'Tachometer', 'Odometer', 'Tripmeter', 'Fuel Gauge', 'Battery', 'Charging System', 'Ignition', 'Security System'].includes(key)
-                        )
-                        .map(([key, value]) => (
-                          <div key={key} className="flex justify-between py-2 border-b border-gray-100">
-                            <span className="font-medium text-gray-700">{key}</span>
-                            <span className="text-gray-600">{value}</span>
-                                  </div>
-                        ))}
-                                </div>
-                              </div>
-                )}
                     </div>
             )}
           </div>
         </div>
       </main>
+
+      {/* FAQ Section - After Complete Specifications */}
+      {vehicle.faqs && vehicle.faqs.length > 0 && (
+        <section className="bg-white rounded-xl p-6 shadow-sm mt-8">
+          <h2 className="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
+          <div className="space-y-4">
+            {vehicle.faqs.map((faq: any, index: number) => (
+              <div key={index} className="border border-gray-200 rounded-lg p-4">
+                <h3 className="font-semibold text-gray-900 mb-2">{faq.question}</h3>
+                <p className="text-gray-600">{faq.answer}</p>
+              </div>
+            ))}
+          </div>
+        </section>
+      )}
 
       {/* Image Gallery Modal */}
       <AnimatePresence>

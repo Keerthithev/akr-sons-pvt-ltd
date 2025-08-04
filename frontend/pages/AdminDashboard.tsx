@@ -78,83 +78,290 @@ function VariantInput({ value = [], onChange }: { value: any[]; onChange: (v: an
 // GroupedSpecsInput
 const VEHICLE_SPEC_GROUPS = [
   {
-    group: 'Engine',
-    fields: [
-      { key: 'Engine Type', label: 'Engine Type' },
-      { key: 'Max Power', label: 'Max Power' },
-      { key: 'Max Torque', label: 'Max Torque' },
-      { key: 'Displacement', label: 'Displacement' },
-      { key: 'Clutch', label: 'Clutch' },
-    ]
-  },
-  {
-    group: 'Performance',
+    group: 'Engine & Performance',
     fields: [
       { key: 'Power', label: 'Power' },
       { key: 'Torque', label: 'Torque' },
       { key: 'Mileage', label: 'Mileage' },
+      { key: 'Engine(cc)', label: 'Engine(cc)' },
     ]
   },
   {
-    group: 'Brakes & Tyres',
-    fields: [
-      { key: 'Front Brakes', label: 'Front Brakes' },
-      { key: 'Rear Brakes', label: 'Rear Brakes' },
-      { key: 'Front Tyres', label: 'Front Tyres' },
-      { key: 'Rear Tyres', label: 'Rear Tyres' },
-      { key: 'Brakes Type', label: 'Brakes Type' },
-    ]
+    group: 'Transmission & Brakes',
+    fields: []
   },
   {
-    group: 'Electricals',
-    fields: [
-      { key: 'Head Lamp', label: 'Head Lamp' },
-      { key: 'Tail Lamp', label: 'Tail Lamp' },
-      { key: 'Instrument Cluster', label: 'Instrument Cluster' },
-    ]
+    group: 'Features & Electricals',
+    fields: []
   },
   {
-    group: 'Vehicle',
-    fields: [
-      { key: 'Fuel Tank', label: 'Fuel Tank' },
-      { key: 'Ground Clearance', label: 'Ground Clearance' },
-      { key: 'Kerb Weight', label: 'Kerb Weight' },
-      { key: 'Suspension Front', label: 'Suspension Front' },
-      { key: 'Suspension Rear', label: 'Suspension Rear' },
-      { key: 'Wheel Base', label: 'Wheel Base' },
-    ]
+    group: 'Dimensions & Comfort',
+    fields: []
   }
 ];
 function GroupedSpecsInput({ value = {}, onChange }: { value: Record<string, string>; onChange: (v: Record<string, string>) => void }) {
   const [openGroups, setOpenGroups] = React.useState(VEHICLE_SPEC_GROUPS.map(g => g.group));
+  const [newSpecs, setNewSpecs] = React.useState<Record<string, { key: string; value: string }>>({});
+  
   const handleInput = (key: string, val: string) => {
     onChange({ ...value, [key]: val });
   };
+
+  const handleAddSpec = (groupName: string) => {
+    const newKey = newSpecs[groupName]?.key || '';
+    const newValue = newSpecs[groupName]?.value || '';
+    if (newKey && newValue) {
+      const specKey = `${groupName}_${newKey}`;
+      handleInput(specKey, newValue);
+      setNewSpecs(prev => ({ ...prev, [groupName]: { key: '', value: '' } }));
+    }
+  };
+
+  const handleRemoveSpec = (key: string) => {
+    const updatedValue = { ...value };
+    delete updatedValue[key];
+    onChange(updatedValue);
+  };
+
+  const getGroupSpecs = (groupName: string) => {
+    return Object.entries(value).filter(([key]) => key.startsWith(`${groupName}_`));
+  };
+
+  // Function to categorize any uncategorized specs
+  const categorizeUncategorizedSpecs = () => {
+    const categorizedSpecs = { ...value };
+    const uncategorizedKeys = Object.keys(value).filter(key => 
+      !key.startsWith('Engine & Performance_') && 
+      !key.startsWith('Transmission & Brakes_') && 
+      !key.startsWith('Features & Electricals_') && 
+      !key.startsWith('Dimensions & Comfort_') &&
+      !['Engine(cc)', 'Power', 'Torque', 'Mileage'].includes(key)
+    );
+    
+    // Move uncategorized specs to appropriate categories based on key names
+    uncategorizedKeys.forEach(key => {
+      const keyLower = key.toLowerCase();
+      let newKey = key;
+      
+      if (keyLower.includes('engine') || keyLower.includes('power') || keyLower.includes('torque') || keyLower.includes('mileage') || keyLower.includes('performance')) {
+        newKey = `Engine & Performance_${key}`;
+      } else if (keyLower.includes('brake') || keyLower.includes('gear') || keyLower.includes('transmission') || keyLower.includes('tyre')) {
+        newKey = `Transmission & Brakes_${key}`;
+      } else if (keyLower.includes('electrical') || keyLower.includes('light') || keyLower.includes('instrument') || keyLower.includes('battery') || keyLower.includes('feature')) {
+        newKey = `Features & Electricals_${key}`;
+      } else if (keyLower.includes('length') || keyLower.includes('width') || keyLower.includes('height') || keyLower.includes('weight') || keyLower.includes('comfort') || keyLower.includes('dimension')) {
+        newKey = `Dimensions & Comfort_${key}`;
+      } else {
+        // Default to Engine & Performance for any remaining specs
+        newKey = `Engine & Performance_${key}`;
+      }
+      
+      if (newKey !== key) {
+        categorizedSpecs[newKey] = categorizedSpecs[key];
+        delete categorizedSpecs[key];
+      }
+    });
+    
+    return categorizedSpecs;
+  };
+
   return (
     <div className="space-y-4">
       {VEHICLE_SPEC_GROUPS.map(group => (
         <div key={group.group} className="border rounded-lg bg-gray-50">
-          <div
-            className="flex items-center justify-between px-4 py-2 cursor-pointer select-none bg-gray-100 rounded-t-lg"
-            onClick={() => setOpenGroups(open => open.includes(group.group) ? open.filter(g => g !== group.group) : [...open, group.group])}
-          >
-            <span className="font-semibold text-gray-800">{group.group}</span>
-            <span>{openGroups.includes(group.group) ? '▲' : '▼'}</span>
+          <div className="flex items-center justify-between px-4 py-2 bg-gray-100 rounded-t-lg">
+            <div 
+              className="flex items-center justify-between flex-1 cursor-pointer select-none"
+              onClick={() => setOpenGroups(open => open.includes(group.group) ? open.filter(g => g !== group.group) : [...open, group.group])}
+            >
+              <span className="font-semibold text-gray-800">{group.group}</span>
+              <span>{openGroups.includes(group.group) ? '▲' : '▼'}</span>
+            </div>
+            {group.group === 'Engine & Performance' && (
+              <button
+                type="button"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  const categorized = categorizeUncategorizedSpecs();
+                  onChange(categorized);
+                }}
+                className="ml-2 bg-blue-500 text-white px-2 py-1 rounded text-xs hover:bg-blue-600"
+                title="Categorize uncategorized specs"
+              >
+                Auto-Categorize
+              </button>
+            )}
           </div>
           {openGroups.includes(group.group) && (
-            <div className="p-4 grid grid-cols-1 md:grid-cols-2 gap-4">
-              {group.fields.map(field => (
-                <div key={field.key} className="flex flex-col">
-                  <label className="text-xs font-medium text-gray-600 mb-1">{field.label}</label>
-                  <input
-                    type="text"
-                    className="border px-3 py-2 rounded"
-                    value={value[field.key] || ''}
-                    onChange={e => handleInput(field.key, e.target.value)}
-                    placeholder={`Enter ${field.label}`}
-                  />
+            <div className="p-4 space-y-4">
+              {/* Pre-defined fields for Engine & Performance */}
+              {group.fields.length > 0 && (
+                <div className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {group.fields.map(field => (
+                      <div key={field.key} className="flex flex-col">
+                        <label className="text-xs font-medium text-gray-600 mb-1">{field.label}</label>
+                        <input
+                          type="text"
+                          className="border px-3 py-2 rounded"
+                          value={value[field.key] || ''}
+                          onChange={e => handleInput(field.key, e.target.value)}
+                          placeholder={`Enter ${field.label}`}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                  
+                  {/* Additional custom specs for Engine & Performance */}
+                  <div className="border-t pt-4">
+                    <h4 className="text-sm font-medium text-gray-700 mb-3">Additional Engine & Performance Specs</h4>
+                    {/* Existing custom specs in this group */}
+                    {getGroupSpecs(group.group).map(([key, val]) => (
+                      <div key={key} className="flex items-center gap-2 mb-2">
+                        <input
+                          type="text"
+                          value={key.replace(`${group.group}_`, '')}
+                          onChange={(e) => {
+                            const newKey = `${group.group}_${e.target.value}`;
+                            const updatedValue = { ...value };
+                            delete updatedValue[key];
+                            updatedValue[newKey] = val;
+                            onChange(updatedValue);
+                          }}
+                          className="border px-3 py-2 rounded text-sm flex-1"
+                          placeholder="Specification name"
+                        />
+                        <input
+                          type="text"
+                          value={val}
+                          onChange={(e) => handleInput(key, e.target.value)}
+                          className="border px-3 py-2 rounded text-sm flex-1"
+                          placeholder="Value"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveSpec(key)}
+                          className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600"
+                        >
+                          Remove
+                        </button>
+                      </div>
+                    ))}
+                    
+                    {/* Add new custom spec */}
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={newSpecs[group.group]?.key || ''}
+                        onChange={(e) => setNewSpecs(prev => ({ 
+                          ...prev, 
+                          [group.group]: { 
+                            key: e.target.value, 
+                            value: prev[group.group]?.value || '' 
+                          } 
+                        }))}
+                        placeholder="Specification name"
+                        className="border px-3 py-2 rounded text-sm flex-1"
+                      />
+                      <input
+                        type="text"
+                        value={newSpecs[group.group]?.value || ''}
+                        onChange={(e) => setNewSpecs(prev => ({ 
+                          ...prev, 
+                          [group.group]: { 
+                            key: prev[group.group]?.key || '', 
+                            value: e.target.value 
+                          } 
+                        }))}
+                        placeholder="Value"
+                        className="border px-3 py-2 rounded text-sm flex-1"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleAddSpec(group.group)}
+                        className="bg-green-500 text-white px-3 py-2 rounded text-sm hover:bg-green-600"
+                      >
+                        Add
+                      </button>
+                    </div>
+                  </div>
                 </div>
-              ))}
+              )}
+              
+              {/* Custom specifications for other groups */}
+              {group.fields.length === 0 && (
+                <div className="space-y-3">
+                  {/* Existing specs in this group */}
+                  {getGroupSpecs(group.group).map(([key, val]) => (
+                    <div key={key} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={key.replace(`${group.group}_`, '')}
+                        onChange={(e) => {
+                          const newKey = `${group.group}_${e.target.value}`;
+                          const updatedValue = { ...value };
+                          delete updatedValue[key];
+                          updatedValue[newKey] = val;
+                          onChange(updatedValue);
+                        }}
+                        className="border px-3 py-2 rounded text-sm flex-1"
+                        placeholder="Specification name"
+                      />
+                      <input
+                        type="text"
+                        value={val}
+                        onChange={(e) => handleInput(key, e.target.value)}
+                        className="border px-3 py-2 rounded text-sm flex-1"
+                        placeholder="Value"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveSpec(key)}
+                        className="bg-red-500 text-white px-3 py-2 rounded text-sm hover:bg-red-600"
+                      >
+                        Remove
+                      </button>
+                    </div>
+                  ))}
+                  
+                  {/* Add new spec */}
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={newSpecs[group.group]?.key || ''}
+                      onChange={(e) => setNewSpecs(prev => ({ 
+                        ...prev, 
+                        [group.group]: { 
+                          key: e.target.value, 
+                          value: prev[group.group]?.value || '' 
+                        } 
+                      }))}
+                      placeholder="Specification name"
+                      className="border px-3 py-2 rounded text-sm flex-1"
+                    />
+                    <input
+                      type="text"
+                      value={newSpecs[group.group]?.value || ''}
+                      onChange={(e) => setNewSpecs(prev => ({ 
+                        ...prev, 
+                        [group.group]: { 
+                          key: prev[group.group]?.key || '', 
+                          value: e.target.value 
+                        } 
+                      }))}
+                      placeholder="Value"
+                      className="border px-3 py-2 rounded text-sm flex-1"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => handleAddSpec(group.group)}
+                      className="bg-green-500 text-white px-3 py-2 rounded text-sm hover:bg-green-600"
+                    >
+                      Add
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
@@ -649,6 +856,9 @@ export default function AdminDashboard() {
         galleryImageUrls = await uploadGalleryImagesToCloudinary();
       }
       console.log('Brochure before submit:', vehicleForm.brochure);
+      console.log('Specs before submit:', vehicleForm.specs);
+      console.log('Category before submit:', vehicleForm.category);
+      console.log('Full vehicleForm:', vehicleForm);
       const payload = {
         ...vehicleForm,
         price: Number(vehicleForm.price),
@@ -656,6 +866,7 @@ export default function AdminDashboard() {
         company: selectedCompany?._id,
         brochure: vehicleForm.brochure || ""
       };
+      console.log('Full payload:', payload);
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicles/company/${selectedCompany?._id}`,
         {
         method: "POST",
@@ -663,7 +874,11 @@ export default function AdminDashboard() {
         body: JSON.stringify(payload)
         }
       );
-      if (!res.ok) throw new Error("Failed to add vehicle");
+      if (!res.ok) {
+        const errorText = await res.text();
+        console.error('Server error response:', errorText);
+        throw new Error(`Failed to add vehicle: ${res.status} ${res.statusText}`);
+      }
       
       // Show success message
       if (galleryImageUrls.length > 0) {
@@ -721,6 +936,7 @@ export default function AdminDashboard() {
 
   const handleAddVehicleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
+    console.log('Form field change:', name, value);
     setVehicleForm(f => ({ ...f, [name]: value }));
   };
 
@@ -1722,7 +1938,6 @@ export default function AdminDashboard() {
                           <label className="block font-medium mb-2">Gallery Images</label>
                           <div className="space-y-3">
                             {/* Current Gallery Images */}
-                            {console.log('Edit form - gallery images:', editVehicleData?.galleryImages)}
                             {(editVehicleData.galleryImages && editVehicleData.galleryImages.length > 0) || (editGalleryImagePreviews && editGalleryImagePreviews.length > 0) ? (
                               <div className="grid grid-cols-3 gap-2 mb-3">
                                 {/* Show existing gallery images */}

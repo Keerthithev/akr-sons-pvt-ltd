@@ -719,8 +719,8 @@ export default function AkrSonsBikeStore() {
                     console.log('Gallery images:', bike.galleryImages);
                     console.log('Direct images:', bike.images);
                     
-                    // Get specs from the backend data structure
-                    const engine = bike.specs?.['Engine Type'] || bike.specs?.Displacement || bike.specs?.Engine;
+                    // Get specs from the backend data structure with proper units
+                    const engine = bike.specs?.['Engine(cc)'] || bike.specs?.['Engine Type'] || bike.specs?.Displacement || bike.specs?.Engine;
                     const power = bike.specs?.Power || bike.specs?.['Max Power'];
                     const torque = bike.specs?.Torque || bike.specs?.['Max Torque'];
                     const mileage = bike.specs?.Mileage;
@@ -801,9 +801,9 @@ export default function AkrSonsBikeStore() {
 
                         {/* Specifications */}
                         <div className="text-sm text-gray-600 mb-3 space-y-1">
-                          {engine && <div>Engine: <span className="font-medium">{engine}</span></div>}
-                          {power && <div>Power: <span className="font-medium">{power}</span></div>}
-                          {torque && <div>Torque: <span className="font-medium">{torque}</span></div>}
+                          {engine && <div>Engine: <span className="font-medium">{engine} cc</span></div>}
+                          {power && <div>Power: <span className="font-medium">{power} PS</span></div>}
+                          {torque && <div>Torque: <span className="font-medium">{torque} Nm</span></div>}
                           {mileage && <div>Mileage: <span className="font-medium">{mileage} kmpl</span></div>}
                         </div>
 
