@@ -329,6 +329,7 @@ export default function AdminDashboard() {
   const ADD_STEPS = ["Basic Info", "Features & Specs", "Colors", "Variants", "FAQs & Gallery"];
   const [galleryImageFiles, setGalleryImageFiles] = useState<File[]>([]);
   const [galleryImagePreviews, setGalleryImagePreviews] = useState<string[]>([]);
+  const [galleryImageUploading, setGalleryImageUploading] = useState(false);
   const [vehicleForm, setVehicleForm] = useState<any>({
     vehicleType: "Motorcycle",
     name: "",
@@ -362,6 +363,7 @@ export default function AdminDashboard() {
   // Add state for gallery image uploads in edit modal
   const [editGalleryImageFiles, setEditGalleryImageFiles] = useState<File[]>([]);
   const [editGalleryImagePreviews, setEditGalleryImagePreviews] = useState<string[]>([]);
+  const [editGalleryImageUploading, setEditGalleryImageUploading] = useState(false);
   // Add state for selected vehicle price
   const [selectedVehiclePrice, setSelectedVehiclePrice] = useState<number>(0);
   const [selectedCustomerPurchase, setSelectedCustomerPurchase] = useState<any>(null);
@@ -501,6 +503,8 @@ export default function AdminDashboard() {
   };
   // Handler to open edit modal
   const openEditModal = (vehicle: any) => {
+    console.log('Opening edit modal for vehicle:', vehicle);
+    console.log('Gallery images:', vehicle.galleryImages);
     setEditVehicleData({ ...vehicle });
     setEditStep(0);
     setEditModalOpen(true);
@@ -549,6 +553,14 @@ export default function AdminDashboard() {
         }
       );
       if (!res.ok) throw new Error("Failed to update vehicle");
+      
+      // Show success message
+      if (galleryImageUrls.length > 0) {
+        message.success(`Vehicle updated successfully with ${galleryImageUrls.length} new gallery image(s)!`);
+      } else {
+        message.success('Vehicle updated successfully!');
+      }
+      
       setEditModalOpen(false);
       setEditVehicleData(null);
       setEditBrochureFile(null);
@@ -574,19 +586,24 @@ export default function AdminDashboard() {
   // Upload gallery images to Cloudinary for edit modal
   async function uploadEditGalleryImagesToCloudinary() {
     if (!CLOUDINARY_UPLOAD_PRESET || !CLOUDINARY_CLOUD_NAME) return [];
+    setEditGalleryImageUploading(true);
     const urls: string[] = [];
-    for (const file of editGalleryImageFiles) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-        method: "POST",
-        body: formData
-      });
-      const data = await res.json();
-      if (data.secure_url) urls.push(data.secure_url);
+    try {
+      for (const file of editGalleryImageFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (data.secure_url) urls.push(data.secure_url);
+      }
+      return urls;
+    } finally {
+      setEditGalleryImageUploading(false);
     }
-    return urls;
   }
 
   // Add fetchVehicles function
@@ -647,6 +664,14 @@ export default function AdminDashboard() {
         }
       );
       if (!res.ok) throw new Error("Failed to add vehicle");
+      
+      // Show success message
+      if (galleryImageUrls.length > 0) {
+        message.success(`Vehicle added successfully with ${galleryImageUrls.length} gallery image(s)!`);
+      } else {
+        message.success('Vehicle added successfully!');
+      }
+      
       setAddModalOpen(false);
       setVehicleForm({ vehicleType: "Motorcycle", name: "", category: "", price: "", description: "", features: [], specs: {}, colors: [], variants: [], faqs: [], images: [], galleryImages: [], rating: "" });
       setGalleryImageFiles([]);
@@ -668,21 +693,24 @@ export default function AdminDashboard() {
 
   const uploadGalleryImagesToCloudinary = async () => {
     if (!CLOUDINARY_UPLOAD_PRESET || !CLOUDINARY_CLOUD_NAME) return [];
-    setAddVehicleLoading(true);
+    setGalleryImageUploading(true);
     const urls: string[] = [];
-    for (const file of galleryImageFiles) {
-      const formData = new FormData();
-      formData.append("file", file);
-      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-        method: "POST",
-        body: formData
-      });
-      const data = await res.json();
-      if (data.secure_url) urls.push(data.secure_url);
+    try {
+      for (const file of galleryImageFiles) {
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+          method: "POST",
+          body: formData
+        });
+        const data = await res.json();
+        if (data.secure_url) urls.push(data.secure_url);
+      }
+      return urls;
+    } finally {
+      setGalleryImageUploading(false);
     }
-    setAddVehicleLoading(false);
-    return urls;
   };
 
   const handleFeatureChange = (features: string[]) => setVehicleForm(f => ({ ...f, features }));
@@ -1408,11 +1436,95 @@ export default function AdminDashboard() {
                             <VariantInput value={vehicleForm.variants} onChange={handleVariantChange} />
                         )}
                         {addStep === 4 && (
-                            <FaqsInput value={vehicleForm.faqs} onChange={handleFaqsChange} />
-                        )}
-                        {addStep === 4 && (
                           <>
                             <FaqsInput value={vehicleForm.faqs} onChange={handleFaqsChange} />
+                            
+                            {/* Gallery Images */}
+                            <div className="mt-6">
+                              <label className="block font-medium mb-2">Gallery Images</label>
+                              <div className="space-y-3">
+                                {/* Current Gallery Images */}
+                                {(vehicleForm.galleryImages && vehicleForm.galleryImages.length > 0) || (galleryImagePreviews && galleryImagePreviews.length > 0) && (
+                                  <div className="grid grid-cols-3 gap-2 mb-3">
+                                    {/* Show existing gallery images */}
+                                    {vehicleForm.galleryImages && vehicleForm.galleryImages.map((img: string, idx: number) => (
+                                      <div key={`existing-${idx}`} className="relative">
+                                        <img 
+                                          src={img} 
+                                          alt={`Gallery ${idx + 1}`} 
+                                          className="w-full h-20 object-cover rounded border"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newImages = vehicleForm.galleryImages.filter((_: string, i: number) => i !== idx);
+                                            setVehicleForm(f => ({ ...f, galleryImages: newImages }));
+                                          }}
+                                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                    
+                                    {/* Show new preview images */}
+                                    {galleryImagePreviews && galleryImagePreviews.map((img: string, idx: number) => (
+                                      <div key={`preview-${idx}`} className="relative">
+                                        <img 
+                                          src={img} 
+                                          alt={`New Gallery ${idx + 1}`} 
+                                          className="w-full h-20 object-cover rounded border"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => {
+                                            const newFiles = galleryImageFiles.filter((_: File, i: number) => i !== idx);
+                                            const newPreviews = galleryImagePreviews.filter((_: string, i: number) => i !== idx);
+                                            setGalleryImageFiles(newFiles);
+                                            setGalleryImagePreviews(newPreviews);
+                                          }}
+                                          className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                        >
+                                          ×
+                                        </button>
+                                      </div>
+                                    ))}
+                                  </div>
+                                )}
+                                
+                                {/* Upload New Gallery Images */}
+                                <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                                  <input
+                                    type="file"
+                                    multiple
+                                    accept="image/*"
+                                    onChange={handleGalleryImageChange}
+                                    className="hidden"
+                                    id="gallery-images"
+                                  />
+                                  <label htmlFor="gallery-images" className="cursor-pointer">
+                                    <div className="text-gray-600 hover:text-gray-800 transition-colors">
+                                      <div className="text-lg mb-2">📷</div>
+                                      <div className="font-medium">Click to upload gallery images</div>
+                                      <div className="text-sm text-gray-500">Hold Ctrl/Cmd to select multiple images</div>
+                                    </div>
+                                  </label>
+                                </div>
+                                
+                                {(vehicleForm.galleryImages && vehicleForm.galleryImages.length > 0) || (galleryImagePreviews && galleryImagePreviews.length > 0) && (
+                                  <div className="text-xs text-gray-600">
+                                    {((vehicleForm.galleryImages?.length || 0) + (galleryImagePreviews?.length || 0))} image(s) selected
+                                  </div>
+                                )}
+                                
+                                {galleryImageUploading && (
+                                  <div className="text-xs text-blue-600 mt-1">
+                                    📤 Uploading gallery images...
+                                  </div>
+                                )}
+                              </div>
+                            </div>
+
                             <label className="block font-medium mb-1 mt-4">Brochure (PDF)</label>
                             {vehicleForm.brochure && (
                               <div className="mb-2"><a href={vehicleForm.brochure} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline">View current brochure</a></div>
@@ -1604,6 +1716,94 @@ export default function AdminDashboard() {
             {editStep === 4 && (
                         <>
                         <FaqsInput value={editVehicleData.faqs} onChange={faqs => setEditVehicleData(f => ({ ...f, faqs }))} />
+                        
+                        {/* Gallery Images */}
+                        <div className="mt-6">
+                          <label className="block font-medium mb-2">Gallery Images</label>
+                          <div className="space-y-3">
+                            {/* Current Gallery Images */}
+                            {console.log('Edit form - gallery images:', editVehicleData?.galleryImages)}
+                            {(editVehicleData.galleryImages && editVehicleData.galleryImages.length > 0) || (editGalleryImagePreviews && editGalleryImagePreviews.length > 0) ? (
+                              <div className="grid grid-cols-3 gap-2 mb-3">
+                                {/* Show existing gallery images */}
+                                {editVehicleData.galleryImages && editVehicleData.galleryImages.map((img: string, idx: number) => (
+                                  <div key={`existing-${idx}`} className="relative">
+                                    <img 
+                                      src={img} 
+                                      alt={`Gallery ${idx + 1}`} 
+                                      className="w-full h-20 object-cover rounded border"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newImages = editVehicleData.galleryImages.filter((_: string, i: number) => i !== idx);
+                                        setEditVehicleData(f => ({ ...f, galleryImages: newImages }));
+                                      }}
+                                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                                
+                                {/* Show new preview images */}
+                                {editGalleryImagePreviews && editGalleryImagePreviews.map((img: string, idx: number) => (
+                                  <div key={`preview-${idx}`} className="relative">
+                                    <img 
+                                      src={img} 
+                                      alt={`New Gallery ${idx + 1}`} 
+                                      className="w-full h-20 object-cover rounded border"
+                                    />
+                                    <button
+                                      type="button"
+                                      onClick={() => {
+                                        const newFiles = editGalleryImageFiles.filter((_: File, i: number) => i !== idx);
+                                        const newPreviews = editGalleryImagePreviews.filter((_: string, i: number) => i !== idx);
+                                        setEditGalleryImageFiles(newFiles);
+                                        setEditGalleryImagePreviews(newPreviews);
+                                      }}
+                                      className="absolute -top-1 -right-1 bg-red-500 text-white rounded-full w-5 h-5 flex items-center justify-center text-xs hover:bg-red-600"
+                                    >
+                                      ×
+                                    </button>
+                                  </div>
+                                ))}
+                              </div>
+                            ) : null}
+                            
+                            {/* Upload New Gallery Images */}
+                            <div className="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center hover:border-gray-400 transition-colors">
+                              <input
+                                type="file"
+                                multiple
+                                accept="image/*"
+                                onChange={handleEditGalleryImageChange}
+                                className="hidden"
+                                id="edit-gallery-images"
+                              />
+                              <label htmlFor="edit-gallery-images" className="cursor-pointer">
+                                <div className="text-gray-600 hover:text-gray-800 transition-colors">
+                                  <div className="text-lg mb-2">📷</div>
+                                  <div className="font-medium">Click to upload gallery images</div>
+                                  <div className="text-sm text-gray-500">Hold Ctrl/Cmd to select multiple images</div>
+                                </div>
+                              </label>
+                            </div>
+                            
+                            {(editVehicleData.galleryImages && editVehicleData.galleryImages.length > 0) || (editGalleryImagePreviews && editGalleryImagePreviews.length > 0) ? (
+                              <div className="text-xs text-gray-600">
+                                {((editVehicleData.galleryImages?.length || 0) + (editGalleryImagePreviews?.length || 0))} image(s) selected
+                              </div>
+                            ) : null}
+                            
+                            {editGalleryImageUploading && (
+                              <div className="text-xs text-blue-600 mt-1">
+                                📤 Uploading gallery images...
+                              </div>
+                            )}
+                          </div>
+                        </div>
+
                 <label className="block font-medium mb-1 mt-4">Brochure (PDF)</label>
                 {editVehicleData.brochure && (
                   <div className="mb-2"><a href={editVehicleData.brochure} target="_blank" rel="noopener noreferrer" className="text-emerald-700 underline">View current brochure</a></div>
@@ -1630,7 +1830,7 @@ export default function AdminDashboard() {
                       <div className="flex justify-between mt-6">
                       {editStep > 0 && <Button type="default" onClick={() => setEditStep(editStep - 1)}>Back</Button>}
                       {editStep < EDIT_STEPS.length - 1 && <Button type="primary" onClick={() => setEditStep(editStep + 1)}>Next</Button>}
-                      {editStep === EDIT_STEPS.length - 1 && <Button type="primary" htmlType="submit" loading={addVehicleLoading || editBrochureUploading} disabled={addVehicleLoading || editBrochureUploading} block size="large">{addVehicleLoading || editBrochureUploading ? "Saving..." : "Save Changes"}</Button>}
+                      {editStep === EDIT_STEPS.length - 1 && <Button type="primary" htmlType="submit" loading={addVehicleLoading || editBrochureUploading || editGalleryImageUploading} disabled={addVehicleLoading || editBrochureUploading || editGalleryImageUploading} block size="large">{addVehicleLoading || editBrochureUploading || editGalleryImageUploading ? "Saving..." : "Save Changes"}</Button>}
                       </div>
                     </form>
                   )}
