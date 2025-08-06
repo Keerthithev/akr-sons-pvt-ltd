@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { motion, AnimatePresence } from "framer-motion";
+import SEO from '../../components/SEO';
 import {
   ArrowLeft,
   ChevronLeft,
@@ -334,7 +335,14 @@ const VehicleDetails: React.FC = () => {
   });
 
   return (
-    <div className="min-h-screen bg-gray-50">
+    <>
+      <SEO 
+        title={`${vehicle.name} - ${vehicle.category} | AKR & Sons Sri Lanka`}
+        description={`Explore the ${vehicle.name} ${vehicle.category} at AKR & Sons. Price: LKR ${vehicle.price.toLocaleString()}. ${vehicle.description}`}
+        keywords={`${vehicle.name}, ${vehicle.category}, Bajaj, motorcycle, scooter, Sri Lanka, AKR Sons, ${vehicle.price}`}
+        canonical={`https://akr.lk/akr-sons-bike-store/${vehicle._id}`}
+      />
+      <div className="min-h-screen bg-gray-50">
       {/* Header */}
       <header className="bg-white shadow-sm border-b">
         <div className="container mx-auto px-4 sm:px-6 py-4">
@@ -979,6 +987,7 @@ const VehicleDetails: React.FC = () => {
       </footer>
   
     </div>
+    </>
   );
 };
 

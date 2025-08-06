@@ -12,3 +12,9 @@ Allow: /
 
 User-agent: *
 Allow: /
+
+# Sitemap
+Sitemap: https://akr.lk/sitemap.xml
+
+# Crawl-delay (optional - helps with server load)
+Crawl-delay: 1

@@ -3,6 +3,7 @@ import useEmblaCarousel from 'embla-carousel-react';
 import { Row, Col, Card, Button, Typography, Badge, Spin, message, Modal, Tag, Select, Image, Grid, Collapse, Drawer } from "antd"
 import { ArrowLeftOutlined, PhoneOutlined, MailOutlined, EnvironmentOutlined, EyeOutlined, CalendarOutlined, StarFilled, ShoppingCartOutlined, LeftOutlined, RightOutlined, PictureOutlined, ThunderboltOutlined, HomeOutlined, SmileOutlined, SearchOutlined, HeartOutlined, InfoCircleOutlined, MenuOutlined, CloseOutlined, GiftOutlined, DollarOutlined, CarOutlined } from "@ant-design/icons"
 import { useNavigate } from "react-router-dom"
+import SEO from '../components/SEO';
 
 type SettingsType = {
   mode: string;
@@ -307,7 +308,14 @@ export default function AkrSonsBikeStore() {
   const selectedBikesData = vehicles.filter(bike => selectedBikes.includes(bike._id));
 
   return (
-    <div style={{ minHeight: "100vh", background: "#ffffff" }}>
+    <>
+      <SEO 
+        title="AKR & Sons - Bajaj Dealer in Sri Lanka | Motorcycle & Scooter Dealership"
+        description="AKR & Sons is the leading Bajaj motorcycle and scooter dealer in Sri Lanka. Explore our wide range of bikes, scooters, and commercial vehicles. Visit us for the best deals and financing options."
+        keywords="Bajaj dealer Sri Lanka, motorcycle dealer, scooter dealer, bike shop, AKR Sons, Bajaj bikes, motorcycle financing, scooter financing, Sri Lanka motorcycles"
+        canonical="https://akr.lk/akr-sons-bike-store"
+      />
+      <div style={{ minHeight: "100vh", background: "#ffffff" }}>
       {/* Professional Mobile-Responsive Header */}
       <header className="bg-white shadow-sm border-b sticky top-0 z-50">
         <div className="container mx-auto px-4 sm:px-6 py-3">
@@ -1362,5 +1370,6 @@ export default function AkrSonsBikeStore() {
         </div>
       </footer>
     </div>
+    </>
   )
 } 
