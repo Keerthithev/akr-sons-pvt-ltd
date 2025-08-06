@@ -21,7 +21,9 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 const allowedOrigins = [
   'https://akrsonspvtltd.netlify.app',
+  'https://jazzy-lokum-43b747.netlify.app', // current deployment
   'http://localhost:8080', // your local frontend
+  'http://localhost:8081', // alternate local port
 ];
 app.use(cors({
   origin: allowedOrigins,
