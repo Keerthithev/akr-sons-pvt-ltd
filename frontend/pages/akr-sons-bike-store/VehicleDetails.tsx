@@ -666,10 +666,10 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key.replace('Engine & Performance_', '')}</span>
                             <span className="text-gray-600">{getSpecUnit(key, value)}</span>
-                  </div>
+                    </div>
                         ))}
-                </div>
-                </div>
+                    </div>
+                  </div>
 
                   {/* Transmission & Brakes Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -686,10 +686,10 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key.replace('Transmission & Brakes_', '')}</span>
                             <span className="text-gray-600">{getSpecUnit(key, value)}</span>
-              </div>
+                </div>
                         ))}
-            </div>
-                        </div>
+                </div>
+              </div>
 
                   {/* Dimensions & Comfort Card */}
                   <div className="bg-white rounded-xl p-6 shadow-sm border border-gray-100">
@@ -706,7 +706,7 @@ const VehicleDetails: React.FC = () => {
                           <div key={key} className="flex justify-between py-2 border-b border-gray-100">
                             <span className="font-medium text-gray-700">{key.replace('Dimensions & Comfort_', '')}</span>
                             <span className="text-gray-600">{getSpecUnit(key, value)}</span>
-                      </div>
+            </div>
                         ))}
                       </div>
                 </div>
@@ -727,12 +727,12 @@ const VehicleDetails: React.FC = () => {
                             <span className="font-medium text-gray-700">{key.replace('Features & Electricals_', '')}</span>
                             <span className="text-gray-600">{getSpecUnit(key, value)}</span>
                 </div>
-                    ))}
-                  </div>
+                        ))}
+                      </div>
                 </div>
-          </div>
+              </div>
 
-                    </div>
+                  </div>
             )}
           </div>
         </div>
@@ -742,16 +742,16 @@ const VehicleDetails: React.FC = () => {
       {vehicle.faqs && vehicle.faqs.length > 0 && (
         <section className="bg-white rounded-xl p-6 shadow-sm mt-8">
           <h2 className="text-2xl font-bold text-gray-900 mb-6">Frequently Asked Questions</h2>
-          <div className="space-y-4">
+                    <div className="space-y-4">
             {vehicle.faqs.map((faq: any, index: number) => (
               <div key={index} className="border border-gray-200 rounded-lg p-4">
                 <h3 className="font-semibold text-gray-900 mb-2">{faq.question}</h3>
                 <p className="text-gray-600">{faq.answer}</p>
-              </div>
-            ))}
-          </div>
+                                  </div>
+                      ))}
+                    </div>
         </section>
-      )}
+            )}
 
       {/* Image Gallery Modal */}
       <AnimatePresence>

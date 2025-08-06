@@ -301,7 +301,7 @@ export default function Index() {
                     20% off for your first purchase!
                   </div>
                 </div>
-              </div>
+          </div>
               
               {/* Quick Contact/CTA card (desktop only) */}
               <div className="hidden md:flex flex-col absolute right-4 top-1/2 -translate-y-1/2 z-10 w-72">

@@ -14,6 +14,7 @@ import PreBook from "./pages/PreBook";
 import Terms from "./pages/terms";
 
 import AdminLogin from "./pages/admin-login";
+import ProtectedRoute from "./components/ProtectedRoute";
 
 const queryClient = new QueryClient();
 
@@ -28,7 +29,11 @@ const App = () => (
           <Route path="/akr-sons-bike-store" element={<AkrSonsBikeStore />} />
           <Route path="/akr-sons-bike-store/:id" element={<VehicleDetails />} />
 
-          <Route path="/admin/dashboard" element={<AdminDashboard />} />
+          <Route path="/admin/dashboard" element={
+            <ProtectedRoute>
+              <AdminDashboard />
+            </ProtectedRoute>
+          } />
           <Route path="/prebook" element={<PreBook />} />
           <Route path="/terms" element={<Terms />} />
           <Route path="/admin-login" element={<AdminLogin />} />

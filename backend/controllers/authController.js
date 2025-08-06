@@ -29,4 +29,22 @@ exports.login = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+exports.verify = async (req, res, next) => {
+  try {
+    // The protect middleware will handle token verification
+    // If we reach here, the token is valid
+    res.json({
+      success: true,
+      user: {
+        _id: req.user._id,
+        name: req.user.name,
+        email: req.user.email,
+        isAdmin: req.user.isAdmin,
+      }
+    });
+  } catch (err) {
+    next(err);
+  }
 }; 

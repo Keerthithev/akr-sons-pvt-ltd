@@ -1,12 +1,25 @@
 import React, { useState } from "react";
 import { DialogContent, DialogTitle, DialogDescription } from "../components/ui/dialog";
 import { Button } from "../components/ui/button";
+import { useNavigate, useLocation } from "react-router-dom";
 
 export default function AdminLogin() {
   const [adminEmail, setAdminEmail] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminLoading, setAdminLoading] = useState(false);
+  const navigate = useNavigate();
+  const location = useLocation();
+
+  // Check if user is already logged in
+  React.useEffect(() => {
+    const isAdmin = localStorage.getItem('isAdmin');
+    const token = localStorage.getItem('adminToken');
+    
+    if (isAdmin && token) {
+      navigate('/admin/dashboard');
+    }
+  }, [navigate]);
 
   const handleAdminLogin = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -33,7 +46,10 @@ export default function AdminLogin() {
       localStorage.setItem("adminToken", data.token);
       localStorage.setItem("adminName", data.name);
       localStorage.setItem("adminEmail", data.email);
-      window.location.href = "/admin/dashboard";
+      
+      // Navigate to dashboard or the intended destination
+      const from = location.state?.from?.pathname || '/admin/dashboard';
+      navigate(from, { replace: true });
     } catch (err) {
       setAdminError("Unable to connect to server. Please try again later.");
     } finally {

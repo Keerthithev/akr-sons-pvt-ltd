@@ -170,12 +170,12 @@ function GroupedSpecsInput({ value = {}, onChange }: { value: Record<string, str
       {VEHICLE_SPEC_GROUPS.map(group => (
         <div key={group.group} className="border rounded-lg bg-gray-50">
           <div className="flex items-center justify-between px-4 py-2 bg-gray-100 rounded-t-lg">
-            <div 
+          <div
               className="flex items-center justify-between flex-1 cursor-pointer select-none"
-              onClick={() => setOpenGroups(open => open.includes(group.group) ? open.filter(g => g !== group.group) : [...open, group.group])}
-            >
-              <span className="font-semibold text-gray-800">{group.group}</span>
-              <span>{openGroups.includes(group.group) ? '▲' : '▼'}</span>
+            onClick={() => setOpenGroups(open => open.includes(group.group) ? open.filter(g => g !== group.group) : [...open, group.group])}
+          >
+            <span className="font-semibold text-gray-800">{group.group}</span>
+            <span>{openGroups.includes(group.group) ? '▲' : '▼'}</span>
             </div>
             {group.group === 'Engine & Performance' && (
               <button
@@ -198,18 +198,18 @@ function GroupedSpecsInput({ value = {}, onChange }: { value: Record<string, str
               {group.fields.length > 0 && (
                 <div className="space-y-4">
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {group.fields.map(field => (
-                      <div key={field.key} className="flex flex-col">
-                        <label className="text-xs font-medium text-gray-600 mb-1">{field.label}</label>
-                        <input
-                          type="text"
-                          className="border px-3 py-2 rounded"
-                          value={value[field.key] || ''}
-                          onChange={e => handleInput(field.key, e.target.value)}
-                          placeholder={`Enter ${field.label}`}
-                        />
-                      </div>
-                    ))}
+              {group.fields.map(field => (
+                <div key={field.key} className="flex flex-col">
+                  <label className="text-xs font-medium text-gray-600 mb-1">{field.label}</label>
+                  <input
+                    type="text"
+                    className="border px-3 py-2 rounded"
+                    value={value[field.key] || ''}
+                    onChange={e => handleInput(field.key, e.target.value)}
+                    placeholder={`Enter ${field.label}`}
+                  />
+                </div>
+              ))}
                   </div>
                   
                   {/* Additional custom specs for Engine & Performance */}
@@ -285,8 +285,8 @@ function GroupedSpecsInput({ value = {}, onChange }: { value: Record<string, str
                       </button>
                     </div>
                   </div>
-                </div>
-              )}
+            </div>
+          )}
               
               {/* Custom specifications for other groups */}
               {group.fields.length === 0 && (
@@ -517,6 +517,19 @@ function ColorInput({ value = [], onChange }: { value: any[]; onChange: (v: any[
 }
 
 export default function AdminDashboard() {
+  const navigate = useNavigate();
+  
+  // Check authentication on component mount
+  React.useEffect(() => {
+    const isAdmin = localStorage.getItem('isAdmin');
+    const token = localStorage.getItem('adminToken');
+    
+    if (!isAdmin || !token) {
+      navigate('/admin-login');
+      return;
+    }
+  }, [navigate]);
+
   const [vehicles, setVehicles] = useState<any[]>([]);
   const [preBookings, setPreBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
@@ -614,10 +627,13 @@ export default function AdminDashboard() {
   // Add state for brochure uploading
   const [brochureUploading, setBrochureUploading] = useState(false);
   const [editBrochureUploading, setEditBrochureUploading] = useState(false);
-  const navigate = useNavigate();
   // Logout handler
   const handleLogout = () => {
-    localStorage.removeItem('adminToken'); // Adjust key as needed
+    // Clear all admin-related data
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('isAdmin');
+    localStorage.removeItem('adminName');
+    localStorage.removeItem('adminEmail');
     navigate('/admin-login');
   };
 
@@ -796,18 +812,18 @@ export default function AdminDashboard() {
     setEditGalleryImageUploading(true);
     const urls: string[] = [];
     try {
-      for (const file of editGalleryImageFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-          method: "POST",
-          body: formData
-        });
-        const data = await res.json();
-        if (data.secure_url) urls.push(data.secure_url);
-      }
-      return urls;
+    for (const file of editGalleryImageFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (data.secure_url) urls.push(data.secure_url);
+    }
+    return urls;
     } finally {
       setEditGalleryImageUploading(false);
     }
@@ -911,18 +927,18 @@ export default function AdminDashboard() {
     setGalleryImageUploading(true);
     const urls: string[] = [];
     try {
-      for (const file of galleryImageFiles) {
-        const formData = new FormData();
-        formData.append("file", file);
-        formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
-        const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
-          method: "POST",
-          body: formData
-        });
-        const data = await res.json();
-        if (data.secure_url) urls.push(data.secure_url);
-      }
-      return urls;
+    for (const file of galleryImageFiles) {
+      const formData = new FormData();
+      formData.append("file", file);
+      formData.append("upload_preset", CLOUDINARY_UPLOAD_PRESET);
+      const res = await fetch(`https://api.cloudinary.com/v1_1/${CLOUDINARY_CLOUD_NAME}/image/upload`, {
+        method: "POST",
+        body: formData
+      });
+      const data = await res.json();
+      if (data.secure_url) urls.push(data.secure_url);
+    }
+    return urls;
     } finally {
       setGalleryImageUploading(false);
     }

@@ -365,7 +365,7 @@ export default function AKRSonsBikeStore() {
                 </p>
                 <p className="text-sm md:text-base text-emerald-700 font-semibold mb-8">
                   Your trusted mobility partner in Mannar and beyond.
-                </p>
+          </p>
                 
                 {/* Prominent CTA Button */}
                 <div className="flex flex-col sm:flex-row gap-4 justify-start items-start mb-6">
@@ -376,13 +376,13 @@ export default function AKRSonsBikeStore() {
                     <ShoppingCart className="w-4 h-4 md:w-5 md:h-5" />
                     Explore Our Bikes
                   </Button>
-                </div>
+            </div>
                 
                 {/* Promotional Banner */}
                 <div className="bg-yellow-400 text-yellow-900 font-bold text-xs md:text-sm px-4 py-2 rounded-full inline-block shadow-lg">
                   20% off for your first purchase!
-                </div>
-              </div>
+            </div>
+            </div>
             </div>
           </div>
         </div>
