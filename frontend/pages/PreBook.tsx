@@ -32,6 +32,7 @@ const steps = [
 
 export default function PreBook() {
   const [models, setModels] = useState<string[]>([]);
+  const [vehicles, setVehicles] = useState<any[]>([]);
   const [form, setForm] = useState({
     fullName: '',
     email: '',
@@ -71,9 +72,11 @@ export default function PreBook() {
     const params = new URLSearchParams(location.search);
     const vehicleModel = params.get('vehicle');
     if (vehicleModel) {
-      setForm(prev => ({ ...prev, vehicleModel, vehicle: '' }));
+      // Find the vehicle by name and set its ID
+      const selectedVehicle = vehicles.find(v => v.name === vehicleModel);
+      setForm(prev => ({ ...prev, vehicleModel, vehicle: selectedVehicle?._id || '' }));
     }
-  }, [location]);
+  }, [location, vehicles]);
 
   useEffect(() => {
     async function fetchModels() {
@@ -81,13 +84,19 @@ export default function PreBook() {
         const vehiclesRes = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicles`);
         const vehiclesData = await vehiclesRes.json();
         if (Array.isArray(vehiclesData)) {
-          setModels(vehiclesData.filter((v: any) => v.available !== false).map((v: any) => v.name));
+          const availableVehicles = vehiclesData.filter((v: any) => v.available !== false);
+          setVehicles(availableVehicles);
+          setModels(availableVehicles.map((v: any) => v.name));
         } else if (Array.isArray(vehiclesData.vehicles)) {
-          setModels(vehiclesData.vehicles.filter((v: any) => v.available !== false).map((v: any) => v.name));
+          const availableVehicles = vehiclesData.vehicles.filter((v: any) => v.available !== false);
+          setVehicles(availableVehicles);
+          setModels(availableVehicles.map((v: any) => v.name));
         } else {
+          setVehicles([]);
           setModels([]);
         }
       } catch {
+        setVehicles([]);
         setModels([]);
       }
     }
@@ -101,7 +110,7 @@ export default function PreBook() {
   }, []);
 
   const validate = () => {
-    if (!form.fullName || !form.email || !form.phone || !form.nationalId || !form.address || !form.vehicleModel || !form.agree) {
+    if (!form.fullName || !form.email || !form.phone || !form.nationalId || !form.address || !form.vehicleModel || !form.vehicle || !form.agree) {
       setError('Please fill all required fields and agree to the terms.');
       return false;
     }
@@ -238,6 +247,7 @@ export default function PreBook() {
                         nationalId: '',
                         address: '',
                         vehicleModel: '',
+                        vehicle: '',
                         notes: '',
                         agree: false
                       });
@@ -393,7 +403,10 @@ export default function PreBook() {
                         </Label>
                         <div className="relative">
                           <Bike className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          <Select value={form.vehicleModel} onValueChange={(value) => setForm({ ...form, vehicleModel: value, vehicle: '' })}>
+                          <Select value={form.vehicleModel} onValueChange={(value) => {
+                            const selectedVehicle = vehicles.find(v => v.name === value);
+                            setForm({ ...form, vehicleModel: value, vehicle: selectedVehicle?._id || '' });
+                          }}>
                             <SelectTrigger className="pl-10">
                               <SelectValue placeholder="Select a vehicle model" />
                             </SelectTrigger>
