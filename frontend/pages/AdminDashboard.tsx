@@ -1162,27 +1162,6 @@ export default function AdminDashboard() {
       });
   }, []);
 
-  // Auto-ping backend to keep it awake (every 10 minutes)
-  useEffect(() => {
-    const pingBackend = async () => {
-      try {
-        await fetch(`${import.meta.env.VITE_API_URL}/api/health`);
-        console.log('Backend pinged successfully');
-      } catch (error) {
-        console.log('Backend ping failed:', error);
-      }
-    };
-
-    // Ping immediately when component mounts
-    pingBackend();
-
-    // Set up interval to ping every 10 minutes (600,000 ms)
-    const interval = setInterval(pingBackend, 10 * 60 * 1000);
-
-    // Cleanup interval on component unmount
-    return () => clearInterval(interval);
-  }, []);
-
   // After adding a vehicle, refresh vehicles
   const handleAddVehicle = async () => {
     setAddVehicleLoading(true);
@@ -8768,7 +8747,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
               </div>
-            </div>
+              </div>
           )}
           {akrTab === 'salesTransactions' && (
             <div className="col-span-full">

@@ -945,21 +945,59 @@ export default function AkrSonsBikeStore() {
         <div className="container mx-auto px-4 sm:px-6">
           <div className="text-center mb-8">
             <Title level={3}>Frequently Asked Questions</Title>
-            <p className="text-gray-600">Find answers to common questions about our vehicles</p>
+            <p className="text-gray-600">Find answers to common questions about our bikes and special offers</p>
           </div>
           <div className="max-w-4xl mx-auto">
             <Collapse 
               accordion
-              items={vehicles
-                .filter(vehicle => vehicle.faqs && vehicle.faqs.length > 0)
-                .flatMap(vehicle => 
-                  vehicle.faqs.map((faq: any, idx: number) => ({
-                    key: `${vehicle._id}-${idx}`,
-                    label: `${vehicle.name} - ${faq.question}`,
-                    children: <p className="text-gray-700">{faq.answer}</p>
-                  }))
-                )
-              }
+              items={[
+                {
+                  key: '1',
+                  label: 'What special offers are available for ready cash payments?',
+                  children: (
+                    <div className="text-gray-700 space-y-3">
+                      <p>We offer several exclusive benefits for ready cash payments:</p>
+                      <ul className="list-disc list-inside space-y-2 ml-4">
+                        <li><strong>Full Tank Petrol + Jacket + Helmet:</strong> Get a full tank of petrol, a stylish jacket, and a helmet with your new ride.</li>
+                        <li><strong>15,000 LKR Discount:</strong> Enjoy an instant discount of 15,000 LKR on your purchase.</li>
+                        <li><strong>Registration Fee Waived:</strong> We'll cover your registration fee for a hassle-free start.</li>
+                      </ul>
+                      <p className="text-green-600 font-semibold">All these offers are exclusively for Ready Cash Payments only!</p>
+                    </div>
+                  )
+                },
+                {
+                  key: '2',
+                  label: 'What financing options are available for bike purchases?',
+                  children: (
+                    <div className="text-gray-700 space-y-3">
+                      <p>We offer multiple financing options to make your bike purchase convenient:</p>
+                      <ul className="list-disc list-inside space-y-2 ml-4">
+                        <li><strong>Ready Cash Payment:</strong> Full payment with special offers and discounts</li>
+                        <li><strong>Leasing via AKR Easy Credit:</strong> Our in-house financing with competitive rates</li>
+                        <li><strong>Other Leasing Companies:</strong> We work with various external financing partners</li>
+                      </ul>
+                      <p>Contact our sales team for detailed financing terms and eligibility criteria.</p>
+                    </div>
+                  )
+                },
+                {
+                  key: '3',
+                  label: 'How can I pre-book a bike and what is the process?',
+                  children: (
+                    <div className="text-gray-700 space-y-3">
+                      <p>The pre-booking process is simple and secure:</p>
+                      <ol className="list-decimal list-inside space-y-2 ml-4">
+                        <li><strong>Select Your Bike:</strong> Choose from our wide range of Bajaj bikes</li>
+                        <li><strong>Fill Pre-booking Form:</strong> Provide your contact details and preferences</li>
+                        <li><strong>Confirmation:</strong> Receive confirmation via phone or email</li>
+                        <li><strong>Visit Showroom:</strong> Complete the purchase process at our showroom</li>
+                      </ol>
+                      <p>Pre-booking helps us prepare your bike and ensures priority service. Contact us at 0232231222 or 0773111266 for assistance.</p>
+                    </div>
+                  )
+                }
+              ]}
             />
           </div>
         </div>
