@@ -235,7 +235,7 @@ export default function PreBook() {
                     onClick={() => navigate("/akr-sons-bike-store")}
                     className="w-full bg-green-600 hover:bg-green-700 text-white"
                   >
-                    Continue Shopping
+                    Continue
                   </Button>
                   <Button
                     onClick={() => {
