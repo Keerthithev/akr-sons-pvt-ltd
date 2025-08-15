@@ -243,4 +243,26 @@ exports.updateVehicleAvailability = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
+};
+
+// Update stock quantity of a vehicle
+exports.updateStockQuantity = async (req, res, next) => {
+  try {
+    const { stockQuantity } = req.body;
+    
+    if (typeof stockQuantity !== 'number' || stockQuantity < 0) {
+      return res.status(400).json({ message: 'Stock quantity must be a non-negative number' });
+    }
+    
+    const vehicle = await Vehicle.findByIdAndUpdate(
+      req.params.vehicleId,
+      { $set: { stockQuantity } },
+      { new: true, runValidators: true }
+    );
+    
+    if (!vehicle) return res.status(404).json({ message: 'Vehicle not found' });
+    res.json(vehicle);
+  } catch (err) {
+    next(err);
+  }
 }; 

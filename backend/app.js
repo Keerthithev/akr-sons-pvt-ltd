@@ -10,6 +10,15 @@ const preBookingRoutes = require('./routes/preBooking');
 const companyRoutes = require('./routes/company');
 const customerRoutes = require('./routes/customer');
 const settingRoutes = require('./routes/setting');
+const accountDataRoutes = require('./routes/accountData');
+const bankDepositRoutes = require('./routes/bankDeposit');
+const bikeInventoryRoutes = require('./routes/bikeInventory');
+const salesTransactionRoutes = require('./routes/salesTransaction');
+const installmentPlanRoutes = require('./routes/installmentPlan');
+const supplierRoutes = require('./routes/supplier');
+const serviceWarrantyRoutes = require('./routes/serviceWarranty');
+const additionalInfoRoutes = require('./routes/additionalInfo');
+const vehicleAllocationCouponRoutes = require('./routes/vehicleAllocationCoupon');
 
 // Load env vars
 dotenv.config({ path: './.env' });
@@ -47,6 +56,15 @@ app.use('/api/prebookings', preBookingRoutes);
 app.use('/api/companies', companyRoutes);
 app.use('/api/customers', customerRoutes);
 app.use('/api/settings', settingRoutes);
+app.use('/api/account-data', accountDataRoutes);
+app.use('/api/bank-deposits', bankDepositRoutes);
+app.use('/api/bike-inventory', bikeInventoryRoutes);
+app.use('/api/sales-transactions', salesTransactionRoutes);
+app.use('/api/installment-plans', installmentPlanRoutes);
+app.use('/api/suppliers', supplierRoutes);
+app.use('/api/service-warranty', serviceWarrantyRoutes);
+app.use('/api/additional-info', additionalInfoRoutes);
+app.use('/api/vehicle-allocation-coupons', vehicleAllocationCouponRoutes);
 
 // Error Handler
 app.use(errorHandler);

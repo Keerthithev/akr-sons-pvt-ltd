@@ -8,7 +8,9 @@ const preBookingSchema = new mongoose.Schema({
   nationalId: { type: String, required: true },
   address: { type: String, required: true },
   vehicleModel: { type: String, required: true },
-  status: { type: String, enum: ['Pending', 'Ordered', 'Delivered', 'Cancelled'], default: 'Pending' },
+  vehicle: { type: mongoose.Schema.Types.ObjectId, ref: 'Vehicle' },
+  status: { type: String, enum: ['Pending', 'Confirmed', 'Delivered', 'Cancelled'], default: 'Pending' },
+  orderDate: { type: Date },
   createdAt: { type: Date, default: Date.now }
 });
 

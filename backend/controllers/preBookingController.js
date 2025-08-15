@@ -1,4 +1,5 @@
 const PreBooking = require('../models/PreBooking');
+const Vehicle = require('../models/Vehicle.cjs');
 
 // Generate the next bookingId in the format 'akr-01', 'akr-02', ...
 async function generateBookingId() {
@@ -43,12 +44,49 @@ exports.getAllPreBookings = async (req, res, next) => {
 // Update a pre-booking by ID
 exports.updatePreBooking = async (req, res, next) => {
   try {
+    const { status, ...updateData } = req.body;
+    
+    // Get the current pre-booking to check if status is changing to 'Confirmed'
+    const currentPreBooking = await PreBooking.findById(req.params.id);
+    if (!currentPreBooking) {
+      return res.status(404).json({ message: 'Pre-booking not found' });
+    }
+
+    // If status is being changed to 'Confirmed', reduce stock quantity
+    if (status === 'Confirmed' && currentPreBooking.status !== 'Confirmed') {
+      if (currentPreBooking.vehicle) {
+        const vehicle = await Vehicle.findById(currentPreBooking.vehicle);
+        if (vehicle) {
+          if (vehicle.stockQuantity > 0) {
+            vehicle.stockQuantity -= 1;
+            await vehicle.save();
+          } else {
+            return res.status(400).json({ message: 'No stock available for this vehicle' });
+          }
+        }
+      }
+      
+      // Set order date when confirming
+      updateData.orderDate = new Date();
+    }
+    
+    // If status is being changed from 'Confirmed' to something else, restore stock
+    if (currentPreBooking.status === 'Confirmed' && status !== 'Confirmed') {
+      if (currentPreBooking.vehicle) {
+        const vehicle = await Vehicle.findById(currentPreBooking.vehicle);
+        if (vehicle) {
+          vehicle.stockQuantity += 1;
+          await vehicle.save();
+        }
+      }
+    }
+
     const preBooking = await PreBooking.findByIdAndUpdate(
       req.params.id,
-      { $set: req.body },
+      { $set: { ...updateData, status } },
       { new: true, runValidators: true }
     );
-    if (!preBooking) return res.status(404).json({ message: 'Pre-booking not found' });
+    
     res.json(preBooking);
   } catch (err) {
     next(err);

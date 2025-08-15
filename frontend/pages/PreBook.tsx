@@ -39,6 +39,7 @@ export default function PreBook() {
     nationalId: '',
     address: '',
     vehicleModel: '',
+    vehicle: '', // Add vehicle ID reference
     notes: '',
     agree: false
   });
@@ -70,7 +71,7 @@ export default function PreBook() {
     const params = new URLSearchParams(location.search);
     const vehicleModel = params.get('vehicle');
     if (vehicleModel) {
-      setForm(prev => ({ ...prev, vehicleModel }));
+      setForm(prev => ({ ...prev, vehicleModel, vehicle: '' }));
     }
   }, [location]);
 
@@ -392,7 +393,7 @@ export default function PreBook() {
                         </Label>
                         <div className="relative">
                           <Bike className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-gray-400" />
-                          <Select value={form.vehicleModel} onValueChange={(value) => setForm({ ...form, vehicleModel: value })}>
+                          <Select value={form.vehicleModel} onValueChange={(value) => setForm({ ...form, vehicleModel: value, vehicle: '' })}>
                             <SelectTrigger className="pl-10">
                               <SelectValue placeholder="Select a vehicle model" />
                             </SelectTrigger>

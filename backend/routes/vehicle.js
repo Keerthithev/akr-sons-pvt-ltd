@@ -14,6 +14,8 @@ router.get('/:vehicleId', vehicleController.getVehicle);
 router.patch('/:vehicleId', vehicleController.uploadBrochure, vehicleController.updateVehicle);
 // Add this route for updating vehicle availability only
 router.patch('/:vehicleId/availability', vehicleController.updateVehicleAvailability);
+// Add this route for updating stock quantity
+router.patch('/:vehicleId/stock', vehicleController.updateStockQuantity);
 // Add this route for deleting a vehicle
 router.delete('/:vehicleId', vehicleController.deleteVehicle);
 

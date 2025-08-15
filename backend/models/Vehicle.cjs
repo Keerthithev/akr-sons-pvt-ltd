@@ -32,6 +32,7 @@ const VehicleSchema = new mongoose.Schema({
   galleryImages: [String],
   faqs: [{ question: String, answer: String }],
   brochure: { type: String },
+  stockQuantity: { type: Number, default: 0, min: 0 },
   createdAt: { type: Date, default: Date.now },
   available: { type: Boolean, default: true }
 });
