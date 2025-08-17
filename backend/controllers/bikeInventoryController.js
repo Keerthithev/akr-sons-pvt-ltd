@@ -21,6 +21,7 @@ const getAllBikeInventory = async (req, res) => {
           { color: { $regex: search, $options: 'i' } },
           { engineNo: { $regex: search, $options: 'i' } },
           { chassisNumber: { $regex: search, $options: 'i' } },
+          { workshopNo: { $regex: search, $options: 'i' } },
           { registrationNo: { $regex: search, $options: 'i' } }
         ]
       };
@@ -292,6 +293,110 @@ const updateVehicleStock = async (modelName) => {
   }
 };
 
+// Get detailed stock information by model and color
+const getDetailedStockInfo = async (req, res) => {
+  try {
+    // Get all bikes from inventory with individual details
+    const bikes = await BikeInventory.find({}).sort({ model: 1, color: 1 });
+    
+    // Group bikes by model and color, but show individual bikes
+    const stockByModel = {};
+    
+    bikes.forEach(bike => {
+      if (!stockByModel[bike.model]) {
+        stockByModel[bike.model] = {
+          model: bike.model,
+          category: bike.category,
+          totalStock: 0,
+          bikes: []
+        };
+      }
+      
+      // Clean up color data - handle combined colors like "Black & Blue"
+      let cleanColor = bike.color;
+      if (cleanColor && cleanColor.includes('&')) {
+        // Split combined colors and take the first one
+        const colors = cleanColor.split('&').map(c => c.trim());
+        cleanColor = colors[0]; // Take the first color
+      }
+      
+      // Add individual bike with its cleaned color
+      stockByModel[bike.model].bikes.push({
+        bikeId: bike.bikeId,
+        color: cleanColor,
+        originalColor: bike.color, // Keep original for reference
+        engineNo: bike.engineNo,
+        chassisNumber: bike.chassisNumber,
+        workshopNo: bike.workshopNo,
+        date: bike.date
+      });
+      
+      stockByModel[bike.model].totalStock += bike.stockQuantity || 1;
+    });
+    
+    // Convert to array format for easier frontend consumption
+    const stockArray = Object.values(stockByModel).map(model => ({
+      ...model,
+      // Group bikes by cleaned color for display
+      colors: model.bikes.reduce((acc, bike) => {
+        if (!acc[bike.color]) {
+          acc[bike.color] = [];
+        }
+        acc[bike.color].push(bike);
+        return acc;
+      }, {})
+    }));
+    
+    // Sort by total stock (descending)
+    stockArray.sort((a, b) => b.totalStock - a.totalStock);
+    
+    res.json({
+      stockInfo: stockArray,
+      totalModels: stockArray.length,
+      totalBikes: stockArray.reduce((sum, model) => sum + model.totalStock, 0)
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
+// Clean up bike inventory color data
+const cleanupBikeInventoryColors = async (req, res) => {
+  try {
+    // Find all bikes with combined colors (containing '&')
+    const bikesWithCombinedColors = await BikeInventory.find({
+      color: { $regex: /&/ }
+    });
+
+    let updatedCount = 0;
+    
+    for (const bike of bikesWithCombinedColors) {
+      const colors = bike.color.split('&').map(c => c.trim());
+      const firstColor = colors[0]; // Take the first color
+      
+      // Update the bike with the first color only
+      await BikeInventory.findByIdAndUpdate(bike._id, {
+        color: firstColor
+      });
+      
+      updatedCount++;
+      console.log(`Updated bike ${bike.bikeId}: "${bike.color}" → "${firstColor}"`);
+    }
+
+    res.json({
+      message: `Cleaned up ${updatedCount} bike color entries`,
+      updatedCount,
+      details: bikesWithCombinedColors.map(bike => ({
+        bikeId: bike.bikeId,
+        oldColor: bike.color,
+        newColor: bike.color.split('&')[0].trim()
+      }))
+    });
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // Bulk import bike inventory
 const bulkImportBikeInventory = async (req, res) => {
   try {
@@ -377,5 +482,7 @@ module.exports = {
   updateBikeInventory,
   deleteBikeInventory,
   bulkImportBikeInventory,
-  getBikeInventoryStats
+  getBikeInventoryStats,
+  getDetailedStockInfo,
+  cleanupBikeInventoryColors
 }; 

@@ -94,6 +94,16 @@ const vehicleAllocationCouponSchema = new mongoose.Schema({
     type: Number, 
     required: true 
   },
+  downPaymentDate: { 
+    type: Date 
+  },
+  chequeReleaseDate: { 
+    type: Date 
+  },
+  chequeReleased: { 
+    type: Boolean, 
+    default: false 
+  },
   regFee: { 
     type: Number, 
     default: 0 

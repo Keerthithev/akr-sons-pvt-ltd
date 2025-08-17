@@ -44,6 +44,18 @@ exports.createVehicleAllocationCoupon = async (req, res, next) => {
     // Auto-calculate installment dates if payment method is leasing or if there's a balance
     let couponData = { ...req.body, couponId, workshopNo };
     
+    // Set down payment date and calculate cheque release date (4 days after down payment)
+    if (req.body.downPayment && req.body.downPayment > 0) {
+      const downPaymentDate = new Date();
+      couponData.downPaymentDate = downPaymentDate;
+      
+      // Calculate cheque release date (4 days after down payment)
+      const chequeReleaseDate = new Date(downPaymentDate);
+      chequeReleaseDate.setDate(chequeReleaseDate.getDate() + 4);
+      couponData.chequeReleaseDate = chequeReleaseDate;
+      couponData.chequeReleased = false;
+    }
+    
     // Set status based on payment method and balance
     if (req.body.paymentMethod === 'Leasing via AKR') {
       // For "Leasing via AKR" - status will be "Pending" initially, updated based on installments
@@ -335,18 +347,26 @@ exports.getVehicleAllocationCouponDropdownData = async (req, res, next) => {
           price: bike.sellingPrice,
           color: bike.color,
           engineNumbers: [],
-          chassisNumbers: []
+          chassisNumbers: [],
+          engineChassisMap: [] // New array to store engine-chassis mappings
         };
       }
       
-      // Add engine number if not already present
-      if (bike.engineNo && !vehicleData[modelKey].engineNumbers.includes(bike.engineNo)) {
-        vehicleData[modelKey].engineNumbers.push(bike.engineNo);
-      }
-      
-      // Add chassis number if not already present
-      if (bike.chassisNumber && !vehicleData[modelKey].chassisNumbers.includes(bike.chassisNumber)) {
-        vehicleData[modelKey].chassisNumbers.push(bike.chassisNumber);
+      // Add engine-chassis mapping
+      if (bike.engineNo && bike.chassisNumber) {
+        vehicleData[modelKey].engineChassisMap.push({
+          engineNo: bike.engineNo,
+          chassisNo: bike.chassisNumber
+        });
+        
+        // Also keep separate arrays for backward compatibility
+        if (!vehicleData[modelKey].engineNumbers.includes(bike.engineNo)) {
+          vehicleData[modelKey].engineNumbers.push(bike.engineNo);
+        }
+        
+        if (!vehicleData[modelKey].chassisNumbers.includes(bike.chassisNumber)) {
+          vehicleData[modelKey].chassisNumbers.push(bike.chassisNumber);
+        }
       }
     });
     
@@ -418,4 +438,116 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
   } catch (err) {
     next(err);
   }
-}; 
+};
+
+// Get cheque release reminders
+exports.getChequeReleaseReminders = async (req, res, next) => {
+  try {
+    const today = new Date();
+    const { includeReleased = 'false' } = req.query;
+    
+    // Get pending coupons with down payments
+    const pendingReminders = await VehicleAllocationCoupon.find({
+      downPayment: { $gt: 0 },
+      chequeReleased: false
+    })
+    .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate')
+    .sort({ chequeReleaseDate: 1 })
+    .limit(20);
+
+    // Calculate days since down payment and days until cheque release for pending reminders
+    const pendingWithDays = pendingReminders.map(coupon => {
+      const downPaymentDate = new Date(coupon.downPaymentDate);
+      const releaseDate = new Date(coupon.chequeReleaseDate);
+      
+      // Days since down payment was made
+      const daysSinceDownPayment = Math.ceil((today - downPaymentDate) / (1000 * 60 * 60 * 24));
+      
+      // Days until cheque release (or overdue)
+      const daysUntilRelease = Math.ceil((releaseDate - today) / (1000 * 60 * 60 * 24));
+      
+      return {
+        ...coupon.toObject(),
+        daysSinceDownPayment: Math.max(0, daysSinceDownPayment),
+        daysUntilRelease: daysUntilRelease,
+        isOverdue: daysUntilRelease < 0,
+        daysOverdue: daysUntilRelease < 0 ? Math.abs(daysUntilRelease) : 0,
+        status: 'pending'
+      };
+    });
+
+    let releasedReminders = [];
+    
+    // If includeReleased is true, also get released cheques
+    if (includeReleased === 'true') {
+      releasedReminders = await VehicleAllocationCoupon.find({
+        downPayment: { $gt: 0 },
+        chequeReleased: true
+      })
+      .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate')
+      .sort({ chequeReleasedDate: -1 })
+      .limit(20);
+
+      // Calculate days since down payment and days since release for released reminders
+      const releasedWithDays = releasedReminders.map(coupon => {
+        const downPaymentDate = new Date(coupon.downPaymentDate);
+        const releaseDate = new Date(coupon.chequeReleaseDate);
+        const releasedDate = new Date(coupon.chequeReleasedDate);
+        
+        // Days since down payment was made
+        const daysSinceDownPayment = Math.ceil((today - downPaymentDate) / (1000 * 60 * 60 * 24));
+        
+        // Days since cheque was released
+        const daysSinceReleased = Math.ceil((today - releasedDate) / (1000 * 60 * 60 * 24));
+        
+        return {
+          ...coupon.toObject(),
+          daysSinceDownPayment: Math.max(0, daysSinceDownPayment),
+          daysSinceReleased: Math.max(0, daysSinceReleased),
+          status: 'released'
+        };
+      });
+
+      releasedReminders = releasedWithDays;
+    }
+
+    // Combine pending and released reminders
+    const allReminders = [...pendingWithDays, ...releasedReminders];
+
+    res.json({
+      reminders: allReminders,
+      totalReminders: pendingWithDays.length,
+      totalReleased: releasedReminders.length,
+      overdueCount: pendingWithDays.filter(r => r.isOverdue).length
+    });
+  } catch (err) {
+    next(err);
+  }
+};
+
+// Mark cheque as released
+exports.markChequeAsReleased = async (req, res, next) => {
+  try {
+    const { couponId } = req.params;
+    
+    const coupon = await VehicleAllocationCoupon.findOneAndUpdate(
+      { couponId: couponId },
+      { 
+        chequeReleased: true,
+        chequeReleasedDate: new Date()
+      },
+      { new: true }
+    );
+
+    if (!coupon) {
+      return res.status(404).json({ message: 'Coupon not found' });
+    }
+
+    res.json({
+      message: 'Cheque marked as released successfully',
+      coupon
+    });
+  } catch (err) {
+    next(err);
+  }
+};

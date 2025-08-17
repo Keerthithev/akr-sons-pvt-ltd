@@ -19,6 +19,7 @@ const bikeInventorySchema = new mongoose.Schema({
   bikeCondition: { type: String, default: '' },
   engineNo: { type: String, default: '' },
   chassisNumber: { type: String, default: '' },
+  workshopNo: { type: String, default: '' },
   registrationNo: { type: String, default: '' }
 }, { timestamps: true });
 

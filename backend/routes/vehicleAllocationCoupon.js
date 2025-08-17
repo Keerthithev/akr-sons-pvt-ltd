@@ -12,6 +12,12 @@ router.get('/', vehicleAllocationCouponController.getAllVehicleAllocationCoupons
 // Get vehicle allocation coupon statistics
 router.get('/stats', vehicleAllocationCouponController.getVehicleAllocationCouponStats);
 
+// Get cheque release reminders
+router.get('/cheque-reminders', vehicleAllocationCouponController.getChequeReleaseReminders);
+
+// Mark cheque as released
+router.put('/cheque-reminders/:couponId/mark-released', vehicleAllocationCouponController.markChequeAsReleased);
+
 // Get dropdown data for vehicle allocation coupon form
 router.get('/dropdown-data', vehicleAllocationCouponController.getVehicleAllocationCouponDropdownData);
 

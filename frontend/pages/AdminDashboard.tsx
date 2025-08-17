@@ -534,7 +534,7 @@ export default function AdminDashboard() {
   const [preBookings, setPreBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [akrTab, setAkrTab] = useState<'vehicles' | 'prebookings' | 'customers' | 'overview' | 'settings' | 'accountData' | 'bankDeposits' | 'bikeInventory' | 'salesTransactions' | 'installmentPlans' | 'suppliers' | 'serviceWarranty' | 'additionalInfo' | 'vehicleAllocationCoupons' | 'nextDueInstallments' | 'recentActivity' | 'commissionerLetter'>('overview');
+  const [akrTab, setAkrTab] = useState<'vehicles' | 'prebookings' | 'customers' | 'overview' | 'settings' | 'accountData' | 'bankDeposits' | 'bikeInventory' | 'salesTransactions' | 'installmentPlans' | 'suppliers' | 'serviceWarranty' | 'additionalInfo' | 'vehicleAllocationCoupons' | 'nextDueInstallments' | 'recentActivity' | 'commissionerLetter' | 'chequeReleaseReminders'>('overview');
   const [installmentPlans, setInstallmentPlans] = useState([]);
   const [installmentStats, setInstallmentStats] = useState({});
   const [installmentSearch, setInstallmentSearch] = useState('');
@@ -543,6 +543,8 @@ export default function AdminDashboard() {
   const [installmentLoading, setInstallmentLoading] = useState(false);
   const [installmentPagination, setInstallmentPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [installmentPlansModalOpen, setInstallmentPlansModalOpen] = useState(false);
+  const [viewInstallmentPlanModalOpen, setViewInstallmentPlanModalOpen] = useState(false);
+  const [viewingInstallmentPlan, setViewingInstallmentPlan] = useState<any>(null);
   const [editingInstallmentPlan, setEditingInstallmentPlan] = useState<any>(null);
 
   // Suppliers state
@@ -657,6 +659,8 @@ export default function AdminDashboard() {
   });
   const [vehicleAllocationCouponsModalOpen, setVehicleAllocationCouponsModalOpen] = useState(false);
   const [editingVehicleAllocationCoupon, setEditingVehicleAllocationCoupon] = useState<any>(null);
+  const [viewVehicleAllocationCouponModalOpen, setViewVehicleAllocationCouponModalOpen] = useState(false);
+  const [viewingVehicleAllocationCoupon, setViewingVehicleAllocationCoupon] = useState<any>(null);
   const [vehicleAllocationCouponDropdownData, setVehicleAllocationCouponDropdownData] = useState<any>({
     nextWorkshopNo: '1',
     vehicles: [],
@@ -702,7 +706,8 @@ export default function AdminDashboard() {
     status: 'Pending',
     notes: '',
     discountApplied: false,
-    discountAmount: ''
+    discountAmount: '',
+    leaseAmount: ''
   });
 
   // Commissioner Letter state
@@ -901,9 +906,12 @@ export default function AdminDashboard() {
     model: '',
     color: '',
     engineNo: '',
-    chassisNumber: ''
+    chassisNumber: '',
+    workshopNo: ''
   });
   const [editingBikeInventory, setEditingBikeInventory] = useState<any>(null);
+  const [viewBikeInventoryModalOpen, setViewBikeInventoryModalOpen] = useState(false);
+  const [viewingBikeInventory, setViewingBikeInventory] = useState<any>(null);
   const [bikeInventoryDropdownData, setBikeInventoryDropdownData] = useState<any>({
     categories: [],
     vehiclesByCategory: {},
@@ -919,6 +927,14 @@ export default function AdminDashboard() {
   
   // Sidebar collapsible state
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
+  
+  // Cheque Release Reminders state
+  const [chequeReleaseReminders, setChequeReleaseReminders] = useState<any[]>([]);
+  const [chequeReleaseRemindersLoading, setChequeReleaseRemindersLoading] = useState(false);
+
+  // Detailed Stock Information state
+  const [detailedStockInfo, setDetailedStockInfo] = useState<any[]>([]);
+  const [detailedStockInfoLoading, setDetailedStockInfoLoading] = useState(false);
   
   // Keyboard shortcut for toggling sidebar
   useEffect(() => {
@@ -1652,6 +1668,12 @@ export default function AdminDashboard() {
       notes: record.notes || ''
     });
     setInstallmentPlansModalOpen(true);
+  };
+
+  // View installment plan
+  const handleViewInstallmentPlan = (record: any) => {
+    setViewingInstallmentPlan(record);
+    setViewInstallmentPlanModalOpen(true);
   };
 
   // Fetch suppliers
@@ -2753,6 +2775,14 @@ export default function AdminDashboard() {
       fetchVehicleAllocationCouponsStats();
       fetchCustomers(); // Load customers for overview
       fetchPreBookings(); // Load pre-bookings for overview
+      fetchChequeReleaseReminders(); // Load cheque release reminders
+      fetchDetailedStockInfo(); // Load detailed stock information for overview
+    }
+    if (akrTab === 'chequeReleaseReminders') {
+      fetchChequeReleaseReminders(true); // Load cheque release reminders including released ones
+    }
+    if (akrTab === 'bikeInventory') {
+      fetchDetailedStockInfo(); // Load detailed stock information
     }
   }, [akrTab]);
 
@@ -2828,6 +2858,300 @@ export default function AdminDashboard() {
     }
   };
 
+  // Fetch cheque release reminders
+  const fetchChequeReleaseReminders = async (includeReleased = false) => {
+    setChequeReleaseRemindersLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const params = new URLSearchParams({
+        includeReleased: includeReleased.toString()
+      });
+      
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/cheque-reminders?${params}`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      const data = await res.json();
+      setChequeReleaseReminders(data.reminders);
+      setChequeReleaseRemindersLoading(false);
+    } catch (err: any) {
+      console.error("Failed to load cheque release reminders:", err.message);
+      setChequeReleaseRemindersLoading(false);
+    }
+  };
+
+  // Fetch detailed stock information
+  const fetchDetailedStockInfo = async () => {
+    setDetailedStockInfoLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/stock-info`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      const data = await res.json();
+      setDetailedStockInfo(data.stockInfo);
+      setDetailedStockInfoLoading(false);
+    } catch (err: any) {
+      console.error("Failed to load detailed stock info:", err.message);
+      setDetailedStockInfoLoading(false);
+    }
+  };
+
+  // Clean up bike inventory colors
+  const cleanupBikeInventoryColors = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/cleanup-colors`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      const data = await res.json();
+      
+      message.success(`Cleaned up ${data.updatedCount} color entries`);
+      
+      // Refresh the data
+      fetchBikeInventory();
+      fetchDetailedStockInfo();
+    } catch (err: any) {
+      console.error("Failed to cleanup colors:", err.message);
+      message.error('Failed to cleanup colors');
+    }
+  };
+
+  // Mark cheque as released
+  const markChequeAsReleased = async (couponId: string) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/cheque-reminders/${couponId}/mark-released`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      message.success('Cheque marked as released successfully');
+      // Refresh the reminders
+      fetchChequeReleaseReminders(akrTab === 'chequeReleaseReminders');
+    } catch (err: any) {
+      console.error("Failed to mark cheque as released:", err.message);
+      message.error('Failed to mark cheque as released');
+    }
+  };
+
+  // Export cheque release reminders to PDF
+  const exportChequeReleaseRemindersToPDF = () => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentTime = new Date().toLocaleTimeString('en-GB');
+      
+      const pendingReminders = chequeReleaseReminders.filter((r: any) => r.status === 'pending');
+      const releasedReminders = chequeReleaseReminders.filter((r: any) => r.status === 'released');
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Cheque Release Reminders - ${currentDate}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center !important; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #333; 
+                padding-bottom: 15px;
+                width: 100%;
+              }
+              .company-name { 
+                font-size: 28px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 0 0 10px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-title { 
+                font-size: 20px; 
+                color: #666; 
+                margin: 10px 0 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-info { 
+                font-size: 14px; 
+                color: #666; 
+                margin: 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .section-title { 
+                font-size: 18px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 20px 0 10px 0;
+                border-bottom: 2px solid #333;
+                padding-bottom: 5px;
+              }
+              table { 
+                width: 100%; 
+                border-collapse: collapse; 
+                margin: 20px 0;
+                font-size: 12px;
+              }
+              th, td { 
+                border: 1px solid #ddd; 
+                padding: 8px; 
+                text-align: left;
+              }
+              th { 
+                background-color: #f5f5f5; 
+                font-weight: bold;
+              }
+              .status-pending { color: #e67e22; font-weight: bold; }
+              .status-released { color: #27ae60; font-weight: bold; }
+              .status-overdue { color: #e74c3c; font-weight: bold; }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                .header { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="company-name">AKR & SON'S (PVT) LTD</div>
+              <div class="report-title">Cheque Release Reminders Report</div>
+              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+            </div>
+
+            <div class="section-title">Pending Cheque Releases (${pendingReminders.length})</div>
+            ${pendingReminders.length > 0 ? `
+              <table>
+                <thead>
+                  <tr>
+                    <th>Coupon ID</th>
+                    <th>Customer Name</th>
+                    <th>Vehicle</th>
+                    <th>Contact</th>
+                    <th>Down Payment</th>
+                    <th>Days Since Payment</th>
+                    <th>Release Date</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${pendingReminders.map((reminder: any) => `
+                    <tr>
+                      <td>${reminder.couponId}</td>
+                      <td>${reminder.fullName}</td>
+                      <td>${reminder.vehicleType}</td>
+                      <td>${reminder.contactNo || 'N/A'}</td>
+                      <td>LKR ${parseFloat(reminder.downPayment).toLocaleString()}</td>
+                      <td>${reminder.daysSinceDownPayment} days</td>
+                      <td>${new Date(reminder.chequeReleaseDate).toLocaleDateString('en-GB')}</td>
+                      <td class="${reminder.isOverdue ? 'status-overdue' : 'status-pending'}">
+                        ${reminder.isOverdue ? `${reminder.daysOverdue} days overdue` : 
+                          reminder.daysUntilRelease === 0 ? 'Due today' : 
+                          reminder.daysUntilRelease === 1 ? 'Due tomorrow' : 
+                          `Due in ${reminder.daysUntilRelease} days`}
+                      </td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : '<p>No pending cheque releases</p>'}
+
+            ${releasedReminders.length > 0 ? `
+              <div class="section-title">Released Cheques (${releasedReminders.length})</div>
+              <table>
+                <thead>
+                  <tr>
+                    <th>Coupon ID</th>
+                    <th>Customer Name</th>
+                    <th>Vehicle</th>
+                    <th>Contact</th>
+                    <th>Down Payment</th>
+                    <th>Release Date</th>
+                    <th>Days Since Release</th>
+                    <th>Status</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  ${releasedReminders.map((reminder: any) => `
+                    <tr>
+                      <td>${reminder.couponId}</td>
+                      <td>${reminder.fullName}</td>
+                      <td>${reminder.vehicleType}</td>
+                      <td>${reminder.contactNo || 'N/A'}</td>
+                      <td>LKR ${parseFloat(reminder.downPayment).toLocaleString()}</td>
+                      <td>${new Date(reminder.chequeReleasedDate).toLocaleDateString('en-GB')}</td>
+                      <td>${reminder.daysSinceReleased} days</td>
+                      <td class="status-released">Released</td>
+                    </tr>
+                  `).join('')}
+                </tbody>
+              </table>
+            ` : ''}
+
+            <div class="footer">
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating cheque release reminders PDF:', error);
+      message.error('Failed to generate PDF');
+    }
+  };
+
   // Fetch vehicle allocation coupon dropdown data
   const fetchVehicleAllocationCouponDropdownData = async () => {
     try {
@@ -2851,32 +3175,120 @@ export default function AdminDashboard() {
     const { name, value, type } = e.target;
     if (type === 'checkbox') {
       const checked = (e.target as HTMLInputElement).checked;
-      setVehicleAllocationCouponForm(prev => ({ ...prev, [name]: checked }));
+      setVehicleAllocationCouponForm(prev => {
+        const updated = { ...prev, [name]: checked };
+        
+        // Handle discount checkbox
+        if (name === 'discountApplied') {
+          if (!checked) {
+            updated.discountAmount = '0';
+          }
+          // Don't auto-fill discount amount when checkbox is checked
+        }
+        
+        return updated;
+      });
     } else {
       setVehicleAllocationCouponForm(prev => {
         const updated = { ...prev, [name]: value };
         
-        // Auto-calculate balance when total amount, down payment, reg fee, doc charge, or insurance changes
-        if (['totalAmount', 'downPayment', 'regFee', 'docCharge', 'insuranceCo'].includes(name)) {
-          const totalAmount = parseFloat(updated.totalAmount) || 0;
+        // Handle payment method changes
+        if (name === 'paymentMethod') {
+          if (value === 'Full Payment') {
+            // For full payment, calculate total and set balance to 0
+            const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
+            const basePrice = selectedVehicle?.price || 0;
+            const regFee = parseFloat(updated.regFee) || 0;
+            const docCharge = parseFloat(updated.docCharge) || 0;
+            const insuranceCo = parseFloat(updated.insuranceCo) || 0;
+            const discountAmount = parseFloat(updated.discountAmount) || 0;
+            
+            // Calculate total amount as: bike price + reg fee + doc fee + insurance - discount
+            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+            updated.downPayment = updated.totalAmount; // Down payment equals total amount (fully paid)
+            updated.balance = '0'; // Balance is always 0 for full payment
+            // Clear installment amounts
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
+          } else if (value === 'Leasing via AKR') {
+            // Pre-fill leasing company details for AKR
+            updated.leasingCompany = 'AKR Easy Credit';
+            updated.officerName = 'Anton Rojar Stalin';
+            updated.officerContactNo = '0773111266';
+            updated.commissionPercentage = '3';
+            // Reset down payment for leasing
+            updated.downPayment = '0';
+          } else if (value === 'Leasing via Other Company') {
+            // Reset lease amount and down payment for other leasing
+            updated.leaseAmount = '';
+            updated.downPayment = '0';
+            // Clear installment amounts (no installments for other company)
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
+          }
+        }
+        
+        // Auto-calculate balance when vehicle selection, down payment, reg fee, doc charge, insurance, or discount changes
+        if (['vehicleType', 'downPayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount'].includes(name)) {
+          // Get the base price from selected vehicle
+          const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
+          const basePrice = selectedVehicle?.price || 0;
+          
           const downPayment = parseFloat(updated.downPayment) || 0;
           const regFee = parseFloat(updated.regFee) || 0;
           const docCharge = parseFloat(updated.docCharge) || 0;
           const insuranceCo = parseFloat(updated.insuranceCo) || 0;
+          const discountAmount = parseFloat(updated.discountAmount) || 0;
           
-          const balance = totalAmount - downPayment - regFee - docCharge - insuranceCo;
+          if (updated.paymentMethod === 'Full Payment') {
+            // For Full Payment: total = bike price + reg fee + doc fee + insurance - discount
+            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+            updated.downPayment = updated.totalAmount; // Down payment equals total amount
+            updated.balance = '0'; // Balance is always 0 for full payment
+            // Clear installment amounts
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
+          } else if (updated.paymentMethod === 'Leasing via Other Company') {
+            // For Leasing via Other Company: 
+            // Total amount = (Bike amount + doc charge + insurance + reg fee) - discount
+            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+            
+            // Down payment is manually entered by user (not auto-calculated)
+            // Balance = Total amount - down payment
+            const balance = Math.max(0, calculatedTotalAmount - downPayment);
+            updated.balance = balance.toString();
+            
+            // Clear installment amounts (no installments for other company)
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
+          } else {
+            // For Leasing via AKR: total = bike price + reg fee + doc charge + insurance
+            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo;
+            updated.totalAmount = calculatedTotalAmount.toString();
+            
+            // Calculate balance as total amount - down payment - discount amount
+            const balance = calculatedTotalAmount - downPayment - discountAmount;
           updated.balance = Math.max(0, balance).toString();
           
-          // Auto-calculate installment amounts if balance > 0
-          if (balance > 0) {
+            // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
+            if (updated.paymentMethod === 'Leasing via AKR' && balance > 0) {
             const installmentAmount = balance / 3;
             updated.firstInstallmentAmount = installmentAmount.toFixed(2);
             updated.secondInstallmentAmount = installmentAmount.toFixed(2);
             updated.thirdInstallmentAmount = installmentAmount.toFixed(2);
           } else {
+              // Clear installment amounts for other payment methods
             updated.firstInstallmentAmount = '0';
             updated.secondInstallmentAmount = '0';
             updated.thirdInstallmentAmount = '0';
+            }
           }
         }
         
@@ -2901,9 +3313,16 @@ export default function AdminDashboard() {
   const handleVehicleSelection = (vehicleName: string) => {
     const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles.find(v => v.name === vehicleName);
     if (selectedVehicle) {
+      // Auto-fill first available engine and chassis numbers from the mapping
+      const firstMapping = selectedVehicle.engineChassisMap?.[0];
+      const firstEngine = firstMapping?.engineNo || '';
+      const firstChassis = firstMapping?.chassisNo || '';
+      
       setVehicleAllocationCouponForm(prev => ({
         ...prev,
         vehicleType: vehicleName,
+        engineNo: firstEngine,
+        chassisNo: firstChassis,
         totalAmount: selectedVehicle.price?.toString() || '0'
       }));
     }
@@ -2911,19 +3330,88 @@ export default function AdminDashboard() {
 
   // Handle engine number selection
   const handleEngineNumberSelection = (engineNo: string) => {
-    setVehicleAllocationCouponForm(prev => ({ ...prev, engineNo }));
+    // Find the corresponding chassis number for this engine number
+    const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === vehicleAllocationCouponForm.vehicleType);
+    const engineChassisMapping = selectedVehicle?.engineChassisMap?.find((mapping: any) => mapping.engineNo === engineNo);
+    const chassisNo = engineChassisMapping?.chassisNo || '';
+    
+    setVehicleAllocationCouponForm(prev => ({ 
+      ...prev, 
+      engineNo,
+      chassisNo 
+    }));
   };
 
   // Handle chassis number selection
   const handleChassisNumberSelection = (chassisNo: string) => {
-    setVehicleAllocationCouponForm(prev => ({ ...prev, chassisNo }));
+    // Find the corresponding engine number for this chassis number
+    const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === vehicleAllocationCouponForm.vehicleType);
+    const engineChassisMapping = selectedVehicle?.engineChassisMap?.find((mapping: any) => mapping.chassisNo === chassisNo);
+    const engineNo = engineChassisMapping?.engineNo || '';
+    
+    setVehicleAllocationCouponForm(prev => ({ 
+      ...prev, 
+      chassisNo,
+      engineNo 
+    }));
   };
 
   // Handle vehicle allocation coupon number changes
   const handleVehicleAllocationCouponNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
-    const numValue = parseFloat(value) || 0;
-    setVehicleAllocationCouponForm(prev => ({ ...prev, [name]: numValue }));
+    
+    // Store the raw string value to allow empty fields
+    setVehicleAllocationCouponForm(prev => {
+      const updated = { ...prev, [name]: value };
+      
+      // Trigger calculation when these fields change
+      if (['regFee', 'docCharge', 'insuranceCo', 'downPayment', 'discountAmount'].includes(name)) {
+        // Get the base price from selected vehicle
+        const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
+        const basePrice = selectedVehicle?.price || 0;
+        
+        const downPayment = parseFloat(updated.downPayment) || 0;
+        const regFee = parseFloat(updated.regFee) || 0;
+        const docCharge = parseFloat(updated.docCharge) || 0;
+        const insuranceCo = parseFloat(updated.insuranceCo) || 0;
+        const discountAmount = parseFloat(updated.discountAmount) || 0;
+        
+        if (updated.paymentMethod === 'Full Payment') {
+          // For Full Payment: total = bike price + reg fee + doc fee + insurance - discount
+          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+          updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+          updated.downPayment = updated.totalAmount; // Down payment equals total amount
+          updated.balance = '0'; // Balance is always 0 for full payment
+          // Clear installment amounts
+          updated.firstInstallmentAmount = '0';
+          updated.secondInstallmentAmount = '0';
+          updated.thirdInstallmentAmount = '0';
+        } else {
+          // For Leasing: total = bike price + reg fee + doc charge + insurance
+          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo;
+          updated.totalAmount = calculatedTotalAmount.toString();
+          
+          // Calculate balance as total amount - down payment - discount amount
+          const balance = calculatedTotalAmount - downPayment - discountAmount;
+          updated.balance = Math.max(0, balance).toString();
+          
+          // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
+          if (updated.paymentMethod === 'Leasing via AKR' && balance > 0) {
+            const installmentAmount = balance / 3;
+            updated.firstInstallmentAmount = installmentAmount.toFixed(2);
+            updated.secondInstallmentAmount = installmentAmount.toFixed(2);
+            updated.thirdInstallmentAmount = installmentAmount.toFixed(2);
+          } else {
+            // Clear installment amounts for other payment methods
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
+          }
+        }
+      }
+      
+      return updated;
+    });
   };
 
   // Create or update vehicle allocation coupon
@@ -2939,6 +3427,14 @@ export default function AdminDashboard() {
       // Prepare the data for submission
       const submitData = {
         ...vehicleAllocationCouponForm,
+        // Convert string values to numbers for submission
+        totalAmount: parseFloat(vehicleAllocationCouponForm.totalAmount) || 0,
+        balance: parseFloat(vehicleAllocationCouponForm.balance) || 0,
+        downPayment: parseFloat(vehicleAllocationCouponForm.downPayment) || 0,
+        regFee: parseFloat(vehicleAllocationCouponForm.regFee) || 0,
+        docCharge: parseFloat(vehicleAllocationCouponForm.docCharge) || 0,
+        insuranceCo: parseFloat(vehicleAllocationCouponForm.insuranceCo) || 0,
+        discountAmount: parseFloat(vehicleAllocationCouponForm.discountAmount) || 0,
         firstInstallment: {
           amount: parseFloat(vehicleAllocationCouponForm.firstInstallmentAmount) || 0,
           date: vehicleAllocationCouponForm.firstInstallmentDate || null
@@ -3106,6 +3602,12 @@ export default function AdminDashboard() {
     setVehicleAllocationCouponsModalOpen(true);
   };
 
+  // View vehicle allocation coupon
+  const handleViewVehicleAllocationCoupon = (record: any) => {
+    setViewingVehicleAllocationCoupon(record);
+    setViewVehicleAllocationCouponModalOpen(true);
+  };
+
   // Export vehicle allocation coupons to PDF
   const exportVehicleAllocationCouponsToPDF = async () => {
     try {
@@ -3240,24 +3742,7 @@ export default function AdminDashboard() {
               <div class="report-info">${searchTerm}</div>
             </div>
 
-            <div class="stats">
-              <div class="stat-item">
-                <div class="stat-value">${vehicleAllocationCouponsStats?.totalCoupons?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Coupons</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${vehicleAllocationCouponsStats?.totalAmount?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Amount</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${vehicleAllocationCouponsStats?.totalDownPayment?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Down Payment</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${vehicleAllocationCouponsStats?.totalBalance?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Balance</div>
-              </div>
-            </div>
+
 
             <table>
               <thead>
@@ -3308,6 +3793,314 @@ export default function AdminDashboard() {
     }
   };
 
+  // Export individual vehicle allocation coupon to PDF
+  const exportIndividualVehicleAllocationCouponToPDF = (record: any) => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentTime = new Date().toLocaleTimeString('en-GB');
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Vehicle Allocation Coupon - ${record.fullName} - ${currentDate}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center !important; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #333; 
+                padding-bottom: 15px;
+                width: 100%;
+              }
+
+              .company-name { 
+                font-size: 28px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 0 0 10px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-title { 
+                font-size: 20px; 
+                color: #666; 
+                margin: 10px 0 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-info { 
+                font-size: 14px; 
+                color: #666; 
+                margin: 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .customer-details { 
+                margin: 20px 0; 
+                padding: 15px; 
+                background: #f5f5f5; 
+                border-radius: 5px;
+                width: 100%;
+              }
+              .detail-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 8px 0;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 5px;
+              }
+              .detail-label { 
+                font-weight: bold; 
+                color: #333;
+                min-width: 150px;
+              }
+              .detail-value { 
+                color: #666;
+                text-align: right;
+              }
+              .section-title { 
+                font-size: 18px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 20px 0 10px 0;
+                border-bottom: 2px solid #333;
+                padding-bottom: 5px;
+              }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                .header { page-break-inside: avoid; }
+                .customer-details { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="company-name">AKR & SON'S (PVT) LTD</div>
+              <div class="report-title">Vehicle Allocation Coupon</div>
+              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Customer Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Coupon ID:</span>
+                <span class="detail-value">${record.couponId || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Customer Name:</span>
+                <span class="detail-value">${record.fullName || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">NIC Number:</span>
+                <span class="detail-value">${record.nicNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Contact Number:</span>
+                <span class="detail-value">${record.contactNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Address:</span>
+                <span class="detail-value">${record.address || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Occupation:</span>
+                <span class="detail-value">${record.occupation || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Date of Birth:</span>
+                <span class="detail-value">${record.dateOfBirth ? new Date(record.dateOfBirth).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Vehicle Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Vehicle Type:</span>
+                <span class="detail-value">${record.vehicleType || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Engine Number:</span>
+                <span class="detail-value">${record.engineNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Chassis Number:</span>
+                <span class="detail-value">${record.chassisNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Date of Purchase:</span>
+                <span class="detail-value">${record.dateOfPurchase ? new Date(record.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Payment Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Type:</span>
+                <span class="detail-value">${record.paymentType || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Total Amount:</span>
+                <span class="detail-value">LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Down Payment:</span>
+                <span class="detail-value">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Balance:</span>
+                <span class="detail-value">LKR ${record.balance ? parseFloat(record.balance).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Registration Fee:</span>
+                <span class="detail-value">LKR ${record.regFee ? parseFloat(record.regFee).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Document Charge:</span>
+                <span class="detail-value">LKR ${record.docCharge ? parseFloat(record.docCharge).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Insurance:</span>
+                <span class="detail-value">LKR ${record.insuranceCo ? parseFloat(record.insuranceCo).toLocaleString() : '0'}</span>
+              </div>
+              ${record.discountApplied ? `
+              <div class="detail-row">
+                <span class="detail-label">Discount Applied:</span>
+                <span class="detail-value">Yes</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Discount Amount:</span>
+                <span class="detail-value">LKR ${record.discountAmount ? parseFloat(record.discountAmount).toLocaleString() : '0'}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            ${record.paymentMethod === 'Leasing via AKR' || record.paymentMethod === 'Leasing via Other Company' ? `
+            <div class="customer-details">
+              <div class="section-title">Leasing Company Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Leasing Company:</span>
+                <span class="detail-value">${record.leasingCompany || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Officer Name:</span>
+                <span class="detail-value">${record.officerName || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Contact Number:</span>
+                <span class="detail-value">${record.officerContactNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Commission:</span>
+                <span class="detail-value">${record.commissionPercentage ? record.commissionPercentage + '%' : 'N/A'}</span>
+              </div>
+            </div>
+            ` : ''}
+
+            ${record.paymentMethod === 'Leasing via AKR' ? `
+            <div class="customer-details">
+              <div class="section-title">Installment Details</div>
+              <div class="detail-row">
+                <span class="detail-label">1st Installment Amount:</span>
+                <span class="detail-value">LKR ${record.firstInstallment?.amount ? parseFloat(record.firstInstallment.amount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">1st Installment Date:</span>
+                <span class="detail-value">${record.firstInstallment?.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">2nd Installment Amount:</span>
+                <span class="detail-value">LKR ${record.secondInstallment?.amount ? parseFloat(record.secondInstallment.amount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">2nd Installment Date:</span>
+                <span class="detail-value">${record.secondInstallment?.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">3rd Installment Amount:</span>
+                <span class="detail-value">LKR ${record.thirdInstallment?.amount ? parseFloat(record.thirdInstallment.amount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">3rd Installment Date:</span>
+                <span class="detail-value">${record.thirdInstallment?.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+            </div>
+            ` : ''}
+
+            <div class="customer-details">
+              <div class="section-title">Additional Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Workshop No:</span>
+                <span class="detail-value">${record.workshopNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Branch:</span>
+                <span class="detail-value">${record.branch || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Date:</span>
+                <span class="detail-value">${record.date ? new Date(record.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value">${record.status || 'N/A'}</span>
+              </div>
+              ${record.notes ? `
+              <div class="detail-row">
+                <span class="detail-label">Notes:</span>
+                <span class="detail-value">${record.notes}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="footer">
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating individual coupon PDF:', error);
+      message.error('Failed to generate PDF');
+    }
+  };
+
   // Export installment plans to PDF
   const exportInstallmentPlansToPDF = async () => {
     try {
@@ -3315,12 +4108,12 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
         limit: '1000', // Get all records
-        search: installmentSearch,
-        status: installmentStatusFilter,
-        month: installmentMonthFilter
+        search: installmentSearch
       });
       
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/installment-plans?${params}`, {
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5050';
+      // Fetch from Vehicle Allocation Coupons instead of separate Installment Plans
+      const res = await fetch(`${apiUrl}/api/vehicle-allocation-coupons?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -3328,8 +4121,56 @@ export default function AdminDashboard() {
       });
       
       if (!res.ok) throw new Error("Failed to fetch data");
-      const data = await res.json();
-      const allRecords = data.installmentPlans || data.data || [];
+      const response = await res.json();
+      
+      // Filter coupons that have balance and are "Leasing via AKR" only
+      const couponsWithBalance = response.vehicleAllocationCoupons.filter((coupon: any) => 
+        coupon.balance > 0 && 
+        coupon.paymentMethod === 'Leasing via AKR' &&
+        (installmentStatusFilter === '' || coupon.status === installmentStatusFilter) &&
+        (installmentMonthFilter === '' || new Date(coupon.dateOfPurchase).getMonth() === parseInt(installmentMonthFilter))
+      );
+      
+      // Transform Vehicle Allocation Coupons to Installment Plan format with full details
+      const allRecords = couponsWithBalance.map((coupon: any) => ({
+        _id: coupon._id,
+        installmentId: `IP-${coupon.couponId}`,
+        customerName: coupon.fullName,
+        customerPhone: coupon.contactNo,
+        customerAddress: coupon.address,
+        vehicleModel: coupon.vehicleType,
+        engineNumber: coupon.engineNo,
+        chassisNumber: coupon.chassisNo,
+        totalAmount: coupon.totalAmount,
+        downPayment: coupon.downPayment,
+        balanceAmount: coupon.balance,
+        installmentAmount: coupon.balance / 3, // Default to 3 installments
+        numberOfInstallments: 3,
+        startDate: coupon.dateOfPurchase,
+        firstInstallmentDate: coupon.firstInstallment?.date,
+        secondInstallmentDate: coupon.secondInstallment?.date,
+        thirdInstallmentDate: coupon.thirdInstallment?.date,
+        firstInstallmentAmount: coupon.firstInstallment?.amount,
+        secondInstallmentAmount: coupon.secondInstallment?.amount,
+        thirdInstallmentAmount: coupon.thirdInstallment?.amount,
+        firstInstallmentPaidAmount: coupon.firstInstallment?.paidAmount || 0,
+        secondInstallmentPaidAmount: coupon.secondInstallment?.paidAmount || 0,
+        thirdInstallmentPaidAmount: coupon.thirdInstallment?.paidAmount || 0,
+        firstInstallmentPaidDate: coupon.firstInstallment?.paidDate,
+        secondInstallmentPaidDate: coupon.secondInstallment?.paidDate,
+        thirdInstallmentPaidDate: coupon.thirdInstallment?.paidDate,
+        firstInstallment: coupon.firstInstallment,
+        secondInstallment: coupon.secondInstallment,
+        thirdInstallment: coupon.thirdInstallment,
+        paymentMethod: coupon.paymentMethod,
+        leasingCompany: coupon.leasingCompany,
+        officerName: coupon.officerName,
+        officerContactNo: coupon.officerContactNo,
+        commissionPercentage: coupon.commissionPercentage,
+        status: coupon.status,
+        notes: coupon.notes,
+        relatedCouponId: coupon.couponId
+      }));
       
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
@@ -3447,55 +4288,79 @@ export default function AdminDashboard() {
               <div class="report-info">${searchTerm}${statusFilter}${monthFilter}</div>
             </div>
 
-            <div class="stats">
-              <div class="stat-item">
-                <div class="stat-value">${installmentStats?.overall?.totalPlans?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Plans</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${installmentStats?.overall?.totalAmount?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Amount</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${installmentStats?.overall?.totalRemainingBalance?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Remaining Balance</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">${installmentStats?.overall?.activePlans || '0'}</div>
-                <div class="stat-label">Active Plans</div>
-              </div>
-            </div>
+
 
             <table>
               <thead>
                 <tr>
-                  <th>Installment ID</th>
-                  <th>Customer Name</th>
-                  <th>Total Amount</th>
-                  <th>Down Payment</th>
-                  <th>Monthly Installment</th>
-                  <th>Months</th>
-                  <th>Start Date</th>
-                  <th>End Date</th>
-                  <th>Remaining Balance</th>
-                  <th>Payment Status</th>
+                  <th>Coupon ID</th>
+                  <th>Customer Details</th>
+                  <th>Vehicle Details</th>
+                  <th>Payment Summary</th>
+                  <th>Installment Schedule</th>
+                  <th>Installment Payments</th>
+                  <th>Leasing Details</th>
                 </tr>
               </thead>
               <tbody>
-                ${allRecords.map((record: any) => `
+                ${allRecords.map((record: any) => {
+                  // Calculate payment status
+                  const totalPaid = (record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0);
+                  const remainingBalance = record.balanceAmount - totalPaid;
+                  const isFullyPaid = totalPaid >= record.balanceAmount;
+                  
+                  // Format installment schedule
+                  const firstDate = record.firstInstallmentDate ? new Date(record.firstInstallmentDate).toLocaleDateString('en-GB') : '-';
+                  const secondDate = record.secondInstallmentDate ? new Date(record.secondInstallmentDate).toLocaleDateString('en-GB') : '-';
+                  const thirdDate = record.thirdInstallmentDate ? new Date(record.thirdInstallmentDate).toLocaleDateString('en-GB') : '-';
+                  
+                  const firstPaid = record.firstInstallmentPaidAmount > 0 ? '✓' : '';
+                  const secondPaid = record.secondInstallmentPaidAmount > 0 ? '✓' : '';
+                  const thirdPaid = record.thirdInstallmentPaidAmount > 0 ? '✓' : '';
+                  
+                  const scheduleText = isFullyPaid ? 
+                    `1st: ${firstDate} (${firstPaid}), 2nd: ${secondDate} (${secondPaid}), 3rd: ${thirdDate} (${thirdPaid}), All Paid ✓` :
+                    `1st: ${firstDate} (${firstPaid}), 2nd: ${secondDate} (${secondPaid}), 3rd: ${thirdDate} (${thirdPaid}), Check payments above`;
+                  
+                  // Format installment payments
+                  const firstAmount = record.firstInstallmentAmount ? parseFloat(record.firstInstallmentAmount).toLocaleString() : '0';
+                  const secondAmount = record.secondInstallmentAmount ? parseFloat(record.secondInstallmentAmount).toLocaleString() : '0';
+                  const thirdAmount = record.thirdInstallmentAmount ? parseFloat(record.thirdInstallmentAmount).toLocaleString() : '0';
+                  
+                  const paymentsText = `1st: LKR ${firstAmount} (${record.firstInstallmentPaidAmount > 0 ? 'Paid ✓' : 'Pending'}), 2nd: LKR ${secondAmount} (${record.secondInstallmentPaidAmount > 0 ? 'Paid ✓' : 'Pending'}), 3rd: LKR ${thirdAmount} (${record.thirdInstallmentPaidAmount > 0 ? 'Paid ✓' : 'Pending'})`;
+                  
+                  return `
                   <tr>
                     <td>${record.installmentId || '-'}</td>
-                    <td>${record.customerName || '-'}</td>
-                    <td>${record.totalAmount ? `LKR ${record.totalAmount.toLocaleString()}` : '-'}</td>
-                    <td>${record.downPayment ? `LKR ${record.downPayment.toLocaleString()}` : '-'}</td>
-                    <td>${record.monthlyInstallment ? `LKR ${record.monthlyInstallment.toLocaleString()}` : '-'}</td>
-                    <td>${record.numberOfMonths || '-'}</td>
-                    <td>${record.startDate ? new Date(record.startDate).toLocaleDateString('en-GB') : '-'}</td>
-                    <td>${record.endDate ? new Date(record.endDate).toLocaleDateString('en-GB') : '-'}</td>
-                    <td>${record.remainingBalance ? `LKR ${record.remainingBalance.toLocaleString()}` : '-'}</td>
-                    <td class="status-${record.paymentStatus?.toLowerCase() || 'unknown'}">${record.paymentStatus || '-'}</td>
+                      <td>
+                        <strong>${record.customerName || '-'}</strong><br>
+                        ${record.customerPhone || '-'}<br>
+                        ${record.customerAddress || '-'}
+                      </td>
+                      <td>
+                        <strong>${record.vehicleModel || '-'}</strong><br>
+                        Engine: ${record.engineNumber || '-'}<br>
+                        Chassis: ${record.chassisNumber || '-'}
+                      </td>
+                      <td>
+                        <strong>LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</strong> (Total)<br>
+                        Down: LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}<br>
+                        Balance: LKR ${record.balanceAmount ? parseFloat(record.balanceAmount).toLocaleString() : '0'}<br>
+                        Paid: LKR ${totalPaid.toLocaleString()}<br>
+                        Remaining: LKR ${remainingBalance.toLocaleString()}<br>
+                        <strong>${record.paymentMethod || '-'}</strong>
+                      </td>
+                      <td>${scheduleText}</td>
+                      <td>${paymentsText}</td>
+                      <td>
+                        ${record.leasingCompany || '-'}<br>
+                        ${record.officerName || '-'}<br>
+                        ${record.officerContactNo || '-'}<br>
+                        ${record.commissionPercentage ? record.commissionPercentage + '% Commission' : '-'}
+                      </td>
                   </tr>
-                `).join('')}
+                  `;
+                }).join('')}
               </tbody>
             </table>
           </body>
@@ -3514,6 +4379,558 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error generating print report:', error);
       message.error('Failed to generate print report');
+    }
+  };
+
+  // Export individual installment plan to PDF
+  const exportIndividualInstallmentPlanToPDF = (record: any) => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentTime = new Date().toLocaleTimeString('en-GB');
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Installment Plan - ${record.customerName} - ${currentDate}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center !important; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #333; 
+                padding-bottom: 15px;
+                width: 100%;
+              }
+              .company-name { 
+                font-size: 28px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 0 0 10px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-title { 
+                font-size: 20px; 
+                color: #666; 
+                margin: 10px 0 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-info { 
+                font-size: 14px; 
+                color: #666; 
+                margin: 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .customer-details { 
+                margin: 20px 0; 
+                padding: 15px; 
+                background: #f5f5f5; 
+                border-radius: 5px;
+                width: 100%;
+              }
+              .detail-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 8px 0;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 5px;
+              }
+              .detail-label { 
+                font-weight: bold; 
+                color: #333;
+                min-width: 150px;
+              }
+              .detail-value { 
+                color: #666;
+                text-align: right;
+              }
+              .section-title { 
+                font-size: 18px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 20px 0 10px 0;
+                border-bottom: 2px solid #333;
+                padding-bottom: 5px;
+              }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                .header { page-break-inside: avoid; }
+                .customer-details { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="company-name">AKR & SON'S (PVT) LTD</div>
+              <div class="report-title">Installment Plan</div>
+              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Plan Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Installment ID:</span>
+                <span class="detail-value">${record.installmentId || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Customer Name:</span>
+                <span class="detail-value">${record.customerName || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Phone Number:</span>
+                <span class="detail-value">${record.customerPhone || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Address:</span>
+                <span class="detail-value">${record.customerAddress || '-'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Vehicle Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Vehicle Model:</span>
+                <span class="detail-value">${record.vehicleModel || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Engine Number:</span>
+                <span class="detail-value">${record.engineNumber || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Chassis Number:</span>
+                <span class="detail-value">${record.chassisNumber || '-'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Payment Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">${record.paymentMethod || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Total Amount:</span>
+                <span class="detail-value">LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Down Payment:</span>
+                <span class="detail-value">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Balance Amount:</span>
+                <span class="detail-value">LKR ${record.balanceAmount ? parseFloat(record.balanceAmount).toLocaleString() : '0'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Installment Details</div>
+              <div class="detail-row">
+                <span class="detail-label">1st Installment Amount:</span>
+                <span class="detail-value">LKR ${record.firstInstallmentAmount ? parseFloat(record.firstInstallmentAmount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">1st Installment Date:</span>
+                <span class="detail-value">${record.firstInstallment?.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">1st Installment Status:</span>
+                <span class="detail-value">${record.firstInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">2nd Installment Amount:</span>
+                <span class="detail-value">LKR ${record.secondInstallmentAmount ? parseFloat(record.secondInstallmentAmount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">2nd Installment Date:</span>
+                <span class="detail-value">${record.secondInstallment?.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">2nd Installment Status:</span>
+                <span class="detail-value">${record.secondInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">3rd Installment Amount:</span>
+                <span class="detail-value">LKR ${record.thirdInstallmentAmount ? parseFloat(record.thirdInstallmentAmount).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">3rd Installment Date:</span>
+                <span class="detail-value">${record.thirdInstallment?.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">3rd Installment Status:</span>
+                <span class="detail-value">${record.thirdInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+              </div>
+            </div>
+
+            ${record.leasingCompany ? `
+            <div class="customer-details">
+              <div class="section-title">Leasing Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Leasing Company:</span>
+                <span class="detail-value">${record.leasingCompany || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Officer Name:</span>
+                <span class="detail-value">${record.officerName || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Contact Number:</span>
+                <span class="detail-value">${record.officerContactNo || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Commission:</span>
+                <span class="detail-value">${record.commissionPercentage ? record.commissionPercentage + '%' : '-'}</span>
+              </div>
+            </div>
+            ` : ''}
+
+            <div class="customer-details">
+              <div class="section-title">Payment Summary</div>
+              <div class="detail-row">
+                <span class="detail-label">Total Paid:</span>
+                <span class="detail-value">LKR ${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)).toLocaleString()}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Remaining Balance:</span>
+                <span class="detail-value">LKR ${(record.balanceAmount - ((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0))).toLocaleString()}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Status:</span>
+                <span class="detail-value">${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)) >= record.balanceAmount ? 'Fully Paid' : 'Partially Paid'}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating individual installment plan PDF:', error);
+      message.error('Failed to generate PDF');
+    }
+  };
+
+  // Export individual sales transaction to PDF
+  const exportIndividualSalesTransactionToPDF = (record: any) => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentTime = new Date().toLocaleTimeString('en-GB');
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Sales Transaction - ${record.customerName} - ${currentDate}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center !important; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #333; 
+                padding-bottom: 15px;
+                width: 100%;
+              }
+              .company-name { 
+                font-size: 28px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 0 0 10px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-title { 
+                font-size: 20px; 
+                color: #666; 
+                margin: 10px 0 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-info { 
+                font-size: 14px; 
+                color: #666; 
+                margin: 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .customer-details { 
+                margin: 20px 0; 
+                padding: 15px; 
+                background: #f5f5f5; 
+                border-radius: 5px;
+                width: 100%;
+              }
+              .detail-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 8px 0;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 5px;
+              }
+              .detail-label { 
+                font-weight: bold; 
+                color: #333;
+                min-width: 150px;
+              }
+              .detail-value { 
+                color: #666;
+                text-align: right;
+              }
+              .section-title { 
+                font-size: 18px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 20px 0 10px 0;
+                border-bottom: 2px solid #333;
+                padding-bottom: 5px;
+              }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                .header { page-break-inside: avoid; }
+                .customer-details { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="company-name">AKR & SON'S (PVT) LTD</div>
+              <div class="report-title">Sales Transaction</div>
+              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Transaction Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Invoice No:</span>
+                <span class="detail-value">${record.invoiceNo || 'N/A'}</span>
+              </div>
+                              <div class="detail-row">
+                  <span class="detail-label">Bike ID:</span>
+                  <span class="detail-value">${record.bikeId || '-'}</span>
+                </div>
+              <div class="detail-row">
+                <span class="detail-label">Sales Date:</span>
+                <span class="detail-value">${record.salesDate ? new Date(record.salesDate).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+                              <div class="detail-row">
+                  <span class="detail-label">Salesperson:</span>
+                  <span class="detail-value">${record.salespersonName || '-'}</span>
+                </div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Status:</span>
+                <span class="detail-value">${record.paymentStatus || 'N/A'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Customer Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Customer Name:</span>
+                <span class="detail-value">${record.customerName || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Phone Number:</span>
+                <span class="detail-value">${record.customerPhone || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Address:</span>
+                <span class="detail-value">${record.customerAddress || 'N/A'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Vehicle Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Vehicle Model:</span>
+                <span class="detail-value">${record.vehicleModel || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Engine Number:</span>
+                <span class="detail-value">${record.engineNumber || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Chassis Number:</span>
+                <span class="detail-value">${record.chassisNumber || 'N/A'}</span>
+              </div>
+                              <div class="detail-row">
+                  <span class="detail-label">Color:</span>
+                  <span class="detail-value">${record.bikeColor || '-'}</span>
+                </div>
+                <div class="detail-row">
+                  <span class="detail-label">Category:</span>
+                  <span class="detail-value">${record.bikeCategory || '-'}</span>
+                </div>
+              <div class="detail-row">
+                <span class="detail-label">Insurance:</span>
+                <span class="detail-value">${record.insuranceCo || 'N/A'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Payment Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Selling Price:</span>
+                <span class="detail-value">LKR ${record.sellingPrice ? parseFloat(record.sellingPrice).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Down Payment:</span>
+                <span class="detail-value">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Balance Amount:</span>
+                <span class="detail-value">LKR ${record.balanceAmount ? parseFloat(record.balanceAmount).toLocaleString() : '0'}</span>
+              </div>
+              ${record.discountApplied ? `
+              <div class="detail-row">
+                <span class="detail-label">Discount Applied:</span>
+                <span class="detail-value">Yes</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Discount Amount:</span>
+                <span class="detail-value">LKR ${record.discountAmount ? parseFloat(record.discountAmount).toLocaleString() : '0'}</span>
+              </div>
+              ` : ''}
+              ${record.regFee > 0 ? `
+              <div class="detail-row">
+                <span class="detail-label">Registration Fee:</span>
+                <span class="detail-value">LKR ${record.regFee ? parseFloat(record.regFee).toLocaleString() : '0'}</span>
+              </div>
+              ` : ''}
+              ${record.docCharge > 0 ? `
+              <div class="detail-row">
+                <span class="detail-label">Document Charge:</span>
+                <span class="detail-value">LKR ${record.docCharge ? parseFloat(record.docCharge).toLocaleString() : '0'}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            ${record.leasingCompany && record.leasingCompany.trim() !== '' ? `
+            <div class="customer-details">
+              <div class="section-title">Leasing Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Leasing Company:</span>
+                <span class="detail-value">${record.leasingCompany || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Officer Name:</span>
+                <span class="detail-value">${record.officerName || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Contact Number:</span>
+                <span class="detail-value">${record.officerContactNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Commission:</span>
+                <span class="detail-value">${record.commissionPercentage ? record.commissionPercentage + '%' : 'N/A'}</span>
+              </div>
+            </div>
+            ` : ''}
+
+            <div class="customer-details">
+              <div class="section-title">Additional Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Branch:</span>
+                <span class="detail-value">${record.branch || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Issue Time:</span>
+                <span class="detail-value">${record.vehicleIssueTime || 'N/A'}</span>
+              </div>
+              ${record.warrantyPeriod ? `
+              <div class="detail-row">
+                <span class="detail-label">Warranty Period:</span>
+                <span class="detail-value">${record.warrantyPeriod}</span>
+              </div>
+              ` : ''}
+              ${record.freeServiceDetails ? `
+              <div class="detail-row">
+                <span class="detail-label">Free Service Details:</span>
+                <span class="detail-value">${record.freeServiceDetails}</span>
+              </div>
+              ` : ''}
+            </div>
+
+            <div class="footer">
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating individual sales transaction PDF:', error);
+      message.error('Failed to generate PDF');
     }
   };
 
@@ -3919,6 +5336,7 @@ export default function AdminDashboard() {
       });
       fetchBikeInventory();
       fetchBikeInventoryStats();
+      fetchDetailedStockInfo(); // Refresh detailed stock information
     } catch (error) {
       console.error('Error saving bike inventory:', error);
       message.error('Failed to save bike inventory');
@@ -3944,6 +5362,7 @@ export default function AdminDashboard() {
       message.success('Bike inventory deleted successfully');
       fetchBikeInventory();
       fetchBikeInventoryStats();
+      fetchDetailedStockInfo(); // Refresh detailed stock information
     } catch (error) {
       console.error('Error deleting bike inventory:', error);
       message.error('Failed to delete bike inventory');
@@ -3962,9 +5381,16 @@ export default function AdminDashboard() {
       model: record.model || '',
       color: record.color || '',
       engineNo: record.engineNo || '',
-      chassisNumber: record.chassisNumber || ''
+      chassisNumber: record.chassisNumber || '',
+      workshopNo: record.workshopNo || ''
     });
     setBikeInventoryModalOpen(true);
+  };
+
+  // View bike inventory
+  const handleViewBikeInventory = (record: any) => {
+    setViewingBikeInventory(record);
+    setViewBikeInventoryModalOpen(true);
   };
 
   // Export account data to PDF
@@ -4662,6 +6088,181 @@ export default function AdminDashboard() {
     }
   };
 
+  // Export individual bike inventory to PDF
+  const exportIndividualBikeInventoryToPDF = (record: any) => {
+    try {
+      const printWindow = window.open('', '_blank');
+      if (!printWindow) return;
+
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      const currentTime = new Date().toLocaleTimeString('en-GB');
+      
+      const htmlContent = `
+        <!DOCTYPE html>
+        <html>
+          <head>
+            <title>Bike Inventory - ${record.bikeId} - ${currentDate}</title>
+            <style>
+              * { box-sizing: border-box; }
+              body { 
+                font-family: Arial, sans-serif; 
+                margin: 0; 
+                padding: 20px; 
+                line-height: 1.4;
+              }
+              .header { 
+                text-align: center !important; 
+                margin-bottom: 30px; 
+                border-bottom: 2px solid #333; 
+                padding-bottom: 15px;
+                width: 100%;
+              }
+              .company-name { 
+                font-size: 28px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 0 0 10px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-title { 
+                font-size: 20px; 
+                color: #666; 
+                margin: 10px 0 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .report-info { 
+                font-size: 14px; 
+                color: #666; 
+                margin: 5px 0;
+                text-align: center !important;
+                width: 100%;
+                display: block;
+              }
+              .customer-details { 
+                margin: 20px 0; 
+                padding: 15px; 
+                background: #f5f5f5; 
+                border-radius: 5px;
+                width: 100%;
+              }
+              .detail-row { 
+                display: flex; 
+                justify-content: space-between; 
+                margin: 8px 0;
+                border-bottom: 1px solid #ddd;
+                padding-bottom: 5px;
+              }
+              .detail-label { 
+                font-weight: bold; 
+                color: #333;
+                min-width: 150px;
+              }
+              .detail-value { 
+                color: #666;
+                text-align: right;
+              }
+              .section-title { 
+                font-size: 18px; 
+                font-weight: bold; 
+                color: #333; 
+                margin: 20px 0 10px 0;
+                border-bottom: 2px solid #333;
+                padding-bottom: 5px;
+              }
+              .footer { 
+                margin-top: 40px; 
+                text-align: center; 
+                font-size: 12px; 
+                color: #666;
+                border-top: 1px solid #ddd;
+                padding-top: 20px;
+              }
+              @media print {
+                body { margin: 0; padding: 15px; }
+                .header { page-break-inside: avoid; }
+                .customer-details { page-break-inside: avoid; }
+              }
+            </style>
+          </head>
+          <body>
+            <div class="header">
+              <div class="company-name">AKR & SON'S (PVT) LTD</div>
+              <div class="report-title">Bike Inventory Details</div>
+              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Bike Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Bike ID:</span>
+                <span class="detail-value">${record.bikeId || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Date:</span>
+                <span class="detail-value">${record.date ? new Date(record.date).toLocaleDateString('en-GB') : '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Branch:</span>
+                <span class="detail-value">${record.branch || '-'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Vehicle Details</div>
+              <div class="detail-row">
+                <span class="detail-label">Category:</span>
+                <span class="detail-value">${record.category || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Model:</span>
+                <span class="detail-value">${record.model || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Color:</span>
+                <span class="detail-value">${record.color || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Engine Number:</span>
+                <span class="detail-value">${record.engineNo || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Chassis Number:</span>
+                <span class="detail-value">${record.chassisNumber || '-'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Workshop No:</span>
+                <span class="detail-value">${record.workshopNo || '-'}</span>
+              </div>
+            </div>
+
+            <div class="footer">
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            </div>
+          </body>
+        </html>
+      `;
+
+      printWindow.document.write(htmlContent);
+      printWindow.document.close();
+      printWindow.focus();
+      
+      setTimeout(() => {
+        printWindow.print();
+        printWindow.close();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error generating individual bike inventory PDF:', error);
+      message.error('Failed to generate PDF');
+    }
+  };
+
   // Print account data
   const printAccountData = async () => {
     try {
@@ -4981,6 +6582,12 @@ export default function AdminDashboard() {
               label: 'Next Due Installments',
               icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><ClockCircleOutlined style={{ fontSize: 20 }} /></span>,
               onClick: () => setAkrTab('nextDueInstallments')
+            },
+            {
+              key: 'chequeReleaseReminders',
+              label: 'Cheque Release Reminders',
+              icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><FileTextOutlined style={{ fontSize: 20 }} /></span>,
+              onClick: () => setAkrTab('chequeReleaseReminders')
             },
             {
               key: 'recentActivity',
@@ -5390,11 +6997,21 @@ export default function AdminDashboard() {
       key: 'chassisNumber',
       render: (chassisNumber: string) => chassisNumber || '-'
     },
+    { 
+      title: 'Workshop No', 
+      dataIndex: 'workshopNo', 
+      key: 'workshopNo',
+      render: (workshopNo: string) => workshopNo || '-'
+    },
     {
       title: 'Actions',
       key: 'actions',
+      align: 'center' as const,
       render: (_: any, record: any) => (
-        <div className="flex gap-2">
+        <div className="flex gap-2 justify-center">
+          <Button size="small" type="primary" onClick={() => handleViewBikeInventory(record)}>
+            View
+          </Button>
           <Button type="link" size="small" onClick={() => handleEditBikeInventory(record)}>
             Edit
           </Button>
@@ -5500,6 +7117,8 @@ export default function AdminDashboard() {
     averageFinalAmount: 0
   });
   const [salesTransactionsModalOpen, setSalesTransactionsModalOpen] = useState(false);
+  const [viewSalesTransactionModalOpen, setViewSalesTransactionModalOpen] = useState(false);
+  const [viewingSalesTransaction, setViewingSalesTransaction] = useState<any>(null);
   const [salesTransactionsForm, setSalesTransactionsForm] = useState<any>({
     invoiceNo: '',
     bikeId: '',
@@ -5882,6 +7501,12 @@ export default function AdminDashboard() {
     setSalesTransactionsModalOpen(true);
   };
 
+  // View sales transaction
+  const handleViewSalesTransaction = (record: any) => {
+    setViewingSalesTransaction(record);
+    setViewSalesTransactionModalOpen(true);
+  };
+
   // Export sales transactions to PDF
   const exportSalesTransactionsToPDF = async () => {
     try {
@@ -6018,24 +7643,7 @@ export default function AdminDashboard() {
               <div class="report-info">Report Type: Complete Sales Transactions with Full Details</div>
             </div>
             
-            <div class="stats">
-              <div class="stat-item">
-                <div class="stat-value">${salesTransactionsStats?.totalTransactions?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Transactions</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${salesTransactionsStats?.totalSellingPrice?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Amount</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${salesTransactionsStats?.totalDiscountApplied?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Discount</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">LKR ${salesTransactionsStats?.totalFinalAmount?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Balance</div>
-              </div>
-            </div>
+
             
             <table>
               <thead>
@@ -6166,12 +7774,7 @@ export default function AdminDashboard() {
               border-bottom: 3px solid #000;
               padding-bottom: 20px;
             }
-            .logo {
-              width: 80px;
-              height: 80px;
-              margin: 0 auto 10px;
-              display: block;
-            }
+
             .company-name {
               font-size: 24px;
               font-weight: bold;
@@ -6241,10 +7844,9 @@ export default function AdminDashboard() {
         </head>
         <body>
           <div class="letterhead">
-            <img src="/images/logo-removebg-preview.png" alt="AKR Logo" class="logo">
             <div class="company-name">AKR & SONS (PVT) LTD</div>
             <div class="company-subtitle">Vehicle Dealership & Services</div>
-            <div class="company-subtitle">Silavathurai road, Murunkan, Mannar</div>
+            <div class="company-subtitle">Main street, Murunkan</div>
             <div class="company-subtitle">Contact: akrfuture@gmail.com | 0232231222, 0773111266</div>
           </div>
 
@@ -8024,11 +9626,13 @@ export default function AdminDashboard() {
                 </Card>
               </div>
 
+
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                 <div className="flex gap-2 w-full sm:w-auto">
                   <input
                     type="text"
-                    placeholder="Search by bike ID, branch, model, color, engine no, chassis number..."
+                    placeholder="Search by bike ID, branch, model, color, engine no, chassis number, workshop no..."
                     value={bikeInventorySearch}
                     onChange={e => {
                       setBikeInventorySearch(e.target.value);
@@ -8066,7 +9670,8 @@ export default function AdminDashboard() {
                       model: '',
                       color: '',
                       engineNo: '',
-                      chassisNumber: ''
+                      chassisNumber: '',
+                      workshopNo: ''
                     });
                     setBikeInventoryModalOpen(true);
                   }}>
@@ -8210,6 +9815,16 @@ export default function AdminDashboard() {
                         type="text"
                         name="chassisNumber"
                         value={bikeInventoryForm.chassisNumber}
+                        onChange={handleBikeInventoryFormChange}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Workshop No</label>
+                      <input
+                        type="text"
+                        name="workshopNo"
+                        value={bikeInventoryForm.workshopNo}
                         onChange={handleBikeInventoryFormChange}
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       />
@@ -8873,6 +10488,18 @@ export default function AdminDashboard() {
                         </div>
                       )
                     },
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      align: 'center' as const,
+                      render: (_, record: any) => (
+                        <div className="flex gap-2 justify-center">
+                          <Button size="small" type="primary" onClick={() => handleViewSalesTransaction(record)}>
+                            View
+                          </Button>
+                        </div>
+                      )
+                    },
 
                   ]}
                   pagination={{
@@ -9512,6 +11139,18 @@ export default function AdminDashboard() {
                           ) : (
                             <span className="text-gray-500">-</span>
                           )}
+                        </div>
+                      )
+                    },
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      align: 'center' as const,
+                      render: (_, record: any) => (
+                        <div className="flex gap-2 justify-center">
+                          <Button size="small" type="primary" onClick={() => handleViewInstallmentPlan(record)}>
+                            View
+                          </Button>
                         </div>
                       )
                     },
@@ -10595,6 +12234,9 @@ export default function AdminDashboard() {
                       align: 'center' as const,
                       render: (_, record: any) => (
                         <div className="flex gap-2 justify-center">
+                          <Button size="small" type="primary" onClick={() => handleViewVehicleAllocationCoupon(record)}>
+                            View
+                          </Button>
                           <Button size="small" onClick={() => handleEditVehicleAllocationCoupon(record)}>
                             Edit
                           </Button>
@@ -10845,8 +12487,8 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Leasing Company Information - Only show for "Leasing via Other Company" */}
-                {vehicleAllocationCouponForm.paymentMethod === 'Leasing via Other Company' && (
+                {/* Leasing Company Information - Show for both "Leasing via AKR" and "Leasing via Other Company" */}
+                {(vehicleAllocationCouponForm.paymentMethod === 'Leasing via AKR' || vehicleAllocationCouponForm.paymentMethod === 'Leasing via Other Company') && (
                   <div className="bg-yellow-50 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">Leasing Company Information</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -10892,41 +12534,17 @@ export default function AdminDashboard() {
                           min="0"
                         />
                       </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">IV. Total Amount *</label>
-                        <input
-                          type="number"
-                          name="totalAmount"
-                          value={vehicleAllocationCouponForm.totalAmount}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">V. Balance *</label>
-                        <input
-                          type="number"
-                          name="balance"
-                          value={vehicleAllocationCouponForm.balance}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          required
-                        />
-                      </div>
+                      
                     </div>
                   </div>
                 )}
 
-                {/* Payment Details - Only show for "Full Payment" or "Leasing via AKR" */}
-                {(vehicleAllocationCouponForm.paymentMethod === 'Full Payment' || vehicleAllocationCouponForm.paymentMethod === 'Leasing via AKR') && (
+                                {/* Payment Details - Show for all payment methods */}
                   <div className="bg-purple-50 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">Payment Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Show Down Payment for all except Full Payment */}
+                    {vehicleAllocationCouponForm.paymentMethod !== 'Full Payment' && (
                       <div>
                         <label className="block text-sm font-medium mb-1">Down Payment *</label>
                         <input
@@ -10940,6 +12558,7 @@ export default function AdminDashboard() {
                           required
                         />
                       </div>
+                    )}
                       <div>
                         <label className="block text-sm font-medium mb-1">Reg. Fee</label>
                         <input
@@ -10975,18 +12594,54 @@ export default function AdminDashboard() {
                           step="0.01"
                           min="0"
                         />
+                    </div>
+                  </div>
+
+                  {/* Discount Information - Before Total Amount and Balance */}
+                  <div className="mt-4 pt-4 border-t border-purple-200">
+                    <h4 className="text-md font-semibold mb-3">Discount Information</h4>
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="flex items-center">
+                        <input
+                          type="checkbox"
+                          name="discountApplied"
+                          checked={vehicleAllocationCouponForm.discountApplied}
+                          onChange={handleVehicleAllocationCouponFormChange}
+                          className="mr-2"
+                        />
+                        <label className="text-sm font-medium">Apply 15,000 Discount for Ready Cash</label>
                       </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Discount Amount</label>
+                        <input
+                          type="number"
+                          name="discountAmount"
+                          value={vehicleAllocationCouponForm.discountAmount}
+                          onChange={handleVehicleAllocationCouponNumberChange}
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          step="0.01"
+                          min="0"
+                          placeholder="Enter discount amount"
+                          disabled={!vehicleAllocationCouponForm.discountApplied}
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                                    {/* Total Amount and Balance - After Discount Information */}
+                  <div className="mt-4 pt-4 border-t border-purple-200">
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                       <div>
                         <label className="block text-sm font-medium mb-1">Total Amount *</label>
                         <input
                           type="number"
                           name="totalAmount"
                           value={vehicleAllocationCouponForm.totalAmount}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
                           step="0.01"
                           min="0"
                           required
+                          readOnly
                         />
                       </div>
                       <div>
@@ -10995,8 +12650,7 @@ export default function AdminDashboard() {
                           type="number"
                           name="balance"
                           value={vehicleAllocationCouponForm.balance}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
                           step="0.01"
                           min="0"
                           required
@@ -11005,10 +12659,10 @@ export default function AdminDashboard() {
                       </div>
                     </div>
                   </div>
-                )}
+                </div>
 
-                {/* Installment Details - Only show for "Leasing via AKR" or when balance > 0 */}
-                {(vehicleAllocationCouponForm.paymentMethod === 'Leasing via AKR' || parseFloat(vehicleAllocationCouponForm.balance) > 0) && (
+                {/* Installment Details - Only show for "Leasing via AKR" */}
+                {vehicleAllocationCouponForm.paymentMethod === 'Leasing via AKR' && (
                   <div className="bg-indigo-50 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">Installment Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -11166,35 +12820,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Discount Information */}
-                <div className="bg-red-50 p-4 rounded-lg">
-                  <h3 className="text-lg font-semibold mb-4">Discount Information</h3>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div className="flex items-center">
-                      <input
-                        type="checkbox"
-                        name="discountApplied"
-                        checked={vehicleAllocationCouponForm.discountApplied}
-                        onChange={handleVehicleAllocationCouponFormChange}
-                        className="mr-2"
-                      />
-                      <label className="text-sm font-medium">Apply 15,000 Discount for Ready Cash</label>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium mb-1">Discount Amount</label>
-                      <input
-                        type="number"
-                        name="discountAmount"
-                        value={vehicleAllocationCouponForm.discountAmount}
-                        onChange={handleVehicleAllocationCouponNumberChange}
-                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                        step="0.01"
-                        min="0"
-                        placeholder="15000"
-                      />
-                    </div>
-                  </div>
-                </div>
+
 
                 {/* Notes */}
                 <div className="bg-gray-50 p-4 rounded-lg">
@@ -11254,8 +12880,8 @@ export default function AdminDashboard() {
                 <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-green-100 text-sm font-medium">Available Vehicles</p>
-                      <p className="text-3xl font-bold">{vehicles.filter(v => v.available !== false).length}</p>
+                      <p className="text-green-100 text-sm font-medium">Total Stock</p>
+                      <p className="text-3xl font-bold">{detailedStockInfo.reduce((sum, model) => sum + model.totalStock, 0)}</p>
                     </div>
                     <div className="bg-green-400 bg-opacity-30 p-3 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -11411,72 +13037,90 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Stock Availability by Color */}
+                {/* Detailed Stock Information by Model & Color */}
                 <div className="lg:col-span-2">
                   <div className="bg-white rounded-xl shadow-lg p-6">
-                    <h3 className="text-xl font-bold mb-4 text-gray-800 flex items-center">
-                      <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M7 7h.01M7 3h5c.512 0 1.024.195 1.414.586l7 7a2 2 0 010 2.828l-7 7a2 2 0 01-2.828 0l-7-7A1.994 1.994 0 013 12V7a4 4 0 014-4z" />
-                      </svg>
-                      Stock Availability by Vehicle
-                    </h3>
-                    <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
-                      {vehicles.map((vehicle: any) => {
-                        const stockLevel = vehicle.stockQuantity || 0;
-                        const isLowStock = stockLevel > 0 && stockLevel <= 2;
-                        const isOutOfStock = stockLevel === 0;
-                        const isGoodStock = stockLevel > 2;
-                        
-                        return (
-                          <div key={vehicle._id} className={`border-2 rounded-lg p-4 transition-all hover:shadow-md ${
-                            isOutOfStock ? 'border-red-200 bg-red-50' : 
-                            isLowStock ? 'border-yellow-200 bg-yellow-50' : 
-                            'border-green-200 bg-green-50'
-                          }`}>
-                      <div className="text-center">
-                              <h4 className="font-semibold text-gray-900 text-sm mb-2 leading-tight">{vehicle.name}</h4>
-                              <div className={`text-2xl font-bold ${
-                                isOutOfStock ? 'text-red-600' : 
-                                isLowStock ? 'text-yellow-600' : 
-                                'text-green-600'
-                              }`}>
-                                {stockLevel}
-                        </div>
-                              <div className="text-xs text-gray-500 mt-1">
-                                {isOutOfStock ? 'Out of Stock' : 
-                                 isLowStock ? 'Low Stock' : 
-                                 'In Stock'}
-                      </div>
-                              {vehicle.category && (
-                                <div className="text-xs text-gray-400 mt-1">{vehicle.category}</div>
-                              )}
+                    <div className="flex justify-between items-center mb-4">
+                      <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                        <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        Stock Availability by Model & Color
+                      </h3>
+                      <Button 
+                        type="default" 
+                        onClick={fetchDetailedStockInfo}
+                        loading={detailedStockInfoLoading}
+                        size="small"
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        Refresh
+                      </Button>
                     </div>
-                </div>
-                        );
-                      })}
-                  </div>
+                    
+                    {detailedStockInfoLoading ? (
+                      <div className="text-center py-8">
+                        <Spin size="large" />
+                        <p className="text-gray-500 mt-2">Loading stock information...</p>
+                      </div>
+                    ) : detailedStockInfo.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
+                        </svg>
+                        <h3 className="text-xl font-semibold mb-2">No Stock Information</h3>
+                        <p>Add bikes to inventory to see detailed stock breakdown</p>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                        {detailedStockInfo.map((model: any, index: number) => (
+                          <div key={index} className="bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-3">
+                              <div className="flex-1">
+                                <h4 className="font-semibold text-gray-900 text-sm leading-tight">{model.model}</h4>
+                                <p className="text-xs text-gray-500 mt-1">{model.category || 'N/A'}</p>
+                              </div>
+                              <div className="text-right ml-2">
+                                <div className="text-lg font-bold text-blue-600">{model.totalStock}</div>
+                                <div className="text-xs text-gray-500">Total</div>
+                              </div>
+                            </div>
+                            
+                            <div className="space-y-2">
+                              {Object.entries(model.colors).map(([color, bikes]: [string, any]) => (
+                                <div key={color} className="flex justify-between items-center py-1 px-2 bg-gray-50 rounded text-xs">
+                                  <span className="font-medium text-gray-700">{color}</span>
+                                  <span className="font-bold text-green-600">{bikes.length}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                    
                     <div className="mt-4 pt-4 border-t border-gray-200">
                       <div className="flex flex-wrap justify-center gap-6 text-sm">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                          <span>Good Stock ({vehicles.filter(v => (v.stockQuantity || 0) > 2).length})</span>
-              </div>
+                          <span>Good Stock ({detailedStockInfo.filter(m => m.totalStock > 2).length})</span>
+                        </div>
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                          <span>Low Stock ({vehicles.filter(v => (v.stockQuantity || 0) > 0 && (v.stockQuantity || 0) <= 2).length})</span>
-                      </div>
+                          <span>Low Stock ({detailedStockInfo.filter(m => m.totalStock > 0 && m.totalStock <= 2).length})</span>
+                        </div>
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                          <span>Out of Stock ({vehicles.filter(v => (v.stockQuantity || 0) === 0).length})</span>
-                </div>
-              </div>
+                          <span>Out of Stock ({detailedStockInfo.filter(m => m.totalStock === 0).length})</span>
+                        </div>
+                      </div>
                     </div>
                   </div>
                 </div>
               </div>
 
-              {/* Due Installments and Recent Activity */}
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
+              {/* Due Installments, Cheque Release Reminders, and Recent Activity */}
+              <div className="grid grid-cols-1 lg:grid-cols-3 gap-8 mb-8">
                 {/* Due Installments */}
                 <div className="bg-white rounded-xl shadow-lg p-6">
                   <div className="flex justify-between items-center mb-4">
@@ -11704,6 +13348,100 @@ export default function AdminDashboard() {
                         );
                       });
                     })()}
+                  </div>
+                </div>
+
+                {/* Cheque Release Reminders */}
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex justify-between items-center mb-4">
+                    <h3 className="text-xl font-bold text-gray-800 flex items-center">
+                      <svg className="w-5 h-5 mr-2 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                      </svg>
+                      Reminders
+                    </h3>
+                    <div className="flex items-center gap-2">
+                      <div className="text-sm text-gray-500">
+                        {chequeReleaseRemindersLoading ? (
+                          <Spin size="small" />
+                        ) : (
+                          `${chequeReleaseReminders.length} pending`
+                        )}
+                      </div>
+                      <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => setAkrTab('chequeReleaseReminders')}
+                        className="text-blue-600 hover:text-blue-800"
+                      >
+                        More Details →
+                      </Button>
+                    </div>
+                  </div>
+                  <div className="space-y-3 max-h-80 overflow-y-auto">
+                    {chequeReleaseRemindersLoading ? (
+                      <div className="text-center py-8">
+                        <Spin />
+                        <p className="text-gray-500 mt-2">Loading reminders...</p>
+                      </div>
+                    ) : chequeReleaseReminders.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p>No cheque release reminders</p>
+                        <p className="text-xs mt-2">All cheques are up to date</p>
+                      </div>
+                                         ) : (
+                       chequeReleaseReminders.slice(0, 8).map((reminder: any) => {
+                         const isOverdue = reminder.isOverdue;
+                         const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                         const daysUntilRelease = reminder.daysUntilRelease || 0;
+                         
+                         return (
+                           <div key={reminder._id} className={`p-3 rounded-lg border-l-4 ${
+                             isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                           }`}>
+                             <div className="flex justify-between items-start">
+                               <div className="flex-1">
+                                 <div className="font-semibold text-gray-900">{reminder.fullName}</div>
+                                 <div className="text-sm text-gray-600">{reminder.vehicleType}</div>
+                                 <div className="text-sm text-gray-500">
+                                   Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
+                                 </div>
+                                 <div className="text-xs text-gray-400 mt-1">
+                                   Down Payment: LKR {parseFloat(reminder.downPayment).toLocaleString()}
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
+                                 </div>
+                               </div>
+                               <div className="text-right">
+                                 <div className={`font-bold ${
+                                   isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
+                                 }`}>
+                                   {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                 </div>
+                                 <div className="text-xs text-gray-500">
+                                   {isOverdue ? 
+                                     `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                     daysUntilRelease === 0 ? 'Due today' : 
+                                     daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                     `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                   }
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   Release: {new Date(reminder.chequeReleaseDate).toLocaleDateString()}
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   To: David Peries
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                         );
+                       })
+                     )}
                   </div>
                 </div>
 
@@ -12024,6 +13762,197 @@ export default function AdminDashboard() {
                       );
                     });
                   })()}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Cheque Release Reminders Tab */}
+          {akrTab === 'chequeReleaseReminders' && (
+            <div className="col-span-full">
+              <div className="mb-6">
+                <h1 className="text-3xl font-bold text-gray-800 mb-2">Cheque Release Reminders</h1>
+                <p className="text-gray-600">Track all pending cheque releases for David Peries after customer down payments</p>
+              </div>
+              
+              <div className="bg-white rounded-xl shadow-lg p-6">
+                <div className="flex justify-between items-center mb-6">
+                  <div className="text-sm text-gray-500">
+                    {chequeReleaseRemindersLoading ? (
+                      <Spin size="small" />
+                    ) : (
+                      `Total: ${chequeReleaseReminders.length} reminders`
+                    )}
+                  </div>
+                  <Button 
+                    type="primary" 
+                    onClick={exportChequeReleaseRemindersToPDF}
+                    className="bg-blue-600 hover:bg-blue-700"
+                  >
+                    Export PDF
+                  </Button>
+                </div>
+                
+                <div className="space-y-4">
+                  {chequeReleaseRemindersLoading ? (
+                    <div className="text-center py-12">
+                      <Spin size="large" />
+                      <p className="text-gray-500 mt-4">Loading cheque release reminders...</p>
+                    </div>
+                  ) : chequeReleaseReminders.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
+                      <p>All cheques are up to date</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Pending Reminders */}
+                      {chequeReleaseReminders.filter((r: any) => r.status === 'pending').map((reminder: any) => {
+                        const isOverdue = reminder.isOverdue;
+                        const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                        const daysUntilRelease = reminder.daysUntilRelease || 0;
+                        
+                        return (
+                          <div key={reminder._id} className={`p-6 rounded-lg border-l-4 ${
+                            isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                          }`}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="font-semibold text-lg text-gray-900">{reminder.fullName}</div>
+                                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
+                                    isOverdue ? 'bg-red-100 text-red-800' : daysUntilRelease <= 1 ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <div className="text-sm text-gray-600">Vehicle</div>
+                                    <div className="font-medium">{reminder.vehicleType}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Coupon ID</div>
+                                    <div className="font-medium">{reminder.couponId}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Contact</div>
+                                    <div className="font-medium">{reminder.contactNo || 'N/A'}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Down Payment</div>
+                                    <div className="font-medium text-lg">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
+                                  </div>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <div className="text-gray-600">Days since payment</div>
+                                    <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-600">Cheque release date</div>
+                                    <div className="font-medium">{new Date(reminder.chequeReleaseDate).toLocaleDateString()}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-600">Status</div>
+                                    <div className="font-medium">
+                                      {isOverdue ? 
+                                        `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                        daysUntilRelease === 0 ? 'Due today' : 
+                                        daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                        `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                      }
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                              <div className="text-right ml-4">
+                                <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
+                                <div className="text-xs text-gray-500 mb-3">
+                                  Cheque amount: LKR {parseFloat(reminder.downPayment).toLocaleString()}
+                                </div>
+                                <Button 
+                                  type="primary" 
+                                  size="small"
+                                  onClick={() => markChequeAsReleased(reminder.couponId)}
+                                  className="bg-green-600 hover:bg-green-700"
+                                >
+                                  Mark as Done
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Released Reminders */}
+                      {chequeReleaseReminders.filter((r: any) => r.status === 'released').length > 0 && (
+                        <div className="mt-8">
+                          <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Released Cheques</h3>
+                          {chequeReleaseReminders.filter((r: any) => r.status === 'released').map((reminder: any) => {
+                            const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                            const daysSinceReleased = reminder.daysSinceReleased || 0;
+                            
+                            return (
+                              <div key={reminder._id} className="p-6 rounded-lg border-l-4 border-green-500 bg-green-50 mb-4">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-3">
+                                      <div className="font-semibold text-lg text-gray-900">{reminder.fullName}</div>
+                                      <span className="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                                        RELEASED
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                      <div>
+                                        <div className="text-sm text-gray-600">Vehicle</div>
+                                        <div className="font-medium">{reminder.vehicleType}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Coupon ID</div>
+                                        <div className="font-medium">{reminder.couponId}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Contact</div>
+                                        <div className="font-medium">{reminder.contactNo || 'N/A'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Down Payment</div>
+                                        <div className="font-medium text-lg">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                      <div>
+                                        <div className="text-gray-600">Days since payment</div>
+                                        <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-gray-600">Released date</div>
+                                        <div className="font-medium">{new Date(reminder.chequeReleasedDate).toLocaleDateString()}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-gray-600">Days since release</div>
+                                        <div className="font-medium">{daysSinceReleased} day{daysSinceReleased !== 1 ? 's' : ''}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right ml-4">
+                                    <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
+                                    <div className="text-xs text-gray-500">
+                                      Cheque amount: LKR {parseFloat(reminder.downPayment).toLocaleString()}
+                                    </div>
+                                  </div>
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -12751,6 +14680,792 @@ export default function AdminDashboard() {
                   )}
                 </div>
               ))}
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View Vehicle Allocation Coupon Modal */}
+      <Modal
+        title={
+          <div>
+            <div className="text-lg font-semibold">Vehicle Allocation Coupon Details</div>
+            <div className="text-sm text-blue-600 mt-1">
+              Customer: {viewingVehicleAllocationCoupon?.fullName || 'N/A'}
+            </div>
+          </div>
+        }
+        open={viewVehicleAllocationCouponModalOpen}
+        onCancel={() => {
+          setViewVehicleAllocationCouponModalOpen(false);
+          setViewingVehicleAllocationCoupon(null);
+        }}
+        footer={[
+          <Button key="export" type="primary" onClick={() => exportIndividualVehicleAllocationCouponToPDF(viewingVehicleAllocationCoupon)}>
+            Export PDF
+          </Button>,
+          <Button key="close" onClick={() => {
+            setViewVehicleAllocationCouponModalOpen(false);
+            setViewingVehicleAllocationCoupon(null);
+          }}>
+            Close
+          </Button>
+        ]}
+        width={1000}
+        style={{ top: 20 }}
+      >
+        {viewingVehicleAllocationCoupon && (
+          <div className="space-y-6">
+            {/* Customer Information */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Customer Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Coupon ID</label>
+                  <div className="text-lg font-semibold">{viewingVehicleAllocationCoupon.couponId || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Customer Name</label>
+                  <div className="text-lg font-semibold">{viewingVehicleAllocationCoupon.fullName || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">NIC Number</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.nicNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Contact Number</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.contactNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Address</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.address || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Occupation</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.occupation || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Date of Birth</label>
+                  <div className="text-base">
+                    {viewingVehicleAllocationCoupon.dateOfBirth ? new Date(viewingVehicleAllocationCoupon.dateOfBirth).toLocaleDateString('en-GB') : 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Vehicle Information */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-blue-800">Vehicle Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Vehicle Type</label>
+                  <div className="text-lg font-semibold">{viewingVehicleAllocationCoupon.vehicleType || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Engine Number</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.engineNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Chassis Number</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.chassisNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Date of Purchase</label>
+                  <div className="text-base">
+                    {viewingVehicleAllocationCoupon.dateOfPurchase ? new Date(viewingVehicleAllocationCoupon.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Information */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-green-800">Payment Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Method</label>
+                  <div className="text-lg font-semibold">{viewingVehicleAllocationCoupon.paymentMethod || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Type</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.paymentType || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Total Amount</label>
+                  <div className="text-lg font-semibold text-green-600">
+                    LKR {viewingVehicleAllocationCoupon.totalAmount ? parseFloat(viewingVehicleAllocationCoupon.totalAmount).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Down Payment</label>
+                  <div className="text-lg font-semibold text-blue-600">
+                    LKR {viewingVehicleAllocationCoupon.downPayment ? parseFloat(viewingVehicleAllocationCoupon.downPayment).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Balance</label>
+                  <div className="text-lg font-semibold text-orange-600">
+                    LKR {viewingVehicleAllocationCoupon.balance ? parseFloat(viewingVehicleAllocationCoupon.balance).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Registration Fee</label>
+                  <div className="text-base">LKR {viewingVehicleAllocationCoupon.regFee ? parseFloat(viewingVehicleAllocationCoupon.regFee).toLocaleString() : '0'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Document Charge</label>
+                  <div className="text-base">LKR {viewingVehicleAllocationCoupon.docCharge ? parseFloat(viewingVehicleAllocationCoupon.docCharge).toLocaleString() : '0'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Insurance</label>
+                  <div className="text-base">LKR {viewingVehicleAllocationCoupon.insuranceCo ? parseFloat(viewingVehicleAllocationCoupon.insuranceCo).toLocaleString() : '0'}</div>
+                </div>
+                {viewingVehicleAllocationCoupon.discountApplied && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Discount Applied</label>
+                      <div className="text-base text-green-600">Yes</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Discount Amount</label>
+                      <div className="text-base text-green-600">
+                        LKR {viewingVehicleAllocationCoupon.discountAmount ? parseFloat(viewingVehicleAllocationCoupon.discountAmount).toLocaleString() : '0'}
+                      </div>
+                    </div>
+                  </>
+                )}
+              </div>
+            </div>
+
+            {/* Leasing Company Information */}
+            {(viewingVehicleAllocationCoupon.paymentMethod === 'Leasing via AKR' || viewingVehicleAllocationCoupon.paymentMethod === 'Leasing via Other Company') && (
+              <div className="bg-purple-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-purple-800">Leasing Company Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Leasing Company</label>
+                    <div className="text-lg font-semibold">{viewingVehicleAllocationCoupon.leasingCompany || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Officer Name</label>
+                    <div className="text-base">{viewingVehicleAllocationCoupon.officerName || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Contact Number</label>
+                    <div className="text-base">{viewingVehicleAllocationCoupon.officerContactNo || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Commission</label>
+                    <div className="text-base">{viewingVehicleAllocationCoupon.commissionPercentage ? viewingVehicleAllocationCoupon.commissionPercentage + '%' : 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Installment Details */}
+            {viewingVehicleAllocationCoupon.paymentMethod === 'Leasing via AKR' && (
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-indigo-800">Installment Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">1st Installment</label>
+                    <div className="text-base">
+                      <div className="font-semibold">
+                        LKR {viewingVehicleAllocationCoupon.firstInstallment?.amount ? parseFloat(viewingVehicleAllocationCoupon.firstInstallment.amount).toLocaleString() : '0'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {viewingVehicleAllocationCoupon.firstInstallment?.date ? new Date(viewingVehicleAllocationCoupon.firstInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">2nd Installment</label>
+                    <div className="text-base">
+                      <div className="font-semibold">
+                        LKR {viewingVehicleAllocationCoupon.secondInstallment?.amount ? parseFloat(viewingVehicleAllocationCoupon.secondInstallment.amount).toLocaleString() : '0'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {viewingVehicleAllocationCoupon.secondInstallment?.date ? new Date(viewingVehicleAllocationCoupon.secondInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">3rd Installment</label>
+                    <div className="text-base">
+                      <div className="font-semibold">
+                        LKR {viewingVehicleAllocationCoupon.thirdInstallment?.amount ? parseFloat(viewingVehicleAllocationCoupon.thirdInstallment.amount).toLocaleString() : '0'}
+                      </div>
+                      <div className="text-sm text-gray-600">
+                        {viewingVehicleAllocationCoupon.thirdInstallment?.date ? new Date(viewingVehicleAllocationCoupon.thirdInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Information */}
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-yellow-800">Additional Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Workshop No</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.workshopNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Branch</label>
+                  <div className="text-base">{viewingVehicleAllocationCoupon.branch || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Date</label>
+                  <div className="text-base">
+                    {viewingVehicleAllocationCoupon.date ? new Date(viewingVehicleAllocationCoupon.date).toLocaleDateString('en-GB') : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Status</label>
+                  <div className="text-base">
+                    <Tag color={
+                      viewingVehicleAllocationCoupon.status === 'Completed' ? 'green' : 
+                      viewingVehicleAllocationCoupon.status === 'Approved' ? 'blue' : 
+                      viewingVehicleAllocationCoupon.status === 'Pending' ? 'orange' : 'red'
+                    }>
+                      {viewingVehicleAllocationCoupon.status || 'N/A'}
+                    </Tag>
+                  </div>
+                </div>
+                {viewingVehicleAllocationCoupon.notes && (
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium text-gray-600">Notes</label>
+                    <div className="text-base">{viewingVehicleAllocationCoupon.notes}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View Sales Transaction Modal */}
+      <Modal
+        title={
+          <div>
+            <div className="text-lg font-semibold">Sales Transaction Details</div>
+            <div className="text-sm text-blue-600 mt-1">
+              Customer: {viewingSalesTransaction?.customerName || 'N/A'}
+            </div>
+          </div>
+        }
+        open={viewSalesTransactionModalOpen}
+        onCancel={() => {
+          setViewSalesTransactionModalOpen(false);
+          setViewingSalesTransaction(null);
+        }}
+        footer={[
+          <Button key="export" type="primary" onClick={() => exportIndividualSalesTransactionToPDF(viewingSalesTransaction)}>
+            Export PDF
+          </Button>,
+          <Button key="close" onClick={() => {
+            setViewSalesTransactionModalOpen(false);
+            setViewingSalesTransaction(null);
+          }}>
+            Close
+          </Button>
+        ]}
+        width={1000}
+        style={{ top: 20 }}
+      >
+        {viewingSalesTransaction && (
+          <div className="space-y-6">
+            {/* Transaction Information */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Transaction Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Invoice No</label>
+                  <div className="text-lg font-semibold">{viewingSalesTransaction.invoiceNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Bike ID</label>
+                  <div className="text-lg font-semibold">{viewingSalesTransaction.bikeId || '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Sales Date</label>
+                  <div className="text-base">
+                    {viewingSalesTransaction.salesDate ? new Date(viewingSalesTransaction.salesDate).toLocaleDateString('en-GB') : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Salesperson</label>
+                  <div className="text-base">{viewingSalesTransaction.salespersonName || '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Status</label>
+                  <div className="text-base">
+                    <Tag color={
+                      viewingSalesTransaction.paymentStatus === 'Paid' ? 'green' : 
+                      viewingSalesTransaction.paymentStatus === 'Pending' ? 'orange' : 'red'
+                    }>
+                      {viewingSalesTransaction.paymentStatus || 'N/A'}
+                    </Tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Customer Information */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-blue-800">Customer Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Customer Name</label>
+                  <div className="text-lg font-semibold">{viewingSalesTransaction.customerName || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Phone Number</label>
+                  <div className="text-base">{viewingSalesTransaction.customerPhone || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Address</label>
+                  <div className="text-base">{viewingSalesTransaction.customerAddress || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Vehicle Information */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-green-800">Vehicle Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Vehicle Model</label>
+                  <div className="text-lg font-semibold">{viewingSalesTransaction.vehicleModel || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Engine Number</label>
+                  <div className="text-base">{viewingSalesTransaction.engineNumber || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Chassis Number</label>
+                  <div className="text-base">{viewingSalesTransaction.chassisNumber || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Color</label>
+                  <div className="text-base">{viewingSalesTransaction.bikeColor || '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Category</label>
+                  <div className="text-base">{viewingSalesTransaction.bikeCategory || '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Insurance</label>
+                  <div className="text-base">{viewingSalesTransaction.insuranceCo || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Information */}
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-purple-800">Payment Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Method</label>
+                  <div className="text-lg font-semibold">{viewingSalesTransaction.paymentMethod || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Selling Price</label>
+                  <div className="text-lg font-semibold text-green-600">
+                    LKR {viewingSalesTransaction.sellingPrice ? parseFloat(viewingSalesTransaction.sellingPrice).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Down Payment</label>
+                  <div className="text-lg font-semibold text-blue-600">
+                    LKR {viewingSalesTransaction.downPayment ? parseFloat(viewingSalesTransaction.downPayment).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Balance Amount</label>
+                  <div className="text-lg font-semibold text-orange-600">
+                    LKR {viewingSalesTransaction.balanceAmount ? parseFloat(viewingSalesTransaction.balanceAmount).toLocaleString() : '0'}
+                  </div>
+                </div>
+                {viewingSalesTransaction.discountApplied && (
+                  <>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Discount Applied</label>
+                      <div className="text-base text-green-600">Yes</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-gray-600">Discount Amount</label>
+                      <div className="text-base text-green-600">
+                        LKR {viewingSalesTransaction.discountAmount ? parseFloat(viewingSalesTransaction.discountAmount).toLocaleString() : '0'}
+                      </div>
+                    </div>
+                  </>
+                )}
+                {viewingSalesTransaction.regFee > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Registration Fee</label>
+                    <div className="text-base">LKR {viewingSalesTransaction.regFee ? parseFloat(viewingSalesTransaction.regFee).toLocaleString() : '0'}</div>
+                  </div>
+                )}
+                {viewingSalesTransaction.docCharge > 0 && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Document Charge</label>
+                    <div className="text-base">LKR {viewingSalesTransaction.docCharge ? parseFloat(viewingSalesTransaction.docCharge).toLocaleString() : '0'}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Leasing Information */}
+            {viewingSalesTransaction.leasingCompany && viewingSalesTransaction.leasingCompany.trim() !== '' && (
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-indigo-800">Leasing Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Leasing Company</label>
+                    <div className="text-lg font-semibold">{viewingSalesTransaction.leasingCompany || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Officer Name</label>
+                    <div className="text-base">{viewingSalesTransaction.officerName || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Contact Number</label>
+                    <div className="text-base">{viewingSalesTransaction.officerContactNo || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Commission</label>
+                    <div className="text-base">{viewingSalesTransaction.commissionPercentage ? viewingSalesTransaction.commissionPercentage + '%' : 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Additional Information */}
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-yellow-800">Additional Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Branch</label>
+                  <div className="text-base">{viewingSalesTransaction.branch || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Issue Time</label>
+                  <div className="text-base">{viewingSalesTransaction.vehicleIssueTime || 'N/A'}</div>
+                </div>
+                {viewingSalesTransaction.warrantyPeriod && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Warranty Period</label>
+                    <div className="text-base">{viewingSalesTransaction.warrantyPeriod}</div>
+                  </div>
+                )}
+                {viewingSalesTransaction.freeServiceDetails && (
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Free Service Details</label>
+                    <div className="text-base">{viewingSalesTransaction.freeServiceDetails}</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View Installment Plan Modal */}
+      <Modal
+        title={
+          <div>
+            <div className="text-lg font-semibold">Installment Plan Details</div>
+            <div className="text-sm text-blue-600 mt-1">
+              Customer: {viewingInstallmentPlan?.customerName || 'N/A'}
+            </div>
+          </div>
+        }
+        open={viewInstallmentPlanModalOpen}
+        onCancel={() => {
+          setViewInstallmentPlanModalOpen(false);
+          setViewingInstallmentPlan(null);
+        }}
+        footer={[
+          <Button key="export" type="primary" onClick={() => exportIndividualInstallmentPlanToPDF(viewingInstallmentPlan)}>
+            Export PDF
+          </Button>,
+          <Button key="close" onClick={() => {
+            setViewInstallmentPlanModalOpen(false);
+            setViewingInstallmentPlan(null);
+          }}>
+            Close
+          </Button>
+        ]}
+        width={1000}
+        style={{ top: 20 }}
+      >
+        {viewingInstallmentPlan && (
+          <div className="space-y-6">
+            {/* Plan Information */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Plan Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Installment ID</label>
+                  <div className="text-lg font-semibold">{viewingInstallmentPlan.installmentId || '-'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Customer Name</label>
+                  <div className="text-lg font-semibold">{viewingInstallmentPlan.customerName || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Phone Number</label>
+                  <div className="text-base">{viewingInstallmentPlan.customerPhone || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Address</label>
+                  <div className="text-base">{viewingInstallmentPlan.customerAddress || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Vehicle Information */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-blue-800">Vehicle Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Vehicle Model</label>
+                  <div className="text-lg font-semibold">{viewingInstallmentPlan.vehicleModel || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Engine Number</label>
+                  <div className="text-base">{viewingInstallmentPlan.engineNumber || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Chassis Number</label>
+                  <div className="text-base">{viewingInstallmentPlan.chassisNumber || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Payment Information */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-green-800">Payment Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Method</label>
+                  <div className="text-lg font-semibold">{viewingInstallmentPlan.paymentMethod || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Total Amount</label>
+                  <div className="text-lg font-semibold text-green-600">
+                    LKR {viewingInstallmentPlan.totalAmount ? parseFloat(viewingInstallmentPlan.totalAmount).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Down Payment</label>
+                  <div className="text-lg font-semibold text-blue-600">
+                    LKR {viewingInstallmentPlan.downPayment ? parseFloat(viewingInstallmentPlan.downPayment).toLocaleString() : '0'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Balance Amount</label>
+                  <div className="text-lg font-semibold text-orange-600">
+                    LKR {viewingInstallmentPlan.balanceAmount ? parseFloat(viewingInstallmentPlan.balanceAmount).toLocaleString() : '0'}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Installment Details */}
+            <div className="bg-purple-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-purple-800">Installment Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">1st Installment</label>
+                  <div className="text-base">
+                    <div className="font-semibold">
+                      LKR {viewingInstallmentPlan.firstInstallmentAmount ? parseFloat(viewingInstallmentPlan.firstInstallmentAmount).toLocaleString() : '0'}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {viewingInstallmentPlan.firstInstallment?.date ? new Date(viewingInstallmentPlan.firstInstallment.date).toLocaleDateString('en-GB') : '-'}
+                    </div>
+                    <div className="text-xs mt-1">
+                      <Tag color={viewingInstallmentPlan.firstInstallmentPaidAmount > 0 ? 'green' : 'red'}>
+                        {viewingInstallmentPlan.firstInstallmentPaidAmount > 0 ? '✓ Paid' : '❌ Pending'}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">2nd Installment</label>
+                  <div className="text-base">
+                    <div className="font-semibold">
+                      LKR {viewingInstallmentPlan.secondInstallmentAmount ? parseFloat(viewingInstallmentPlan.secondInstallmentAmount).toLocaleString() : '0'}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {viewingInstallmentPlan.secondInstallment?.date ? new Date(viewingInstallmentPlan.secondInstallment.date).toLocaleDateString('en-GB') : '-'}
+                    </div>
+                    <div className="text-xs mt-1">
+                      <Tag color={viewingInstallmentPlan.secondInstallmentPaidAmount > 0 ? 'green' : 'red'}>
+                        {viewingInstallmentPlan.secondInstallmentPaidAmount > 0 ? '✓ Paid' : '❌ Pending'}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">3rd Installment</label>
+                  <div className="text-base">
+                    <div className="font-semibold">
+                      LKR {viewingInstallmentPlan.thirdInstallmentAmount ? parseFloat(viewingInstallmentPlan.thirdInstallmentAmount).toLocaleString() : '0'}
+                    </div>
+                    <div className="text-sm text-gray-600">
+                      {viewingInstallmentPlan.thirdInstallment?.date ? new Date(viewingInstallmentPlan.thirdInstallment.date).toLocaleDateString('en-GB') : '-'}
+                    </div>
+                    <div className="text-xs mt-1">
+                      <Tag color={viewingInstallmentPlan.thirdInstallmentPaidAmount > 0 ? 'green' : 'red'}>
+                        {viewingInstallmentPlan.thirdInstallmentPaidAmount > 0 ? '✓ Paid' : '❌ Pending'}
+                      </Tag>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Leasing Information */}
+            {viewingInstallmentPlan.leasingCompany && (
+              <div className="bg-indigo-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-indigo-800">Leasing Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Leasing Company</label>
+                    <div className="text-lg font-semibold">{viewingInstallmentPlan.leasingCompany || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Officer Name</label>
+                    <div className="text-base">{viewingInstallmentPlan.officerName || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Contact Number</label>
+                    <div className="text-base">{viewingInstallmentPlan.officerContactNo || 'N/A'}</div>
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-600">Commission</label>
+                    <div className="text-base">{viewingInstallmentPlan.commissionPercentage ? viewingInstallmentPlan.commissionPercentage + '%' : 'N/A'}</div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+            {/* Payment Summary */}
+            <div className="bg-yellow-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-yellow-800">Payment Summary</h3>
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Total Paid</label>
+                  <div className="text-lg font-semibold text-green-600">
+                    LKR {((viewingInstallmentPlan.firstInstallmentPaidAmount || 0) + (viewingInstallmentPlan.secondInstallmentPaidAmount || 0) + (viewingInstallmentPlan.thirdInstallmentPaidAmount || 0)).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Remaining Balance</label>
+                  <div className="text-lg font-semibold text-orange-600">
+                    LKR {(viewingInstallmentPlan.balanceAmount - ((viewingInstallmentPlan.firstInstallmentPaidAmount || 0) + (viewingInstallmentPlan.secondInstallmentPaidAmount || 0) + (viewingInstallmentPlan.thirdInstallmentPaidAmount || 0))).toLocaleString()}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Payment Status</label>
+                  <div className="text-base">
+                    <Tag color={((viewingInstallmentPlan.firstInstallmentPaidAmount || 0) + (viewingInstallmentPlan.secondInstallmentPaidAmount || 0) + (viewingInstallmentPlan.thirdInstallmentPaidAmount || 0)) >= viewingInstallmentPlan.balanceAmount ? 'green' : 'orange'}>
+                      {((viewingInstallmentPlan.firstInstallmentPaidAmount || 0) + (viewingInstallmentPlan.secondInstallmentPaidAmount || 0) + (viewingInstallmentPlan.thirdInstallmentPaidAmount || 0)) >= viewingInstallmentPlan.balanceAmount ? 'Fully Paid' : 'Partially Paid'}
+                    </Tag>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+      </Modal>
+
+      {/* View Bike Inventory Modal */}
+      <Modal
+        title={
+          <div>
+            <div className="text-lg font-semibold">Bike Inventory Details</div>
+            <div className="text-sm text-blue-600 mt-1">
+              Bike ID: {viewingBikeInventory?.bikeId || 'N/A'}
+            </div>
+          </div>
+        }
+        open={viewBikeInventoryModalOpen}
+        onCancel={() => {
+          setViewBikeInventoryModalOpen(false);
+          setViewingBikeInventory(null);
+        }}
+        footer={[
+          <Button key="export" type="primary" onClick={() => exportIndividualBikeInventoryToPDF(viewingBikeInventory)}>
+            Export PDF
+          </Button>,
+          <Button key="close" onClick={() => {
+            setViewBikeInventoryModalOpen(false);
+            setViewingBikeInventory(null);
+          }}>
+            Close
+          </Button>
+        ]}
+        width={800}
+        style={{ top: 20 }}
+      >
+        {viewingBikeInventory && (
+          <div className="space-y-6">
+            {/* Bike Information */}
+            <div className="bg-gray-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-gray-800">Bike Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Bike ID</label>
+                  <div className="text-lg font-semibold">{viewingBikeInventory.bikeId || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Date</label>
+                  <div className="text-base">
+                    {viewingBikeInventory.date ? new Date(viewingBikeInventory.date).toLocaleDateString('en-GB') : 'N/A'}
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Branch</label>
+                  <div className="text-base">{viewingBikeInventory.branch || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Vehicle Details */}
+            <div className="bg-blue-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-blue-800">Vehicle Details</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Category</label>
+                  <div className="text-lg font-semibold">{viewingBikeInventory.category || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Model</label>
+                  <div className="text-lg font-semibold">{viewingBikeInventory.model || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Color</label>
+                  <div className="text-base">{viewingBikeInventory.color || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Engine Number</label>
+                  <div className="text-base">{viewingBikeInventory.engineNo || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Chassis Number</label>
+                  <div className="text-base">{viewingBikeInventory.chassisNumber || 'N/A'}</div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Workshop No</label>
+                  <div className="text-base">{viewingBikeInventory.workshopNo || 'N/A'}</div>
+                </div>
+              </div>
             </div>
           </div>
         )}
