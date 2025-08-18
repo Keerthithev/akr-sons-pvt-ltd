@@ -1,7 +1,5 @@
-const { schedule } = require('@netlify/functions');
-
-// Cron syntax for every 2 minutes: "*/2 * * * *"
-exports.handler = schedule("*/2 * * * *", async (event) => {
+// Simple keep-alive function - can be triggered manually or via cron
+exports.handler = async (event) => {
   const timestamp = new Date().toISOString();
   const keepAliveUrl = process.env.KEEP_ALIVE_URL;
   
