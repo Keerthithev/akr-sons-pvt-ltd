@@ -1,7 +1,7 @@
 const { schedule } = require('@netlify/functions');
 
 // Cron syntax for every 2 minutes: "*/2 * * * *"
-const handler = schedule("*/2 * * * *", async (event) => {
+exports.handler = schedule("*/2 * * * *", async (event) => {
   const timestamp = new Date().toISOString();
   const keepAliveUrl = process.env.KEEP_ALIVE_URL;
   
@@ -55,6 +55,4 @@ const handler = schedule("*/2 * * * *", async (event) => {
       })
     };
   }
-});
-
-module.exports = { handler }; 
+}); 
