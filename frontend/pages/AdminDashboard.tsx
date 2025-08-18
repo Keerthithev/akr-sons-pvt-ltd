@@ -705,9 +705,10 @@ export default function AdminDashboard() {
     vehicleIssueTime: '',
     status: 'Pending',
     notes: '',
-    discountApplied: false,
-    discountAmount: '',
-    leaseAmount: ''
+            discountApplied: false,
+        discountAmount: '',
+                leaseAmount: '',
+        interestAmount: '' // New field for interest amount
   });
 
   // Commissioner Letter state
@@ -3231,8 +3232,8 @@ export default function AdminDashboard() {
           }
         }
         
-        // Auto-calculate balance when vehicle selection, down payment, reg fee, doc charge, insurance, or discount changes
-        if (['vehicleType', 'downPayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount'].includes(name)) {
+        // Auto-calculate balance when vehicle selection, down payment, reg fee, doc charge, insurance, discount, or interest changes
+        if (['vehicleType', 'downPayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount', 'interestAmount'].includes(name)) {
           // Get the base price from selected vehicle
           const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
           const basePrice = selectedVehicle?.price || 0;
@@ -3269,13 +3270,14 @@ export default function AdminDashboard() {
             updated.secondInstallmentAmount = '0';
             updated.thirdInstallmentAmount = '0';
           } else {
-            // For Leasing via AKR: total = bike price + reg fee + doc charge + insurance
-            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo;
+            // For Leasing via AKR: total = bike price + reg fee + doc charge + insurance + interest
+            const interestAmount = parseFloat(updated.interestAmount) || 0;
+            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount;
             updated.totalAmount = calculatedTotalAmount.toString();
             
             // Calculate balance as total amount - down payment - discount amount
             const balance = calculatedTotalAmount - downPayment - discountAmount;
-          updated.balance = Math.max(0, balance).toString();
+            updated.balance = Math.max(0, balance).toString();
           
             // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
             if (updated.paymentMethod === 'Leasing via AKR' && balance > 0) {
@@ -3361,11 +3363,41 @@ export default function AdminDashboard() {
     const { name, value } = e.target;
     
     // Store the raw string value to allow empty fields
-    setVehicleAllocationCouponForm(prev => {
-      const updated = { ...prev, [name]: value };
-      
-      // Trigger calculation when these fields change
-      if (['regFee', 'docCharge', 'insuranceCo', 'downPayment', 'discountAmount'].includes(name)) {
+          setVehicleAllocationCouponForm(prev => {
+        const updated = { ...prev, [name]: value };
+        
+        // Handle manual installment amount changes for AKR leasing
+        if (['firstInstallmentAmount', 'secondInstallmentAmount'].includes(name) && updated.paymentMethod === 'Leasing via AKR') {
+          const balance = parseFloat(updated.balance) || 0;
+          
+          if (name === 'firstInstallmentAmount') {
+            // Always allow user to type freely
+            updated.firstInstallmentAmount = value;
+            
+            // Only auto-calculate other installments if user entered a valid amount
+            const firstAmount = parseFloat(value) || 0;
+            if (firstAmount > 0 && firstAmount <= balance) {
+              const remainingBalance = balance - firstAmount;
+              const equalAmount = remainingBalance / 2;
+              updated.secondInstallmentAmount = equalAmount.toFixed(2);
+              updated.thirdInstallmentAmount = equalAmount.toFixed(2);
+            }
+          } else if (name === 'secondInstallmentAmount') {
+            // Always allow user to type freely
+            updated.secondInstallmentAmount = value;
+            
+            // Only auto-calculate third installment if user entered a valid amount
+            const secondAmount = parseFloat(value) || 0;
+            const firstAmount = parseFloat(updated.firstInstallmentAmount) || 0;
+            if (secondAmount > 0 && (firstAmount + secondAmount) <= balance) {
+              const remainingBalance = balance - firstAmount - secondAmount;
+              updated.thirdInstallmentAmount = remainingBalance.toFixed(2);
+            }
+          }
+        }
+        
+        // Trigger calculation when these fields change
+      if (['regFee', 'docCharge', 'insuranceCo', 'downPayment', 'discountAmount', 'interestAmount'].includes(name)) {
         // Get the base price from selected vehicle
         const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
         const basePrice = selectedVehicle?.price || 0;
@@ -3387,8 +3419,9 @@ export default function AdminDashboard() {
           updated.secondInstallmentAmount = '0';
           updated.thirdInstallmentAmount = '0';
         } else {
-          // For Leasing: total = bike price + reg fee + doc charge + insurance
-          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo;
+          // For Leasing: total = bike price + reg fee + doc charge + insurance + interest (for AKR)
+          const interestAmount = updated.paymentMethod === 'Leasing via AKR' ? (parseFloat(updated.interestAmount) || 0) : 0;
+          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount;
           updated.totalAmount = calculatedTotalAmount.toString();
           
           // Calculate balance as total amount - down payment - discount amount
@@ -3435,6 +3468,7 @@ export default function AdminDashboard() {
         docCharge: parseFloat(vehicleAllocationCouponForm.docCharge) || 0,
         insuranceCo: parseFloat(vehicleAllocationCouponForm.insuranceCo) || 0,
         discountAmount: parseFloat(vehicleAllocationCouponForm.discountAmount) || 0,
+        interestAmount: parseFloat(vehicleAllocationCouponForm.interestAmount) || 0,
         firstInstallment: {
           amount: parseFloat(vehicleAllocationCouponForm.firstInstallmentAmount) || 0,
           date: vehicleAllocationCouponForm.firstInstallmentDate || null
@@ -3597,7 +3631,9 @@ export default function AdminDashboard() {
       status: record.status || 'Pending',
       notes: record.notes || '',
       discountApplied: record.discountApplied || false,
-      discountAmount: record.discountAmount || ''
+      discountAmount: record.discountAmount || '',
+      leaseAmount: record.leaseAmount || '',
+      interestAmount: record.interestAmount || ''
     });
     setVehicleAllocationCouponsModalOpen(true);
   };
@@ -12594,8 +12630,25 @@ export default function AdminDashboard() {
                           step="0.01"
                           min="0"
                         />
+                      </div>
+                      
+                      {/* Interest Amount - Only show for Leasing via AKR */}
+                      {vehicleAllocationCouponForm.paymentMethod === 'Leasing via AKR' && (
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Interest Amount</label>
+                          <input
+                            type="number"
+                            name="interestAmount"
+                            value={vehicleAllocationCouponForm.interestAmount}
+                            onChange={handleVehicleAllocationCouponNumberChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter interest amount"
+                          />
+                        </div>
+                      )}
                     </div>
-                  </div>
 
                   {/* Discount Information - Before Total Amount and Balance */}
                   <div className="mt-4 pt-4 border-t border-purple-200">
@@ -12666,78 +12719,75 @@ export default function AdminDashboard() {
                   <div className="bg-indigo-50 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">Installment Details</h3>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-sm font-medium mb-1">1st Installment Amount</label>
-                        <input
-                          type="number"
-                          name="firstInstallmentAmount"
-                          value={vehicleAllocationCouponForm.firstInstallmentAmount}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">1st Installment Date</label>
-                        <input
-                          type="date"
-                          name="firstInstallmentDate"
-                          value={vehicleAllocationCouponForm.firstInstallmentDate}
-                          onChange={handleVehicleAllocationCouponFormChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">2nd Installment Amount</label>
-                        <input
-                          type="number"
-                          name="secondInstallmentAmount"
-                          value={vehicleAllocationCouponForm.secondInstallmentAmount}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">2nd Installment Date</label>
-                        <input
-                          type="date"
-                          name="secondInstallmentDate"
-                          value={vehicleAllocationCouponForm.secondInstallmentDate}
-                          onChange={handleVehicleAllocationCouponFormChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">3rd Installment Amount</label>
-                        <input
-                          type="number"
-                          name="thirdInstallmentAmount"
-                          value={vehicleAllocationCouponForm.thirdInstallmentAmount}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          readOnly
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-sm font-medium mb-1">3rd Installment Date</label>
-                        <input
-                          type="date"
-                          name="thirdInstallmentDate"
-                          value={vehicleAllocationCouponForm.thirdInstallmentDate}
-                          onChange={handleVehicleAllocationCouponFormChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          readOnly
-                        />
-                      </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">1st Installment Amount</label>
+                          <input
+                            type="number"
+                            name="firstInstallmentAmount"
+                            value={vehicleAllocationCouponForm.firstInstallmentAmount}
+                            onChange={handleVehicleAllocationCouponNumberChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter amount or leave for auto-calculation"
+                          />
+                        </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">1st Installment Date</label>
+                          <input
+                            type="date"
+                            name="firstInstallmentDate"
+                            value={vehicleAllocationCouponForm.firstInstallmentDate}
+                            onChange={handleVehicleAllocationCouponFormChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">2nd Installment Amount</label>
+                          <input
+                            type="number"
+                            name="secondInstallmentAmount"
+                            value={vehicleAllocationCouponForm.secondInstallmentAmount}
+                            onChange={handleVehicleAllocationCouponNumberChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                            step="0.01"
+                            min="0"
+                            placeholder="Enter amount or leave for auto-calculation"
+                          />
+                        </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">2nd Installment Date</label>
+                          <input
+                            type="date"
+                            name="secondInstallmentDate"
+                            value={vehicleAllocationCouponForm.secondInstallmentDate}
+                            onChange={handleVehicleAllocationCouponFormChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">3rd Installment Amount</label>
+                          <input
+                            type="number"
+                            name="thirdInstallmentAmount"
+                            value={vehicleAllocationCouponForm.thirdInstallmentAmount}
+                            onChange={handleVehicleAllocationCouponNumberChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                            step="0.01"
+                            min="0"
+                            placeholder="Auto-calculated (remaining balance)"
+                          />
+                        </div>
+                                              <div>
+                          <label className="block text-sm font-medium mb-1">3rd Installment Date</label>
+                          <input
+                            type="date"
+                            name="thirdInstallmentDate"
+                            value={vehicleAllocationCouponForm.thirdInstallmentDate}
+                            onChange={handleVehicleAllocationCouponFormChange}
+                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                          />
+                        </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">Cheque No</label>
                         <input

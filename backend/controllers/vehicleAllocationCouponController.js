@@ -44,6 +44,15 @@ exports.createVehicleAllocationCoupon = async (req, res, next) => {
     // Auto-calculate installment dates if payment method is leasing or if there's a balance
     let couponData = { ...req.body, couponId, workshopNo };
     
+    // Add interest amount to total for AKR leasing
+    if (req.body.paymentMethod === 'Leasing via AKR') {
+      const interestAmount = parseFloat(req.body.interestAmount) || 0;
+      if (interestAmount > 0) {
+        couponData.totalAmount = (parseFloat(couponData.totalAmount) + interestAmount).toString();
+        couponData.balance = (parseFloat(couponData.balance) + interestAmount).toString();
+      }
+    }
+    
     // Set down payment date and calculate cheque release date (4 days after down payment)
     if (req.body.downPayment && req.body.downPayment > 0) {
       const downPaymentDate = new Date();
@@ -67,26 +76,85 @@ exports.createVehicleAllocationCoupon = async (req, res, next) => {
     
     if ((req.body.paymentMethod === 'Leasing via AKR' || parseFloat(req.body.balance) > 0) && req.body.dateOfPurchase) {
       const purchaseDate = new Date(req.body.dateOfPurchase);
+      const numberOfInstallments = 3; // Always use 3 installments
       
       // Calculate installment amounts if balance > 0
       const balance = parseFloat(req.body.balance) || 0;
-      const installmentAmount = balance > 0 ? balance / 3 : 0;
       
-      // Set installment dates with 1-month gaps
-      couponData.firstInstallment = {
-        amount: installmentAmount,
-        date: new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 1, purchaseDate.getDate())
-      };
-      
-      couponData.secondInstallment = {
-        amount: installmentAmount,
-        date: new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 2, purchaseDate.getDate())
-      };
-      
-      couponData.thirdInstallment = {
-        amount: installmentAmount,
-        date: new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 3, purchaseDate.getDate())
-      };
+      if (balance > 0) {
+        // Use the installment amounts from the form if provided, otherwise calculate equally
+        const firstAmount = parseFloat(req.body.firstInstallment?.amount || req.body.firstInstallmentAmount || 0);
+        const secondAmount = parseFloat(req.body.secondInstallment?.amount || req.body.secondInstallmentAmount || 0);
+        
+        let installments = [];
+        
+        if (firstAmount > 0 || secondAmount > 0) {
+          // User has provided manual amounts
+          if (firstAmount > 0) {
+            installments.push(firstAmount);
+          }
+          
+          if (secondAmount > 0 && numberOfInstallments >= 2) {
+            installments.push(secondAmount);
+          }
+          
+          // Calculate remaining installments
+          const usedAmount = installments.reduce((sum, amount) => sum + amount, 0);
+          const remainingBalance = balance - usedAmount;
+          
+          if (numberOfInstallments === 2 && installments.length === 1) {
+            // For 2 installments, second gets remaining balance
+            installments.push(remainingBalance);
+          } else if (numberOfInstallments === 3) {
+            // For 3 installments, calculate remaining equally
+            const remainingInstallments = numberOfInstallments - installments.length;
+            if (remainingInstallments > 0 && remainingBalance > 0) {
+              const equalAmount = remainingBalance / remainingInstallments;
+              for (let i = 0; i < remainingInstallments; i++) {
+                installments.push(equalAmount);
+              }
+            }
+          }
+        } else {
+          // Default calculation - divide equally
+          if (numberOfInstallments === 1) {
+            installments = [balance];
+          } else if (numberOfInstallments === 2) {
+            const equalAmount = balance / 2;
+            installments = [equalAmount, equalAmount];
+          } else {
+            const equalAmount = balance / 3;
+            installments = [equalAmount, equalAmount, equalAmount];
+          }
+        }
+        
+        // Set installment data - use dates from frontend if provided, otherwise use defaults
+        const firstDate = req.body.firstInstallment?.date || req.body.firstInstallmentDate || 
+                         new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 1, purchaseDate.getDate());
+        const secondDate = req.body.secondInstallment?.date || req.body.secondInstallmentDate || 
+                          new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 2, purchaseDate.getDate());
+        const thirdDate = req.body.thirdInstallment?.date || req.body.thirdInstallmentDate || 
+                         new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 3, purchaseDate.getDate());
+        
+        couponData.firstInstallment = {
+          amount: installments[0] || 0,
+          date: new Date(firstDate)
+        };
+        
+        if (numberOfInstallments >= 2) {
+          couponData.secondInstallment = {
+            amount: installments[1] || 0,
+            date: new Date(secondDate)
+          };
+        }
+        
+        if (numberOfInstallments >= 3) {
+          couponData.thirdInstallment = {
+            amount: installments[2] || 0,
+            date: new Date(thirdDate)
+          };
+        }
+      }
     }
     
     const vehicleAllocationCoupon = new VehicleAllocationCoupon(couponData);
@@ -211,6 +279,97 @@ exports.updateVehicleAllocationCoupon = async (req, res, next) => {
     const isInstallmentUpdate = req.body.firstInstallment || req.body.secondInstallment || req.body.thirdInstallment;
     
     let updateData = { ...req.body };
+    
+    // Add interest amount to total for AKR leasing
+    if (req.body.paymentMethod === 'Leasing via AKR') {
+      const interestAmount = parseFloat(req.body.interestAmount) || 0;
+      if (interestAmount > 0) {
+        updateData.totalAmount = (parseFloat(updateData.totalAmount) + interestAmount).toString();
+        updateData.balance = (parseFloat(updateData.balance) + interestAmount).toString();
+      }
+    }
+    
+    // Handle installment calculation for AKR leasing
+    if (req.body.paymentMethod === 'Leasing via AKR' && req.body.dateOfPurchase && req.body.balance > 0) {
+      const purchaseDate = new Date(req.body.dateOfPurchase);
+      const numberOfInstallments = 3; // Always use 3 installments
+      const balance = parseFloat(req.body.balance) || 0;
+      
+      if (balance > 0) {
+        // Use the installment amounts from the form if provided, otherwise calculate equally
+        const firstAmount = parseFloat(req.body.firstInstallment?.amount || req.body.firstInstallmentAmount || 0);
+        const secondAmount = parseFloat(req.body.secondInstallment?.amount || req.body.secondInstallmentAmount || 0);
+        
+        let installments = [];
+        
+        if (firstAmount > 0 || secondAmount > 0) {
+          // User has provided manual amounts
+          if (firstAmount > 0) {
+            installments.push(firstAmount);
+          }
+          
+          if (secondAmount > 0 && numberOfInstallments >= 2) {
+            installments.push(secondAmount);
+          }
+          
+          // Calculate remaining installments
+          const usedAmount = installments.reduce((sum, amount) => sum + amount, 0);
+          const remainingBalance = balance - usedAmount;
+          
+          if (numberOfInstallments === 2 && installments.length === 1) {
+            // For 2 installments, second gets remaining balance
+            installments.push(remainingBalance);
+          } else if (numberOfInstallments === 3) {
+            // For 3 installments, calculate remaining equally
+            const remainingInstallments = numberOfInstallments - installments.length;
+            if (remainingInstallments > 0 && remainingBalance > 0) {
+              const equalAmount = remainingBalance / remainingInstallments;
+              for (let i = 0; i < remainingInstallments; i++) {
+                installments.push(equalAmount);
+              }
+            }
+          }
+        } else {
+          // Default calculation - divide equally
+          if (numberOfInstallments === 1) {
+            installments = [balance];
+          } else if (numberOfInstallments === 2) {
+            const equalAmount = balance / 2;
+            installments = [equalAmount, equalAmount];
+          } else {
+            const equalAmount = balance / 3;
+            installments = [equalAmount, equalAmount, equalAmount];
+          }
+        }
+        
+        // Set installment data - use dates from frontend if provided, otherwise use defaults
+        const firstDate = req.body.firstInstallment?.date || req.body.firstInstallmentDate || 
+                         new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 1, purchaseDate.getDate());
+        const secondDate = req.body.secondInstallment?.date || req.body.secondInstallmentDate || 
+                          new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 2, purchaseDate.getDate());
+        const thirdDate = req.body.thirdInstallment?.date || req.body.thirdInstallmentDate || 
+                         new Date(purchaseDate.getFullYear(), purchaseDate.getMonth() + 3, purchaseDate.getDate());
+        
+        updateData.firstInstallment = {
+          amount: installments[0] || 0,
+          date: new Date(firstDate)
+        };
+        
+        if (numberOfInstallments >= 2) {
+          updateData.secondInstallment = {
+            amount: installments[1] || 0,
+            date: new Date(secondDate)
+          };
+        }
+        
+        if (numberOfInstallments >= 3) {
+          updateData.thirdInstallment = {
+            amount: installments[2] || 0,
+            date: new Date(thirdDate)
+          };
+        }
+      }
+    }
     
     // Status logic based on payment method and installment payments
     if (currentCoupon.paymentMethod === 'Leasing via AKR') {

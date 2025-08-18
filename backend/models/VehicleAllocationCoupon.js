@@ -117,6 +117,12 @@ const vehicleAllocationCouponSchema = new mongoose.Schema({
     default: '' 
   },
   
+  // Interest Amount for AKR Leasing
+  interestAmount: { 
+    type: Number, 
+    default: 0 
+  },
+  
   // Installment Details
   firstInstallment: {
     amount: { type: Number, default: 0 },
@@ -196,6 +202,14 @@ const vehicleAllocationCouponSchema = new mongoose.Schema({
   discountAmount: { 
     type: Number, 
     default: 0 
+  },
+  
+  // Installment Plan Configuration
+  numberOfInstallments: {
+    type: Number,
+    default: 3,
+    min: 1,
+    max: 3
   }
 }, { 
   timestamps: true 
