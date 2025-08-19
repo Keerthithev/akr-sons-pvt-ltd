@@ -1,5 +1,6 @@
 const BikeInventory = require('../models/BikeInventory');
 const Vehicle = require('../models/Vehicle.cjs');
+const VehicleAllocationCoupon = require('../models/VehicleAllocationCoupon');
 
 // Get all bike inventory with pagination and search
 const getAllBikeInventory = async (req, res) => {
@@ -296,8 +297,8 @@ const updateVehicleStock = async (modelName) => {
 // Get detailed stock information by model and color
 const getDetailedStockInfo = async (req, res) => {
   try {
-    // Get all bikes from inventory with individual details
-    const bikes = await BikeInventory.find({}).sort({ model: 1, color: 1 });
+    // Get only available bikes (status = 'in') from inventory with individual details
+    const bikes = await BikeInventory.find({ status: 'in' }).sort({ model: 1, color: 1 });
     
     // Group bikes by model and color, but show individual bikes
     const stockByModel = {};
@@ -474,6 +475,84 @@ const getBikeInventoryStats = async (req, res) => {
   }
 };
 
+// Sync bike status with Vehicle Allocation Coupons
+exports.syncBikeStatusWithVAC = async (req, res, next) => {
+  try {
+    console.log('Starting bike status synchronization...');
+
+    // Step 1: Set all bikes to 'in' status by default if they don't have status field
+    const bikesWithoutStatus = await BikeInventory.updateMany(
+      { 
+        $or: [
+          { status: { $exists: false } },
+          { status: null },
+          { status: '' }
+        ]
+      },
+      { $set: { status: 'in', allocatedCouponId: '' } }
+    );
+    
+    // Step 2: Get all VACs that have engine numbers
+    const vacsWithEngines = await VehicleAllocationCoupon.find({
+      engineNo: { $exists: true, $ne: '' }
+    });
+    
+    // Step 3: Update bike status for each VAC
+    let updatedCount = 0;
+    const updateResults = [];
+    
+    for (const vac of vacsWithEngines) {
+      const bike = await BikeInventory.findOne({ engineNo: vac.engineNo });
+      
+      if (bike) {
+        bike.status = 'out';
+        bike.allocatedCouponId = vac.couponId;
+        await bike.save();
+        updatedCount++;
+        updateResults.push({
+          engineNo: bike.engineNo,
+          bikeId: bike.bikeId,
+          allocatedTo: vac.couponId,
+          status: 'updated'
+        });
+      } else {
+        updateResults.push({
+          engineNo: vac.engineNo,
+          allocatedTo: vac.couponId,
+          status: 'bike_not_found'
+        });
+      }
+    }
+
+    // Step 4: Get summary
+    const totalBikes = await BikeInventory.countDocuments();
+    const bikesIn = await BikeInventory.countDocuments({ status: 'in' });
+    const bikesOut = await BikeInventory.countDocuments({ status: 'out' });
+
+    res.json({
+      success: true,
+      message: 'Bike status synchronization completed',
+      summary: {
+        totalVACs: vacsWithEngines.length,
+        bikesWithoutStatus: bikesWithoutStatus.modifiedCount,
+        bikesUpdatedToOut: updatedCount,
+        totalBikes,
+        bikesIn,
+        bikesOut
+      },
+      updateResults
+    });
+
+  } catch (error) {
+    console.error('Error during synchronization:', error);
+    res.status(500).json({
+      success: false,
+      message: 'Error during bike status synchronization',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   getAllBikeInventory,
   getBikeInventoryById,
@@ -484,5 +563,6 @@ module.exports = {
   bulkImportBikeInventory,
   getBikeInventoryStats,
   getDetailedStockInfo,
-  cleanupBikeInventoryColors
+  cleanupBikeInventoryColors,
+  syncBikeStatusWithVAC: exports.syncBikeStatusWithVAC
 }; 

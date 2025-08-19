@@ -11,7 +11,8 @@ const {
   bulkImportBikeInventory,
   getBikeInventoryStats,
   getDetailedStockInfo,
-  cleanupBikeInventoryColors
+  cleanupBikeInventoryColors,
+  syncBikeStatusWithVAC
 } = require('../controllers/bikeInventoryController');
 
 // Apply authentication middleware to all routes
@@ -28,6 +29,9 @@ router.get('/stock-info', getDetailedStockInfo);
 
 // POST /api/bike-inventory/cleanup-colors - Clean up combined color entries
 router.post('/cleanup-colors', cleanupBikeInventoryColors);
+
+// POST /api/bike-inventory/sync-status - Sync bike status with VACs
+router.post('/sync-status', syncBikeStatusWithVAC);
 
 // GET /api/bike-inventory/dropdown-data - Get dropdown data for form
 router.get('/dropdown-data', getBikeInventoryDropdownData);

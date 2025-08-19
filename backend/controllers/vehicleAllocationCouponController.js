@@ -172,11 +172,21 @@ exports.createVehicleAllocationCoupon = async (req, res, next) => {
         }
       }
 
-      // Reduce stock in BikeInventory model
+      // Reduce stock in BikeInventory model and update status
       if (req.body.engineNo) {
         const bikeInventory = await BikeInventory.findOne({ engineNo: req.body.engineNo });
-        if (bikeInventory && bikeInventory.stockQuantity > 0) {
-          bikeInventory.stockQuantity = Math.max(0, bikeInventory.stockQuantity - 1);
+        if (bikeInventory) {
+          // Update stock quantity
+          if (bikeInventory.stockQuantity > 0) {
+            bikeInventory.stockQuantity = Math.max(0, bikeInventory.stockQuantity - 1);
+          }
+          
+          // Update bike status to 'out' (allocated)
+          bikeInventory.status = 'out';
+          
+          // Link to VAC for tracking
+          bikeInventory.allocatedCouponId = couponId;
+          
           await bikeInventory.save();
         }
       }
@@ -486,6 +496,22 @@ exports.deleteVehicleAllocationCoupon = async (req, res, next) => {
       return res.status(404).json({ message: 'Vehicle allocation coupon not found' });
     }
 
+    // Revert bike status back to 'in' if this VAC was linked to a bike
+    if (vehicleAllocationCoupon.engineNo) {
+      const bikeInventory = await BikeInventory.findOne({ 
+        engineNo: vehicleAllocationCoupon.engineNo,
+        allocatedCouponId: vehicleAllocationCoupon.couponId 
+      });
+      
+      if (bikeInventory) {
+        bikeInventory.status = 'in';
+        bikeInventory.allocatedCouponId = '';
+        // Restore stock quantity
+        bikeInventory.stockQuantity = Math.max(1, bikeInventory.stockQuantity + 1);
+        await bikeInventory.save();
+      }
+    }
+
     // Delete related Customer record
     await Customer.deleteMany({ 
       fullName: vehicleAllocationCoupon.fullName,
@@ -537,8 +563,10 @@ exports.getVehicleAllocationCouponDropdownData = async (req, res, next) => {
     const vehicleData = {};
     
     bikeInventory.forEach(bike => {
-      // Skip if this bike is already sold/allocated
-      if (soldEngineNumbers.includes(bike.engineNo) || soldChassisNumbers.includes(bike.chassisNumber)) {
+      // Skip if this bike is already sold/allocated or status is 'out'
+      if (soldEngineNumbers.includes(bike.engineNo) || 
+          soldChassisNumbers.includes(bike.chassisNumber) || 
+          bike.status === 'out') {
         return;
       }
       

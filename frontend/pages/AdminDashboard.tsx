@@ -946,6 +946,7 @@ export default function AdminDashboard() {
   const [bikeInventoryError, setBikeInventoryError] = useState("");
   const [bikeInventorySearch, setBikeInventorySearch] = useState('');
   const [bikeInventoryDateFilter, setBikeInventoryDateFilter] = useState('');
+  const [bikeInventoryStatusFilter, setBikeInventoryStatusFilter] = useState('');
   const [bikeInventoryPagination, setBikeInventoryPagination] = useState({ current: 1, pageSize: 50, total: 0 });
   const [bikeInventoryStats, setBikeInventoryStats] = useState<any>({
     totalBikes: 0,
@@ -966,7 +967,8 @@ export default function AdminDashboard() {
     color: '',
     engineNo: '',
     chassisNumber: '',
-    workshopNo: ''
+    workshopNo: '',
+    status: 'in'
   });
   const [editingBikeInventory, setEditingBikeInventory] = useState<any>(null);
   const [viewBikeInventoryModalOpen, setViewBikeInventoryModalOpen] = useState(false);
@@ -2892,6 +2894,7 @@ export default function AdminDashboard() {
       fetchPreBookings(); // Load pre-bookings for overview
       fetchChequeReleaseReminders(); // Load cheque release reminders
       fetchDetailedStockInfo(); // Load detailed stock information for overview
+      autoSyncBikeStatus(); // Auto-sync bike status
     }
     if (akrTab === 'chequeReleaseReminders') {
       fetchChequeReleaseReminders(true); // Load cheque release reminders including released ones
@@ -3020,6 +3023,31 @@ export default function AdminDashboard() {
     } catch (err: any) {
       console.error("Failed to load detailed stock info:", err.message);
       setDetailedStockInfoLoading(false);
+    }
+  };
+
+  // Auto-sync bike status on page load (only once)
+  const autoSyncBikeStatus = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/sync-status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (res.ok) {
+        const result = await res.json();
+        if (result.success && result.summary.bikesUpdatedToOut > 0) {
+          console.log(`Auto-sync completed: Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status`);
+          // Refresh bike inventory data
+          fetchBikeInventory();
+        }
+      }
+    } catch (err: any) {
+      console.error("Auto-sync failed:", err.message);
     }
   };
 
@@ -6227,6 +6255,33 @@ export default function AdminDashboard() {
     setViewBikeInventoryModalOpen(true);
   };
 
+  // Sync bike status with Vehicle Allocation Coupons
+  const handleSyncBikeStatus = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/sync-status`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+      
+      if (!res.ok) throw new Error("Failed to sync bike status");
+      const result = await res.json();
+      
+      if (result.success) {
+        message.success(`Sync completed! Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status`);
+        fetchBikeInventory(); // Refresh the bike inventory
+      } else {
+        message.error(result.message || 'Sync failed');
+      }
+    } catch (err: any) {
+      console.error("Failed to sync bike status:", err.message);
+      message.error("Failed to sync bike status: " + err.message);
+    }
+  };
+
   // Export account data to PDF
   const exportAccountDataToPDF = async () => {
     try {
@@ -6957,6 +7012,14 @@ export default function AdminDashboard() {
                 <div class="stat-label">New Bikes (Today)</div>
               </div>
               <div class="stat-item">
+                <div class="stat-value">${allRecords.filter(bike => bike.status === 'in').length}</div>
+                <div class="stat-label">Bikes IN (Available)</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">${allRecords.filter(bike => bike.status === 'out').length}</div>
+                <div class="stat-label">Bikes OUT (Allocated)</div>
+              </div>
+              <div class="stat-item">
                 <div class="stat-value">${allRecords.length}</div>
                 <div class="stat-label">Total Bikes in Inventory</div>
               </div>
@@ -6974,6 +7037,9 @@ export default function AdminDashboard() {
                   <th>Color</th>
                   <th>Engine No</th>
                   <th>Chassis Number</th>
+                  <th>Workshop No</th>
+                  <th>Status</th>
+                  <th>Allocated To</th>
                 </tr>
               </thead>
               <tbody>
@@ -6988,6 +7054,9 @@ export default function AdminDashboard() {
                     <td>${record.color || ''}</td>
                     <td>${record.engineNo || ''}</td>
                     <td>${record.chassisNumber || ''}</td>
+                    <td>${record.workshopNo || ''}</td>
+                    <td style="color: ${record.status === 'in' ? 'green' : 'red'}; font-weight: bold;">${record.status === 'in' ? 'IN' : 'OUT'}</td>
+                    <td>${record.allocatedCouponId || '-'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -7164,6 +7233,18 @@ export default function AdminDashboard() {
               <div class="detail-row">
                 <span class="detail-label">Workshop No:</span>
                 <span class="detail-value">${record.workshopNo || '-'}</span>
+              </div>
+            </div>
+
+            <div class="customer-details">
+              <div class="section-title">Status Information</div>
+              <div class="detail-row">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value" style="color: ${record.status === 'in' ? 'green' : 'red'}; font-weight: bold;">${record.status === 'in' ? 'IN (Available)' : 'OUT (Allocated)'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-label">Allocated To:</span>
+                <span class="detail-value">${record.allocatedCouponId || 'Not Allocated'}</span>
               </div>
             </div>
 
@@ -8000,6 +8081,24 @@ export default function AdminDashboard() {
       dataIndex: 'workshopNo', 
       key: 'workshopNo',
       render: (workshopNo: string) => workshopNo || '-'
+    },
+    { 
+      title: 'Status', 
+      dataIndex: 'status', 
+      key: 'status',
+      render: (status: string, record: any) => (
+        <div>
+          <Tag color={status === 'in' ? 'green' : 'red'}>
+            {status === 'in' ? 'IN' : 'OUT'}
+          </Tag>
+          {status === 'out' && record.allocatedCouponId && (
+            <div className="text-xs text-gray-500 mt-1">
+              Allocated: {record.allocatedCouponId}
+            </div>
+          )}
+        </div>
+      ),
+      sorter: (a: any, b: any) => a.status.localeCompare(b.status)
     },
     {
       title: 'Actions',
@@ -10754,7 +10853,7 @@ export default function AdminDashboard() {
               <h2 className="text-2xl font-bold mb-4">Bike Inventory Management</h2>
               
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-green-600">{bikeInventory.filter(bike => new Date(bike.date) >= new Date(new Date().setDate(new Date().getDate() - 30))).length}</div>
                   <div className="text-sm text-gray-600">New Bikes (Last 30 Days)</div>
@@ -10766,6 +10865,14 @@ export default function AdminDashboard() {
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{bikeInventory.filter(bike => new Date(bike.date).toDateString() === new Date().toDateString()).length}</div>
                   <div className="text-sm text-gray-600">New Bikes (Today)</div>
+                </Card>
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-green-600">{bikeInventory.filter(bike => bike.status === 'in').length}</div>
+                  <div className="text-sm text-gray-600">Bikes IN (Available)</div>
+                </Card>
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{bikeInventory.filter(bike => bike.status === 'out').length}</div>
+                  <div className="text-sm text-gray-600">Bikes OUT (Sold/Allocated)</div>
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-orange-600">{bikeInventory.length}</div>
@@ -10804,6 +10911,23 @@ export default function AdminDashboard() {
                     <option value="thisMonth">This Month</option>
                     <option value="lastMonth">Last Month</option>
                   </select>
+                  <select
+                    value={bikeInventoryStatusFilter || ''}
+                    onChange={e => {
+                      setBikeInventoryStatusFilter(e.target.value);
+                      // Filter bikes by status
+                      const filteredBikes = bikeInventory.filter(bike => {
+                        if (!e.target.value) return true;
+                        return bike.status === e.target.value;
+                      });
+                      // You can implement backend filtering here if needed
+                    }}
+                    className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow"
+                  >
+                    <option value="">All Status</option>
+                    <option value="in">Bikes IN (Available)</option>
+                    <option value="out">Bikes OUT (Sold/Allocated)</option>
+                  </select>
                 </div>
                 <div className="flex gap-2">
                   <Button type="primary" onClick={() => {
@@ -10818,7 +10942,8 @@ export default function AdminDashboard() {
                       color: '',
                       engineNo: '',
                       chassisNumber: '',
-                      workshopNo: ''
+                      workshopNo: '',
+                      status: 'in'
                     });
                     setBikeInventoryModalOpen(true);
                   }}>
@@ -10975,6 +11100,19 @@ export default function AdminDashboard() {
                         onChange={handleBikeInventoryFormChange}
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Status *</label>
+                      <select
+                        name="status"
+                        value={bikeInventoryForm.status || 'in'}
+                        onChange={handleBikeInventoryFormChange}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      >
+                        <option value="in">IN (Available)</option>
+                        <option value="out">OUT (Sold/Allocated)</option>
+                      </select>
                     </div>
                   </div>
                   <div className="flex justify-end gap-2 pt-4">
@@ -14833,7 +14971,7 @@ export default function AdminDashboard() {
                 <div className="bg-gradient-to-br from-green-500 to-green-600 rounded-xl shadow-lg p-6 text-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-green-100 text-sm font-medium">Total Stock</p>
+                      <p className="text-green-100 text-sm font-medium">Available Stock</p>
                       <p className="text-3xl font-bold">{detailedStockInfo.reduce((sum, model) => sum + model.totalStock, 0)}</p>
                     </div>
                     <div className="bg-green-400 bg-opacity-30 p-3 rounded-full">
@@ -14998,7 +15136,7 @@ export default function AdminDashboard() {
                         <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        Stock Availability by Model & Color
+                        Available Stock by Model & Color
                       </h3>
                       <Button 
                         type="default" 
@@ -17421,6 +17559,31 @@ export default function AdminDashboard() {
                 <div>
                   <label className="block text-sm font-medium text-gray-600">Workshop No</label>
                   <div className="text-base">{viewingBikeInventory.workshopNo || 'N/A'}</div>
+                </div>
+              </div>
+            </div>
+
+            {/* Status Information */}
+            <div className="bg-green-50 p-4 rounded-lg">
+              <h3 className="text-lg font-semibold mb-4 text-green-800">Status Information</h3>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Status</label>
+                  <div className="text-base">
+                    <Tag color={viewingBikeInventory.status === 'in' ? 'green' : 'red'}>
+                      {viewingBikeInventory.status === 'in' ? 'IN (Available)' : 'OUT (Allocated)'}
+                    </Tag>
+                  </div>
+                </div>
+                <div>
+                  <label className="block text-sm font-medium text-gray-600">Allocated To</label>
+                  <div className="text-base">
+                    {viewingBikeInventory.allocatedCouponId ? (
+                      <span className="text-blue-600 font-semibold">{viewingBikeInventory.allocatedCouponId}</span>
+                    ) : (
+                      <span className="text-gray-500">Not Allocated</span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>
