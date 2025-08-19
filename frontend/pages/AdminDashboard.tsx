@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { Layout, Menu, Button, Modal, Table, Tag, message, Spin, Descriptions, Drawer, Row, Col, Card, Steps, Switch } from "antd";
 import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
+import jsPDF from 'jspdf';
 
 const AKR_COMPANY_NAME = "AKR & SONS (PVT) LTD";
 
@@ -659,6 +660,18 @@ export default function AdminDashboard() {
   });
   const [vehicleAllocationCouponsModalOpen, setVehicleAllocationCouponsModalOpen] = useState(false);
   const [editingVehicleAllocationCoupon, setEditingVehicleAllocationCoupon] = useState<any>(null);
+  const [depositModalOpen, setDepositModalOpen] = useState(false);
+  const [selectedCouponForDeposit, setSelectedCouponForDeposit] = useState<any>(null);
+  const [chequeReleaseModalOpen, setChequeReleaseModalOpen] = useState(false);
+  const [selectedCouponForChequeRelease, setSelectedCouponForChequeRelease] = useState<any>(null);
+  const [depositLoading, setDepositLoading] = useState<string | null>(null);
+  const [chequeReleaseLoading, setChequeReleaseLoading] = useState<string | null>(null);
+  const [accountDataDepositModalOpen, setAccountDataDepositModalOpen] = useState(false);
+  const [selectedAccountDataForDeposit, setSelectedAccountDataForDeposit] = useState<any>(null);
+  const [accountDataDepositLoading, setAccountDataDepositLoading] = useState(false);
+  const [viewBankDepositModalOpen, setViewBankDepositModalOpen] = useState(false);
+  const [viewingBankDeposit, setViewingBankDeposit] = useState<any>(null);
+  const [bankDepositPdfLoading, setBankDepositPdfLoading] = useState(false);
   const [viewVehicleAllocationCouponModalOpen, setViewVehicleAllocationCouponModalOpen] = useState(false);
   const [viewingVehicleAllocationCoupon, setViewingVehicleAllocationCoupon] = useState<any>(null);
   const [vehicleAllocationCouponDropdownData, setVehicleAllocationCouponDropdownData] = useState<any>({
@@ -667,6 +680,44 @@ export default function AdminDashboard() {
     paymentMethods: [],
     paymentTypes: []
   });
+  const [accountDataDepositForm, setAccountDataDepositForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    depositerName: '',
+    accountNumber: '',
+    accountName: '',
+    purpose: '',
+    quantity: 1,
+    payment: 0,
+    slipImage: null as File | null,
+    slipImageUrl: ''
+  });
+
+  const [chequeReleaseForm, setChequeReleaseForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    name: '',
+    details: '',
+    amount: '',
+    model: '',
+    remarks: '',
+    chequeSlipImage: null as File | null,
+    chequeSlipImageUrl: '',
+    couponId: '',
+    vehicleType: ''
+  });
+
+  const [depositForm, setDepositForm] = useState({
+    date: new Date().toISOString().split('T')[0],
+    name: '',
+    details: '',
+    amount: '',
+    model: '',
+    remarks: '',
+    depositSlipImage: null as File | null,
+    depositSlipImageUrl: '',
+    actualAmount: '',
+    depositedAmount: ''
+  });
+
   const [vehicleAllocationCouponForm, setVehicleAllocationCouponForm] = useState({
     workshopNo: '',
     branch: '',
@@ -863,6 +914,11 @@ export default function AdminDashboard() {
   });
   const [editingAccountData, setEditingAccountData] = useState<any>(null);
   
+  // Account Data View Modal state
+  const [viewAccountDataModalOpen, setViewAccountDataModalOpen] = useState(false);
+  const [viewingAccountData, setViewingAccountData] = useState<any>(null);
+  const [accountDataPdfLoading, setAccountDataPdfLoading] = useState(false);
+  
   // Bank Deposits state
   const [bankDeposits, setBankDeposits] = useState<any[]>([]);
   const [bankDepositsLoading, setBankDepositsLoading] = useState(false);
@@ -878,7 +934,9 @@ export default function AdminDashboard() {
     accountName: '',
     purpose: '',
     quantity: 0,
-    payment: 0
+    payment: 0,
+    slipImage: null,
+    slipImageUrl: ''
   });
   const [editingBankDeposit, setEditingBankDeposit] = useState<any>(null);
 
@@ -949,6 +1007,28 @@ export default function AdminDashboard() {
     window.addEventListener('keydown', handleKeyPress);
     return () => window.removeEventListener('keydown', handleKeyPress);
   }, [sidebarCollapsed]);
+  // Helper function to validate token
+  const validateToken = (token: string) => {
+    if (!token) return false;
+    
+    try {
+      // Simple check - if token exists and is not empty
+      return token.length > 0;
+    } catch (error) {
+      return false;
+    }
+  };
+
+  // Helper function to handle authentication errors
+  const handleAuthError = () => {
+    message.error('Authentication failed. Please log in again.');
+    localStorage.removeItem('adminToken');
+    localStorage.removeItem('isAdmin');
+    localStorage.removeItem('adminName');
+    localStorage.removeItem('adminEmail');
+    navigate('/admin-login');
+  };
+
   // Logout handler
   const handleLogout = () => {
     // Clear all admin-related data
@@ -1637,7 +1717,39 @@ export default function AdminDashboard() {
 
       if (!res.ok) throw new Error("Failed to update installment payment");
       
-      message.success(`Installment marked as ${isPaid ? 'paid' : 'unpaid'}`);
+      // If marking as paid, create an Account Data record for the collection
+      if (isPaid && amount > 0) {
+        const installmentNumber = installmentType === 'firstInstallment' ? '1st' : 
+                                 installmentType === 'secondInstallment' ? '2nd' : '3rd';
+        
+        const accountData = {
+          date: new Date().toISOString().split('T')[0],
+          name: currentCoupon.fullName || 'Unknown Customer',
+          details: `Installment Payment Collection - ${installmentNumber} Installment - Vehicle Allocation Coupon ${currentCoupon.couponId} - ${currentCoupon.vehicleType}`,
+          amount: amount,
+          depositedAmount: amount,
+          actualAmount: amount,
+          relatedCouponId: currentCoupon.couponId,
+          remarks: `${installmentNumber} installment payment collected for ${currentCoupon.vehicleType}`
+        };
+
+        const accountDataRes = await fetch(`${apiUrl}/api/account-data`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(accountData)
+        });
+
+        if (!accountDataRes.ok) {
+          console.error("Failed to create account data record for installment payment");
+        } else {
+          console.log(`Created account data record for ${installmentNumber} installment payment`);
+        }
+      }
+      
+      message.success(`Installment marked as ${isPaid ? 'paid' : 'unpaid'}${isPaid ? ' and collection recorded in Account Data' : ''}`);
       
       // Refresh the installment plans data
       fetchInstallmentPlans();
@@ -2774,6 +2886,8 @@ export default function AdminDashboard() {
       // Load data needed for overview dashboard
       fetchVehicleAllocationCoupons(1, '', '', '', 1000); // Load all records for overview
       fetchVehicleAllocationCouponsStats();
+      fetchAccountDataStats(); // Load account data stats for overview
+      fetchBankDepositsStats(); // Load bank deposits stats for overview
       fetchCustomers(); // Load customers for overview
       fetchPreBookings(); // Load pre-bookings for overview
       fetchChequeReleaseReminders(); // Load cheque release reminders
@@ -2792,6 +2906,8 @@ export default function AdminDashboard() {
     // Load data needed for overview dashboard on initial load
     fetchVehicleAllocationCoupons(1, '', '', '', 1000);
     fetchVehicleAllocationCouponsStats();
+    fetchAccountDataStats(); // Load account data stats on initial load
+    fetchBankDepositsStats(); // Load bank deposits stats on initial load
   }, []);
 
   // Auto-generate workshop number when modal opens
@@ -3638,6 +3754,296 @@ export default function AdminDashboard() {
     setVehicleAllocationCouponsModalOpen(true);
   };
 
+  // Handle deposit button click
+  const handleDepositClick = (record: any) => {
+    setSelectedCouponForDeposit(record);
+    
+    // Calculate remaining down payment to collect
+    const downPayment = record.downPayment || 0;
+    const amountCollected = record.depositAmount || 0;
+    const remainingDownPayment = Math.max(0, downPayment - amountCollected);
+    
+    setDepositForm({
+      date: new Date().toISOString().split('T')[0],
+      name: record.fullName,
+      details: `Down Payment Collection - Vehicle Allocation Coupon ${record.couponId} - ${record.vehicleType}`,
+      amount: remainingDownPayment.toString(), // Pre-fill with remaining down payment
+      model: record.vehicleType,
+      remarks: `Down payment collected for vehicle allocation coupon ${record.couponId}`,
+      depositSlipImage: null,
+      depositSlipImageUrl: '',
+      actualAmount: record.downPayment.toString(), // Show down payment as actual amount
+      depositedAmount: ''
+    });
+    setDepositModalOpen(true);
+  };
+
+  // Handle deposit form change
+  const handleDepositFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setDepositForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle deposit slip image upload
+  const handleDepositSlipUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setDepositForm(prev => ({ ...prev, depositSlipImage: file }));
+    }
+  };
+
+  // Handle cheque release button click - opens modal
+  const handleChequeReleaseClick = (reminder: any) => {
+    setSelectedCouponForChequeRelease(reminder);
+    setChequeReleaseForm({
+      date: new Date().toISOString().split('T')[0],
+      name: reminder.fullName,
+      details: `Cheque Release - Vehicle Allocation Coupon ${reminder.couponId}`,
+      amount: reminder.downPayment.toString(),
+      model: reminder.vehicleType,
+      remarks: `Cheque released to David Peries for coupon ${reminder.couponId}`,
+      chequeSlipImage: null,
+      chequeSlipImageUrl: '',
+      couponId: reminder.couponId,
+      vehicleType: reminder.vehicleType
+    });
+    setChequeReleaseModalOpen(true);
+  };
+
+  // Handle cheque release form change
+  const handleChequeReleaseFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setChequeReleaseForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle cheque slip image upload
+  const handleChequeSlipUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setChequeReleaseForm(prev => ({ ...prev, chequeSlipImage: file }));
+    }
+  };
+
+  // Handle cheque release submit
+  const handleChequeReleaseSubmit = async () => {
+    try {
+      setChequeReleaseLoading(selectedCouponForChequeRelease?.couponId || '');
+      const token = localStorage.getItem('adminToken');
+      
+      // Check if token exists and is valid
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+      
+      // Validate amount
+      const amount = parseFloat(chequeReleaseForm.amount);
+      if (isNaN(amount) || amount <= 0) {
+        message.error('Invalid amount');
+        return;
+      }
+      
+      // Upload image to Cloudinary if provided
+      let imageUrl = '';
+      if (chequeReleaseForm.chequeSlipImage) {
+        const formData = new FormData();
+        formData.append('file', chequeReleaseForm.chequeSlipImage);
+        formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+        
+        const uploadResponse = await fetch(
+          `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+          {
+            method: 'POST',
+            body: formData
+          }
+        );
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          imageUrl = uploadResult.secure_url;
+        }
+      }
+
+      // Create a deduction entry in bank deposits (negative amount)
+      const deductionData = {
+        date: chequeReleaseForm.date,
+        depositerName: chequeReleaseForm.name,
+        accountNumber: 'Main Account',
+        accountName: 'Main Bank',
+        purpose: `Cheque Release - ${chequeReleaseForm.details}`,
+        quantity: 1,
+        payment: -amount, // Negative amount for deduction
+        slipImage: imageUrl
+      };
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bank-deposits`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(deductionData)
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleAuthError();
+          return;
+        }
+        const errorData = await response.json();
+        throw new Error(`Failed to record cheque release deduction: ${errorData.message || response.statusText}`);
+      }
+
+      // Update the coupon to mark cheque as released
+      const updateResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/${selectedCouponForChequeRelease._id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          chequeReleased: true,
+          chequeReleasedDate: new Date().toISOString()
+        })
+      });
+
+      if (!updateResponse.ok) {
+        if (updateResponse.status === 401) {
+          handleAuthError();
+          return;
+        }
+        throw new Error('Failed to update coupon');
+      }
+
+      message.success('Cheque released successfully! Amount deducted from bank deposits.');
+      setChequeReleaseModalOpen(false);
+      setSelectedCouponForChequeRelease(null);
+      setChequeReleaseLoading(null);
+      setChequeReleaseForm({
+        date: new Date().toISOString().split('T')[0],
+        name: '',
+        details: '',
+        amount: '',
+        model: '',
+        remarks: '',
+        chequeSlipImage: null,
+        chequeSlipImageUrl: '',
+        couponId: '',
+        vehicleType: ''
+      });
+      
+      // Refresh data and reload page to update totals immediately
+      fetchChequeReleaseReminders();
+      fetchBankDeposits();
+      fetchBankDepositsStats();
+      
+      // Reload the page to update all totals immediately
+      setTimeout(() => {
+        window.location.reload();
+      }, 1000);
+      
+    } catch (error) {
+      console.error('Error releasing cheque:', error);
+      message.error('Failed to release cheque');
+    } finally {
+      setChequeReleaseLoading(null);
+    }
+  };
+
+  // Handle payment collection submit
+  const handleDepositSubmit = async () => {
+    try {
+      setDepositLoading(selectedCouponForDeposit?.couponId || '');
+      const token = localStorage.getItem('adminToken');
+
+      // Validate amounts
+      const collectedAmount = parseFloat(depositForm.amount);
+      const actualCollected = parseFloat(depositForm.depositedAmount);
+      
+      if (isNaN(collectedAmount) || collectedAmount <= 0) {
+        message.error('Invalid amount to collect');
+        return;
+      }
+      
+      if (isNaN(actualCollected) || actualCollected <= 0) {
+        message.error('Invalid actual collected amount');
+        return;
+      }
+      
+      // Check if collected amount exceeds remaining down payment
+      const downPayment = selectedCouponForDeposit?.downPayment || 0;
+      const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
+      const remainingDownPayment = Math.max(0, downPayment - previouslyCollected);
+      
+      if (actualCollected > remainingDownPayment) {
+        message.error(`Cannot collect more than remaining down payment (LKR ${remainingDownPayment.toLocaleString()})`);
+        return;
+      }
+
+      // Create account data entry for payment collection
+      const accountData = {
+        date: depositForm.date,
+        name: depositForm.name,
+        details: depositForm.details,
+        amount: actualCollected, // Use the actually collected amount
+        model: depositForm.model,
+        remarks: `${depositForm.remarks} | Actual: ${depositForm.actualAmount} | Collected: ${depositForm.depositedAmount}`,
+        actualAmount: parseFloat(depositForm.actualAmount),
+        depositedAmount: actualCollected, // Use the actually collected amount
+        relatedCouponId: selectedCouponForDeposit?.couponId
+      };
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/account-data`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(accountData)
+      });
+
+      if (!response.ok) throw new Error('Failed to record payment collection');
+
+      // Calculate remaining down payment after this collection
+      const newRemainingDownPayment = remainingDownPayment - actualCollected;
+      
+      if (newRemainingDownPayment <= 0) {
+        message.success('Down payment collected successfully! All down payment cleared.');
+      } else {
+        message.success(`Down payment collected successfully! Remaining down payment: LKR ${newRemainingDownPayment.toLocaleString()}`);
+      }
+      setDepositModalOpen(false);
+      setSelectedCouponForDeposit(null);
+      setDepositLoading(null);
+      setDepositForm({
+        date: new Date().toISOString().split('T')[0],
+        name: '',
+        details: '',
+        amount: '',
+        model: '',
+        remarks: '',
+        depositSlipImage: null,
+        depositSlipImageUrl: '',
+        actualAmount: '',
+        depositedAmount: ''
+      });
+      
+      // Refresh account data and vehicle allocation coupons
+      fetchAccountData();
+      
+      // Refresh vehicle allocation coupons with a small delay to ensure data is updated
+      setTimeout(() => {
+        fetchVehicleAllocationCoupons();
+      }, 500);
+      
+    } catch (error) {
+      console.error('Error recording deposit:', error);
+      message.error('Failed to record payment collection');
+    } finally {
+      setDepositLoading(null);
+    }
+  };
+
   // View vehicle allocation coupon
   const handleViewVehicleAllocationCoupon = (record: any) => {
     setViewingVehicleAllocationCoupon(record);
@@ -3778,7 +4184,20 @@ export default function AdminDashboard() {
               <div class="report-info">${searchTerm}</div>
             </div>
 
-
+            <div class="stats">
+              <div class="stat-item">
+                <div class="stat-value">${vehicleAllocationCouponsStats.couponsWithArrears || '0'}</div>
+                <div class="stat-label">Coupons with Arrears</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">${vehicleAllocationCouponsStats.totalArrears?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Total Arrears</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">${vehicleAllocationCouponsStats.averageArrears?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Average Arrears</div>
+              </div>
+            </div>
 
             <table>
               <thead>
@@ -5017,6 +5436,8 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
       
+
+      
       setBankDeposits(response.data);
       setBankDepositsPagination(response.pagination);
       setBankDepositsLoading(false);
@@ -5143,6 +5564,18 @@ export default function AdminDashboard() {
     setBankDepositsForm(prev => ({ ...prev, [name]: value }));
   };
 
+  // Handle bank deposit slip upload
+  const handleBankDepositSlipUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setBankDepositsForm(prev => ({
+        ...prev,
+        slipImage: file,
+        slipImageUrl: URL.createObjectURL(file)
+      }));
+    }
+  };
+
   // Handle bank deposit form number changes
   const handleBankDepositNumberChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const { name, value } = e.target;
@@ -5209,6 +5642,147 @@ export default function AdminDashboard() {
     }
   };
 
+  // Handle deposit to bank from account data - opens modal
+  const handleDepositToBank = (record: any) => {
+    setSelectedAccountDataForDeposit(record);
+    setAccountDataDepositForm({
+      date: new Date().toISOString().split('T')[0],
+      depositerName: record.name,
+      accountNumber: 'Main Account',
+      accountName: 'Main Bank',
+      purpose: `Deposited from Account Data - ${record.details}`,
+      quantity: 1,
+      payment: record.amount,
+      slipImage: null,
+      slipImageUrl: ''
+    });
+    setAccountDataDepositModalOpen(true);
+  };
+
+  // Handle account data deposit form change
+  const handleAccountDataDepositFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+    const { name, value } = e.target;
+    setAccountDataDepositForm(prev => ({ ...prev, [name]: value }));
+  };
+
+  // Handle slip image upload for account data deposit
+  const handleAccountDataDepositSlipUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      setAccountDataDepositForm(prev => ({ ...prev, slipImage: file }));
+    }
+  };
+
+  // Handle account data deposit submit
+  const handleAccountDataDepositSubmit = async () => {
+    try {
+      setAccountDataDepositLoading(true);
+      const token = localStorage.getItem('adminToken');
+      
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      // Upload slip image to Cloudinary if provided
+      let imageUrl = '';
+      if (accountDataDepositForm.slipImage) {
+        const formData = new FormData();
+        formData.append('file', accountDataDepositForm.slipImage);
+        formData.append('upload_preset', import.meta.env.VITE_CLOUDINARY_UPLOAD_PRESET);
+        
+        const uploadResponse = await fetch(
+          `https://api.cloudinary.com/v1_1/${import.meta.env.VITE_CLOUDINARY_CLOUD_NAME}/image/upload`,
+          {
+            method: 'POST',
+            body: formData
+          }
+        );
+        
+        if (uploadResponse.ok) {
+          const uploadResult = await uploadResponse.json();
+          imageUrl = uploadResult.secure_url;
+        } else {
+          console.error('Failed to upload slip image');
+        }
+      }
+
+      // Create bank deposit entry
+      const bankDepositData = {
+        date: accountDataDepositForm.date,
+        depositerName: accountDataDepositForm.depositerName,
+        accountNumber: accountDataDepositForm.accountNumber,
+        accountName: accountDataDepositForm.accountName,
+        purpose: accountDataDepositForm.purpose,
+        quantity: accountDataDepositForm.quantity,
+        payment: accountDataDepositForm.payment,
+        slipImage: imageUrl
+      };
+      
+
+
+      const response = await fetch(`${import.meta.env.VITE_API_URL}/api/bank-deposits`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(bankDepositData)
+      });
+
+      if (!response.ok) {
+        if (response.status === 401) {
+          handleAuthError();
+          return;
+        }
+        throw new Error('Failed to create bank deposit');
+      }
+
+      message.success('Amount deposited to bank successfully!');
+      setAccountDataDepositModalOpen(false);
+      setSelectedAccountDataForDeposit(null);
+      setAccountDataDepositLoading(false);
+      setAccountDataDepositForm({
+        date: new Date().toISOString().split('T')[0],
+        depositerName: '',
+        accountNumber: '',
+        accountName: '',
+        purpose: '',
+        quantity: 1,
+        payment: 0,
+        slipImage: null,
+        slipImageUrl: ''
+      });
+      
+      // Mark account data record as deposited to bank
+      const updateResponse = await fetch(`${import.meta.env.VITE_API_URL}/api/account-data/${selectedAccountDataForDeposit._id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          depositedToBank: true,
+          bankDepositDate: new Date().toISOString()
+        })
+      });
+
+      if (!updateResponse.ok) {
+        console.warn('Failed to update account data deposit status');
+      }
+
+      // Refresh bank deposits data and account data
+      fetchBankDeposits();
+      fetchAccountData();
+      
+    } catch (error) {
+      console.error('Error depositing to bank:', error);
+      message.error('Failed to deposit to bank');
+    } finally {
+      setAccountDataDepositLoading(false);
+    }
+  };
+
   // Delete account data
   const handleDeleteAccountData = async (id: string) => {
     try {
@@ -5254,15 +5828,229 @@ export default function AdminDashboard() {
     setAccountDataModalOpen(true);
   };
 
+  // View account data
+  const handleViewAccountData = (record: any) => {
+    setViewingAccountData(record);
+    setViewAccountDataModalOpen(true);
+  };
+
+  // Export individual account data to PDF
+  const exportIndividualAccountDataToPDF = async (record: any) => {
+    try {
+      setAccountDataPdfLoading(true);
+      
+      const doc = new jsPDF();
+      const currentDate = new Date().toLocaleDateString('en-GB');
+      
+      // Set document properties
+      doc.setProperties({
+        title: `Account Data - ${record.name} - ${currentDate}`,
+        subject: 'Account Data Details',
+        author: AKR_COMPANY_NAME,
+        creator: AKR_COMPANY_NAME
+      });
+
+      // Add company header
+      doc.setFontSize(20);
+      doc.setTextColor(0, 0, 0);
+      doc.text(AKR_COMPANY_NAME, 105, 20, { align: 'center' });
+      
+      doc.setFontSize(12);
+      doc.setTextColor(100, 100, 100);
+      doc.text('Account Data Details', 105, 30, { align: 'center' });
+      doc.text(`Generated on: ${currentDate}`, 105, 40, { align: 'center' });
+      
+      // Add separator line
+      doc.setDrawColor(200, 200, 200);
+      doc.line(20, 50, 190, 50);
+      
+      // Add record details
+      let yPosition = 70;
+      const lineHeight = 8;
+      const leftMargin = 20;
+      const rightMargin = 190;
+      
+      doc.setFontSize(14);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Record Information', leftMargin, yPosition);
+      yPosition += lineHeight + 5;
+      
+      doc.setFontSize(10);
+      doc.setTextColor(0, 0, 0);
+      
+      // Basic Information
+      const basicInfo = [
+        { label: 'Date', value: record.date ? new Date(record.date).toLocaleDateString('en-GB') : 'Not specified' },
+        { label: 'Name', value: record.name || 'Not specified' },
+        { label: 'Details', value: record.details || 'Not specified' },
+        { label: 'Amount', value: `LKR ${(record.depositedToBank ? -Math.abs(record.amount) : record.amount)?.toLocaleString() || '0'}` },
+        { label: 'Model', value: record.model || 'Not specified' },
+        { label: 'Color', value: record.color || 'Not specified' }
+      ];
+      
+      basicInfo.forEach(info => {
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${info.label}:`, leftMargin, yPosition);
+        doc.setTextColor(0, 0, 0);
+        doc.text(info.value, leftMargin + 40, yPosition);
+        yPosition += lineHeight;
+      });
+      
+      yPosition += 5;
+      
+      // Financial Information
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Financial Details', leftMargin, yPosition);
+      yPosition += lineHeight + 5;
+      
+      doc.setFontSize(10);
+      const financialInfo = [
+        { label: 'Credit', value: record.credit > 0 ? `LKR ${record.credit.toLocaleString()}` : 'Not specified' },
+        { label: 'Cost', value: record.cost > 0 ? `LKR ${record.cost.toLocaleString()}` : 'Not specified' },
+        { label: 'Balance', value: record.balance > 0 ? `LKR ${record.balance.toLocaleString()}` : 'Not specified' }
+      ];
+      
+      financialInfo.forEach(info => {
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${info.label}:`, leftMargin, yPosition);
+        doc.setTextColor(0, 0, 0);
+        doc.text(info.value, leftMargin + 40, yPosition);
+        yPosition += lineHeight;
+      });
+      
+      yPosition += 5;
+      
+      // Cheque Information
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Cheque Information', leftMargin, yPosition);
+      yPosition += lineHeight + 5;
+      
+      doc.setFontSize(10);
+      const chequeInfo = [
+        { label: 'Cheque Received Date', value: record.chequeReceivedDate ? new Date(record.chequeReceivedDate).toLocaleDateString('en-GB') : 'Not specified' },
+        { label: 'Cheque Release Date', value: record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'Not specified' },
+        { label: 'Payment Mode', value: record.paymentMode || 'Not specified' }
+      ];
+      
+      chequeInfo.forEach(info => {
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${info.label}:`, leftMargin, yPosition);
+        doc.setTextColor(0, 0, 0);
+        doc.text(info.value, leftMargin + 60, yPosition);
+        yPosition += lineHeight;
+      });
+      
+      yPosition += 5;
+      
+      // Additional Information
+      doc.setFontSize(12);
+      doc.setTextColor(0, 0, 0);
+      doc.text('Additional Information', leftMargin, yPosition);
+      yPosition += lineHeight + 5;
+      
+      doc.setFontSize(10);
+      const additionalInfo = [
+        { label: 'Leasing', value: record.leasing || 'Not specified' },
+        { label: 'Remarks', value: record.remarks || 'Not specified' }
+      ];
+      
+      additionalInfo.forEach(info => {
+        doc.setTextColor(100, 100, 100);
+        doc.text(`${info.label}:`, leftMargin, yPosition);
+        doc.setTextColor(0, 0, 0);
+        doc.text(info.value, leftMargin + 40, yPosition);
+        yPosition += lineHeight;
+      });
+      
+      // Add deposit slip image if available
+      if (record.depositSlipImage) {
+        yPosition += 10;
+        doc.setFontSize(12);
+        doc.setTextColor(0, 0, 0);
+        doc.text('Deposit Slip', leftMargin, yPosition);
+        yPosition += lineHeight + 5;
+        
+        try {
+          const img = new Image();
+          img.src = record.depositSlipImage;
+          
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            setTimeout(reject, 5000); // 5 second timeout
+          });
+          
+          const imgWidth = 80;
+          const imgHeight = (img.height * imgWidth) / img.width;
+          
+          if (yPosition + imgHeight > 270) {
+            doc.addPage();
+            yPosition = 20;
+          }
+          
+          doc.addImage(img, 'JPEG', leftMargin, yPosition, imgWidth, imgHeight);
+        } catch (error) {
+          doc.setTextColor(150, 150, 150);
+          doc.text('Deposit slip image could not be loaded', leftMargin, yPosition);
+        }
+      }
+      
+      // Add footer
+      doc.setFontSize(8);
+      doc.setTextColor(150, 150, 150);
+      doc.text(`Generated by ${AKR_COMPANY_NAME}`, 105, 280, { align: 'center' });
+      
+      // Save the PDF
+      doc.save(`Account_Data_${record.name}_${currentDate.replace(/\//g, '-')}.pdf`);
+      
+      message.success('Account data PDF exported successfully!');
+    } catch (error) {
+      console.error('Error generating account data PDF:', error);
+      message.error('Failed to export account data PDF');
+    } finally {
+      setAccountDataPdfLoading(false);
+    }
+  };
+
   // Create or update bank deposit
   const handleBankDepositSubmit = async () => {
     try {
       const token = localStorage.getItem('adminToken');
+      
+      // Upload slip image if provided
+      let slipImageUrl = '';
+      if (bankDepositsForm.slipImage) {
+        const formData = new FormData();
+        formData.append('file', bankDepositsForm.slipImage);
+        formData.append('upload_preset', 'akr-sons');
+        
+        const uploadRes = await fetch('https://api.cloudinary.com/v1_1/dxqjyqz8f/image/upload', {
+          method: 'POST',
+          body: formData
+        });
+        
+        if (uploadRes.ok) {
+          const uploadData = await uploadRes.json();
+          slipImageUrl = uploadData.secure_url;
+        } else {
+          console.warn('Failed to upload slip image');
+        }
+      }
+      
       const url = editingBankDeposit 
         ? `${import.meta.env.VITE_API_URL}/api/bank-deposits/${editingBankDeposit._id}`
         : `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
       
       const method = editingBankDeposit ? 'PUT' : 'POST';
+      
+      // Prepare data for API
+      const depositData = {
+        ...bankDepositsForm,
+        slipImage: slipImageUrl || bankDepositsForm.slipImageUrl
+      };
+      delete depositData.slipImageFile; // Remove file object
       
       const res = await fetch(url, {
         method,
@@ -5270,7 +6058,7 @@ export default function AdminDashboard() {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json' 
         },
-        body: JSON.stringify(bankDepositsForm)
+        body: JSON.stringify(depositData)
       });
       
       if (!res.ok) throw new Error("Failed to save bank deposit");
@@ -5285,7 +6073,9 @@ export default function AdminDashboard() {
         accountName: '',
         purpose: '',
         quantity: 0,
-        payment: 0
+        payment: 0,
+        slipImage: null,
+        slipImageUrl: ''
       });
       fetchBankDeposits();
       fetchBankDepositsStats();
@@ -5320,6 +6110,12 @@ export default function AdminDashboard() {
     }
   };
 
+  // View bank deposit
+  const handleViewBankDeposit = (record: any) => {
+    setViewingBankDeposit(record);
+    setViewBankDepositModalOpen(true);
+  };
+
   // Edit bank deposit
   const handleEditBankDeposit = (record: any) => {
     setEditingBankDeposit(record);
@@ -5330,7 +6126,9 @@ export default function AdminDashboard() {
       accountName: record.accountName || '',
       purpose: record.purpose || '',
       quantity: record.quantity || 0,
-      payment: record.payment || 0
+      payment: record.payment || 0,
+      slipImage: null,
+      slipImageUrl: record.slipImage || ''
     });
     setBankDepositsModalOpen(true);
   };
@@ -5596,16 +6394,20 @@ export default function AdminDashboard() {
             
             <div class="stats">
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Amount</div>
+                <div class="stat-value">${accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Available Amount</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
+                <div class="stat-value">${accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Credit</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalCost?.toLocaleString() || '0'}</div>
+                <div class="stat-value">${accountDataStats.totalCost?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Cost</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">${accountDataStats.depositedAmount?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Deposited Amount</div>
               </div>
               <div class="stat-item">
                 <div class="stat-value">${allRecords.length}</div>
@@ -5619,11 +6421,11 @@ export default function AdminDashboard() {
                   <th>Date</th>
                   <th>Name</th>
                   <th>Details</th>
-                  <th>Amount (LKR)</th>
+                  <th>Amount</th>
                   <th>Model</th>
                   <th>Color</th>
-                  <th>Credit (LKR)</th>
-                  <th>Cost (LKR)</th>
+                  <th>Credit</th>
+                  <th>Cost</th>
                   <th>Balance</th>
                   <th>Cheque Received</th>
                   <th>Cheque Release</th>
@@ -5638,12 +6440,12 @@ export default function AdminDashboard() {
                     <td class="date">${record.date ? new Date(record.date).toLocaleDateString('en-GB') : '-'}</td>
                     <td>${record.name || '-'}</td>
                     <td>${record.details || '-'}</td>
-                    <td class="amount">LKR ${record.amount?.toLocaleString() || '0'}</td>
+                    <td class="amount">${(record.depositedToBank ? -Math.abs(record.amount) : record.amount)?.toLocaleString() || '0'}</td>
                     <td>${record.model || '-'}</td>
                     <td>${record.color || '-'}</td>
-                    <td class="amount">${record.credit > 0 ? `LKR ${record.credit.toLocaleString()}` : '-'}</td>
-                    <td class="amount">${record.cost > 0 ? `LKR ${record.cost.toLocaleString()}` : '-'}</td>
-                    <td class="amount">${record.balance > 0 ? `LKR ${record.balance.toLocaleString()}` : '-'}</td>
+                    <td class="amount">${record.credit > 0 ? record.credit.toLocaleString() : '-'}</td>
+                    <td class="amount">${record.cost > 0 ? record.cost.toLocaleString() : '-'}</td>
+                    <td class="amount">${record.balance > 0 ? record.balance.toLocaleString() : '-'}</td>
                     <td class="date">${record.chequeReceivedDate ? new Date(record.chequeReceivedDate).toLocaleDateString('en-GB') : '-'}</td>
                     <td class="date">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : '-'}</td>
                     <td>${record.paymentMode || '-'}</td>
@@ -5675,6 +6477,87 @@ export default function AdminDashboard() {
     } catch (error) {
       console.error('Error generating PDF:', error);
       message.error('Failed to generate PDF report');
+    }
+  };
+
+
+
+  // Export individual bank deposit to PDF
+  const exportBankDepositToPDF = async (record: any) => {
+    setBankDepositPdfLoading(true);
+    try {
+      const doc = new jsPDF();
+      
+      // Header
+      doc.setFontSize(20);
+      doc.text('AKR & SON\'S (PVT) LTD', 105, 20, { align: 'center' });
+      doc.setFontSize(16);
+      doc.text('Bank Deposit Receipt', 105, 30, { align: 'center' });
+      
+      // Deposit Details
+      doc.setFontSize(12);
+      doc.text('Deposit Details:', 20, 50);
+      doc.setFontSize(10);
+      doc.text(`Date: ${new Date(record.date).toLocaleDateString()}`, 20, 60);
+      doc.text(`Depositer Name: ${record.depositerName || '-'}`, 20, 70);
+      doc.text(`Account Number: ${record.accountNumber || '-'}`, 20, 80);
+      doc.text(`Account Name: ${record.accountName || '-'}`, 20, 90);
+      
+      // Transaction Details
+      doc.setFontSize(12);
+      doc.text('Transaction Details:', 20, 110);
+      doc.setFontSize(10);
+      doc.text(`Purpose: ${record.purpose || '-'}`, 20, 120);
+      doc.text(`Quantity: ${record.quantity || '-'}`, 20, 130);
+      doc.text(`Payment Amount: LKR ${record.payment?.toLocaleString() || '0'}`, 20, 140);
+      
+      // Add slip image if available
+      if (record.slipImage) {
+        try {
+          // Load the image
+          const img = new Image();
+          img.crossOrigin = 'anonymous';
+          
+          await new Promise((resolve, reject) => {
+            img.onload = resolve;
+            img.onerror = reject;
+            img.src = record.slipImage;
+          });
+          
+          // Calculate image dimensions to fit on page
+          const imgWidth = 80;
+          const imgHeight = (img.height * imgWidth) / img.width;
+          
+          // Add image to PDF
+          doc.addImage(img, 'JPEG', 20, 160, imgWidth, imgHeight);
+          
+          // Add caption
+          doc.setFontSize(10);
+          doc.text('Deposit Slip:', 20, 155);
+          
+        } catch (error) {
+          console.warn('Failed to load slip image:', error);
+          // Fallback to text if image fails to load
+          doc.setFontSize(12);
+          doc.text('Slip Image:', 20, 160);
+          doc.setFontSize(8);
+          doc.text('✓ Deposit slip image is available', 20, 170);
+          doc.text(`URL: ${record.slipImage}`, 20, 180);
+        }
+      }
+      
+      // Footer
+      doc.setFontSize(8);
+      doc.text(`Generated on: ${new Date().toLocaleString()}`, 20, 280);
+      doc.text(`Deposit ID: ${record._id}`, 20, 285);
+      
+      doc.save(`bank-deposit-${record._id}.pdf`);
+      message.success('PDF generated successfully!');
+    } catch (error) {
+      console.error('Error generating PDF:', error);
+      message.error('Failed to generate PDF');
+    } finally {
+      setBankDepositPdfLoading(false);
     }
   };
 
@@ -5845,12 +6728,19 @@ export default function AdminDashboard() {
             
             <div class="stats">
               <div class="stat-item">
-                <div class="stat-value">LKR ${bankDepositsStats.totalPayment?.toLocaleString() || '0'}</div>
+                <div class="stat-value">${bankDepositsStats.totalPayment?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Payment</div>
               </div>
               <div class="stat-item">
                 <div class="stat-value">${bankDepositsStats.totalQuantity || '0'}</div>
                 <div class="stat-label">Total Quantity</div>
+                ${bankDepositsStats.quantityBreakdown ? `
+                <div class="stat-breakdown">
+                  Oil: ${bankDepositsStats.quantityBreakdown.Oil || 0} | 
+                  Helmet: ${bankDepositsStats.quantityBreakdown.Helmet || 0} | 
+                  Others: ${bankDepositsStats.quantityBreakdown.Others || 0}
+                </div>
+                ` : ''}
               </div>
               <div class="stat-item">
                 <div class="stat-value">${allRecords.length}</div>
@@ -5867,7 +6757,8 @@ export default function AdminDashboard() {
                   <th>Account Name</th>
                   <th>Purpose</th>
                   <th>Quantity</th>
-                  <th>Payment (LKR)</th>
+                  <th>Payment</th>
+                  <th>Slip</th>
                 </tr>
               </thead>
               <tbody>
@@ -5879,7 +6770,8 @@ export default function AdminDashboard() {
                     <td>${record.accountName || '-'}</td>
                     <td>${record.purpose || '-'}</td>
                     <td>${record.quantity > 0 ? record.quantity : '-'}</td>
-                    <td class="amount">LKR ${record.payment?.toLocaleString() || '0'}</td>
+                    <td class="amount">${record.payment?.toLocaleString() || '0'}</td>
+                    <td>${record.slipImage ? '✓ Available' : '✗ Not available'}</td>
                   </tr>
                 `).join('')}
               </tbody>
@@ -6367,16 +7259,20 @@ export default function AdminDashboard() {
             
             <div class="stats">
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Total Amount</div>
+                <div class="stat-value">${accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Available Amount</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
+                <div class="stat-value">${accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Credit</div>
               </div>
               <div class="stat-item">
-                <div class="stat-value">LKR ${accountDataStats.totalCost?.toLocaleString() || '0'}</div>
+                <div class="stat-value">${accountDataStats.totalCost?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Cost</div>
+              </div>
+              <div class="stat-item">
+                <div class="stat-value">${accountDataStats.depositedAmount?.toLocaleString() || '0'}</div>
+                <div class="stat-label">Deposited Amount</div>
               </div>
               <div class="stat-item">
                 <div class="stat-value">${allRecords.length}</div>
@@ -6390,11 +7286,11 @@ export default function AdminDashboard() {
                   <th>Date</th>
                   <th>Name</th>
                   <th>Details</th>
-                  <th>Amount (LKR)</th>
+                  <th>Amount</th>
                   <th>Model</th>
                   <th>Color</th>
-                  <th>Credit (LKR)</th>
-                  <th>Cost (LKR)</th>
+                  <th>Credit</th>
+                  <th>Cost</th>
                   <th>Balance</th>
                   <th>Cheque Received</th>
                   <th>Cheque Release</th>
@@ -6409,12 +7305,12 @@ export default function AdminDashboard() {
                     <td class="date">${record.date ? new Date(record.date).toLocaleDateString('en-GB') : '-'}</td>
                     <td>${record.name || '-'}</td>
                     <td>${record.details || '-'}</td>
-                    <td class="amount">LKR ${record.amount?.toLocaleString() || '0'}</td>
+                    <td class="amount">${(record.depositedToBank ? -Math.abs(record.amount) : record.amount)?.toLocaleString() || '0'}</td>
                     <td>${record.model || '-'}</td>
                     <td>${record.color || '-'}</td>
-                    <td class="amount">${record.credit > 0 ? `LKR ${record.credit.toLocaleString()}` : '-'}</td>
-                    <td class="amount">${record.cost > 0 ? `LKR ${record.cost.toLocaleString()}` : '-'}</td>
-                    <td class="amount">${record.balance > 0 ? `LKR ${record.balance.toLocaleString()}` : '-'}</td>
+                    <td class="amount">${record.credit > 0 ? record.credit.toLocaleString() : '-'}</td>
+                    <td class="amount">${record.cost > 0 ? record.cost.toLocaleString() : '-'}</td>
+                    <td class="amount">${record.balance > 0 ? record.balance.toLocaleString() : '-'}</td>
                     <td class="date">${record.chequeReceivedDate ? new Date(record.chequeReceivedDate).toLocaleDateString('en-GB') : '-'}</td>
                     <td class="date">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : '-'}</td>
                     <td>${record.paymentMode || '-'}</td>
@@ -6840,8 +7736,22 @@ export default function AdminDashboard() {
       title: 'Amount (LKR)', 
       dataIndex: 'amount', 
       key: 'amount',
-      render: (amount: number) => `LKR ${amount.toLocaleString()}`,
-      sorter: (a: any, b: any) => a.amount - b.amount
+      render: (amount: number, record: any) => {
+        // If deposited to bank, show as negative amount
+        const displayAmount = record.depositedToBank ? -Math.abs(amount) : amount;
+        const color = record.depositedToBank ? 'text-red-600' : 'text-green-600';
+        return (
+          <span className={color}>
+            LKR {displayAmount.toLocaleString()}
+          </span>
+        );
+      },
+      sorter: (a: any, b: any) => {
+        // Sort by absolute amount, but consider deposited status
+        const aAmount = a.depositedToBank ? -Math.abs(a.amount) : a.amount;
+        const bAmount = b.depositedToBank ? -Math.abs(b.amount) : b.amount;
+        return aAmount - bAmount;
+      }
     },
     { 
       title: 'Model', 
@@ -6908,9 +7818,41 @@ export default function AdminDashboard() {
       key: 'actions',
       render: (_: any, record: any) => (
         <div className="flex gap-2">
+          <Button type="link" size="small" onClick={() => handleViewAccountData(record)}>
+            View
+          </Button>
           <Button type="link" size="small" onClick={() => handleEditAccountData(record)}>
             Edit
           </Button>
+          {record.amount > 0 && (
+            record.depositedToBank ? (
+              <div className="flex flex-col items-center">
+                <Button 
+                  type="link" 
+                  size="small" 
+                  disabled
+                  style={{ 
+                    color: '#8c8c8c',
+                    cursor: 'not-allowed'
+                  }}
+                >
+                  Deposited
+                </Button>
+                <div className="text-xs text-gray-500 mt-1">
+                  {record.bankDepositDate ? new Date(record.bankDepositDate).toLocaleDateString() : ''}
+                </div>
+              </div>
+            ) : (
+              <Button 
+                type="link" 
+                size="small" 
+                style={{ color: '#52c41a' }}
+                onClick={() => handleDepositToBank(record)}
+              >
+                Deposit
+              </Button>
+            )
+          )}
           <Button type="link" size="small" danger onClick={() => handleDeleteAccountData(record._id)}>
             Delete
           </Button>
@@ -6967,10 +7909,30 @@ export default function AdminDashboard() {
       sorter: (a: any, b: any) => a.payment - b.payment
     },
     {
+      title: 'Slip',
+      key: 'slip',
+      render: (_: any, record: any) => (
+        record.slipImage ? (
+          <Button 
+            type="link" 
+            size="small" 
+            onClick={() => window.open(record.slipImage, '_blank')}
+          >
+            View Slip
+          </Button>
+        ) : (
+          <span className="text-gray-400">No slip</span>
+        )
+      )
+    },
+    {
       title: 'Actions',
       key: 'actions',
       render: (_: any, record: any) => (
         <div className="flex gap-2">
+          <Button type="link" size="small" onClick={() => handleViewBankDeposit(record)}>
+            View
+          </Button>
           <Button type="link" size="small" onClick={() => handleEditBankDeposit(record)}>
             Edit
           </Button>
@@ -8736,15 +9698,15 @@ export default function AdminDashboard() {
                     className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow w-full md:w-64"
                   />
                   <Button onClick={() => exportVehiclesToCSV(filteredVehicles)} type="primary">Export CSV</Button>
-            </div>
+                </div>
                 <div>
                   <Button type={vehicleView === 'grid' ? 'primary' : 'default'} onClick={() => setVehicleView('grid')}>Grid</Button>
                   <Button type={vehicleView === 'list' ? 'primary' : 'default'} onClick={() => setVehicleView('list')} style={{ marginLeft: 8 }}>List</Button>
                   <Button type="primary" onClick={() => setAddModalOpen(true)} style={{ marginLeft: 16 }}>
                     Add Vehicle
-                          </Button>
-                        </div>
-                      </div>
+                  </Button>
+                </div>
+              </div>
               {loading ? <Spin /> : error ? <div className="text-red-500">{error}</div> : (
                 vehicleView === 'grid' ? (
                   <Row gutter={[16, 16]}>
@@ -9379,18 +10341,22 @@ export default function AdminDashboard() {
               <h2 className="text-2xl font-bold mb-4">Account Data Management</h2>
               
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">LKR {accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
+                  <div className="text-2xl font-bold text-green-600">{accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
                   <div className="text-sm text-gray-600">Total Amount</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">LKR {accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
+                  <div className="text-2xl font-bold text-blue-600">{accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
                   <div className="text-sm text-gray-600">Total Credit</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-red-600">LKR {accountDataStats.totalCost?.toLocaleString() || '0'}</div>
+                  <div className="text-2xl font-bold text-red-600">{accountDataStats.totalCost?.toLocaleString() || '0'}</div>
                   <div className="text-sm text-gray-600">Total Cost</div>
+                </Card>
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{accountDataStats.depositedAmount?.toLocaleString() || '0'}</div>
+                  <div className="text-sm text-gray-600">Deposited Amount</div>
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{accountDataStats.count || '0'}</div>
@@ -9635,6 +10601,151 @@ export default function AdminDashboard() {
                     </Button>
                   </div>
                 </form>
+              </Modal>
+
+              {/* View Account Data Modal */}
+              <Modal
+                title={
+                  <div>
+                    <div className="text-lg font-semibold">Account Data Details</div>
+                    <div className="text-sm text-blue-600 mt-1">
+                      {viewingAccountData?.name || 'Account Data Record'}
+                    </div>
+                  </div>
+                }
+                open={viewAccountDataModalOpen}
+                onCancel={() => {
+                  setViewAccountDataModalOpen(false);
+                  setViewingAccountData(null);
+                }}
+                footer={[
+                  <Button key="export" type="primary" loading={accountDataPdfLoading} onClick={() => exportIndividualAccountDataToPDF(viewingAccountData)}>
+                    Export PDF
+                  </Button>,
+                  <Button key="close" onClick={() => {
+                    setViewAccountDataModalOpen(false);
+                    setViewingAccountData(null);
+                  }}>
+                    Close
+                  </Button>
+                ]}
+                width={800}
+                style={{ top: 20 }}
+              >
+                {viewingAccountData && (
+                  <div className="space-y-6">
+                    {/* Basic Information */}
+                    <div className="bg-gray-50 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-4 text-gray-800">Basic Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Date</label>
+                          <div className="text-base">
+                            {viewingAccountData.date ? new Date(viewingAccountData.date).toLocaleDateString('en-GB') : 'Not specified'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Name</label>
+                          <div className="text-base">{viewingAccountData.name || 'Not specified'}</div>
+                        </div>
+                        <div className="md:col-span-2">
+                          <label className="block text-sm font-medium text-gray-600">Details</label>
+                          <div className="text-base">{viewingAccountData.details || 'Not specified'}</div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Amount</label>
+                          <div className={`text-lg font-semibold ${viewingAccountData.depositedToBank ? 'text-red-600' : 'text-green-600'}`}>
+                            LKR {(viewingAccountData.depositedToBank ? -Math.abs(viewingAccountData.amount) : viewingAccountData.amount)?.toLocaleString() || '0'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Model</label>
+                          <div className="text-base">{viewingAccountData.model || 'Not specified'}</div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Color</label>
+                          <div className="text-base">{viewingAccountData.color || 'Not specified'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Financial Information */}
+                    <div className="bg-blue-50 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-4 text-blue-800">Financial Details</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Credit</label>
+                          <div className="text-base">
+                            {viewingAccountData.credit > 0 ? `LKR ${viewingAccountData.credit.toLocaleString()}` : 'Not specified'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Cost</label>
+                          <div className="text-base">
+                            {viewingAccountData.cost > 0 ? `LKR ${viewingAccountData.cost.toLocaleString()}` : 'Not specified'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Balance</label>
+                          <div className="text-base">
+                            {viewingAccountData.balance > 0 ? `LKR ${viewingAccountData.balance.toLocaleString()}` : 'Not specified'}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Cheque Information */}
+                    <div className="bg-yellow-50 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-4 text-yellow-800">Cheque Information</h3>
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Cheque Received Date</label>
+                          <div className="text-base">
+                            {viewingAccountData.chequeReceivedDate ? new Date(viewingAccountData.chequeReceivedDate).toLocaleDateString('en-GB') : 'Not specified'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Cheque Release Date</label>
+                          <div className="text-base">
+                            {viewingAccountData.chequeReleaseDate ? new Date(viewingAccountData.chequeReleaseDate).toLocaleDateString('en-GB') : 'Not specified'}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Payment Mode</label>
+                          <div className="text-base">{viewingAccountData.paymentMode || 'Not specified'}</div>
+                        </div>
+                        <div>
+                          <label className="block text-sm font-medium text-gray-600">Leasing</label>
+                          <div className="text-base">{viewingAccountData.leasing || 'Not specified'}</div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Additional Information */}
+                    <div className="bg-green-50 p-4 rounded-lg">
+                      <h3 className="text-lg font-semibold mb-4 text-green-800">Additional Information</h3>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-600">Remarks</label>
+                        <div className="text-base">{viewingAccountData.remarks || 'Not specified'}</div>
+                      </div>
+                    </div>
+
+                    {/* Deposit Slip Image */}
+                    {viewingAccountData.depositSlipImage && (
+                      <div className="bg-purple-50 p-4 rounded-lg">
+                        <h3 className="text-lg font-semibold mb-4 text-purple-800">Deposit Slip</h3>
+                        <div>
+                          <img
+                            src={viewingAccountData.depositSlipImage}
+                            alt="Deposit Slip"
+                            className="max-w-full h-auto border rounded-lg shadow-md"
+                            style={{ maxHeight: '300px' }}
+                          />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )}
               </Modal>
             </div>
           )}
@@ -9886,14 +10997,21 @@ export default function AdminDashboard() {
               <h2 className="text-2xl font-bold mb-4">Bank Deposits Management</h2>
               
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">LKR {bankDepositsStats.totalPayment?.toLocaleString() || '0'}</div>
+                  <div className="text-2xl font-bold text-green-600">{bankDepositsStats.totalPayment?.toLocaleString() || '0'}</div>
                   <div className="text-sm text-gray-600">Total Payment</div>
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{bankDepositsStats.totalQuantity || '0'}</div>
                   <div className="text-sm text-gray-600">Total Quantity</div>
+                  {bankDepositsStats.quantityBreakdown && (
+                    <div className="text-xs text-gray-500 mt-1">
+                      Oil: {bankDepositsStats.quantityBreakdown.Oil || 0} | 
+                      Helmet: {bankDepositsStats.quantityBreakdown.Helmet || 0} | 
+                      Others: {bankDepositsStats.quantityBreakdown.Others || 0}
+                    </div>
+                  )}
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{bankDepositsStats.count || '0'}</div>
@@ -9923,7 +11041,9 @@ export default function AdminDashboard() {
                       accountName: '',
                       purpose: '',
                       quantity: 0,
-                      payment: 0
+                      payment: 0,
+                      slipImage: null,
+                      slipImageUrl: ''
                     });
                     setBankDepositsModalOpen(true);
                   }}>
@@ -10044,6 +11164,33 @@ export default function AdminDashboard() {
                       />
                     </div>
                   </div>
+                  
+                  {/* Deposit Slip Upload */}
+                  <div className="border-t pt-4">
+                    <h3 className="text-lg font-semibold mb-4 text-blue-800">Deposit Slip</h3>
+                    <div className="space-y-4">
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Upload Deposit Slip (Optional)</label>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          onChange={handleBankDepositSlipUpload}
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        />
+                      </div>
+                      {bankDepositsForm.slipImageUrl && (
+                        <div>
+                          <label className="block text-sm font-medium mb-1">Preview</label>
+                          <img
+                            src={bankDepositsForm.slipImageUrl}
+                            alt="Deposit Slip Preview"
+                            className="max-w-full h-32 object-contain border rounded"
+                          />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                  
                   <div className="flex justify-end gap-2 pt-4">
                     <Button type="default" onClick={() => {
                       setBankDepositsModalOpen(false);
@@ -10987,9 +12134,11 @@ export default function AdminDashboard() {
 
               {/* Installment Plans Table */}
               <div className="bg-white rounded-xl shadow overflow-hidden">
-                <Table
-                  dataSource={installmentPlans}
-                  loading={installmentLoading}
+                <div className="overflow-x-auto min-w-full">
+                  <div className="min-w-[1400px]">
+                    <Table
+                      dataSource={installmentPlans}
+                      loading={installmentLoading}
               columns={[
                     {
                       title: 'Coupon ID',
@@ -11202,8 +12351,10 @@ export default function AdminDashboard() {
                     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
                   }}
                 />
+                  </div>
+                </div>
               </div>
-              </div>
+            </div>
           )}
 
           {/* Suppliers Tab */}
@@ -12162,6 +13313,22 @@ export default function AdminDashboard() {
           {/* Vehicle Allocation Coupons Tab */}
           {akrTab === 'vehicleAllocationCoupons' && (
             <div className="col-span-full">
+              {/* Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-blue-600">{vehicleAllocationCouponsStats.couponsWithArrears || '0'}</div>
+                  <div className="text-sm text-gray-600">Coupons with Arrears</div>
+                </Card>
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-red-600">{vehicleAllocationCouponsStats.totalArrears?.toLocaleString() || '0'}</div>
+                  <div className="text-sm text-gray-600">Total Arrears</div>
+                </Card>
+                <Card className="text-center">
+                  <div className="text-2xl font-bold text-orange-600">{vehicleAllocationCouponsStats.averageArrears?.toLocaleString() || '0'}</div>
+                  <div className="text-sm text-gray-600">Average Arrears</div>
+                </Card>
+              </div>
+
               {/* Search and Actions */}
               <div className="bg-white rounded-xl shadow p-6 mb-6">
                 <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
@@ -12190,7 +13357,9 @@ export default function AdminDashboard() {
 
               {/* Vehicle Allocation Coupons Table */}
               <div className="bg-white rounded-xl shadow overflow-hidden">
-                <Table
+                                <div className="overflow-x-auto min-w-full">
+                  <div className="min-w-[1200px]">
+                    <Table
                   dataSource={vehicleAllocationCoupons}
                   loading={vehicleAllocationCouponsLoading}
                   columns={[
@@ -12235,6 +13404,31 @@ export default function AdminDashboard() {
                       render: (amount: number) => amount ? `LKR ${amount.toLocaleString()}` : '-'
                     },
                     {
+                      title: 'Arrears',
+                      key: 'arrears',
+                      align: 'center' as const,
+                      render: (_, record: any) => {
+                        // Calculate arrears: Down Payment - Amount Collected
+                        const downPayment = record.downPayment || 0;
+                        const amountCollected = record.depositAmount || 0;
+                        const arrears = downPayment - amountCollected;
+                        
+                        if (arrears <= 0) {
+                          return (
+                            <span style={{ color: '#8c8c8c', fontWeight: 'bold' }}>
+                              Down Payment Collected
+                            </span>
+                          );
+                        }
+                        
+                        return (
+                          <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                            LKR {arrears.toLocaleString()}
+                          </span>
+                        );
+                      }
+                    },
+                    {
                       title: 'Payment Type',
                       dataIndex: 'paymentType',
                       key: 'paymentType',
@@ -12276,6 +13470,51 @@ export default function AdminDashboard() {
                           <Button size="small" onClick={() => handleEditVehicleAllocationCoupon(record)}>
                             Edit
                           </Button>
+                          {record.paymentType === 'Cash' && (() => {
+                            // Calculate arrears
+                            const downPayment = record.downPayment || 0;
+                            const amountCollected = record.depositAmount || 0;
+                            const arrears = downPayment - amountCollected;
+                            
+                            if (arrears <= 0) {
+                              // Fully collected - show grey "Collected" button
+                              return (
+                                <div className="flex flex-col items-center">
+                                  <Button 
+                                    size="small" 
+                                    disabled
+                                    title={`Down Payment Collected: LKR ${record.depositAmount?.toLocaleString() || 0}${record.depositCount > 1 ? ` (${record.depositCount} collections)` : ''}`}
+                                    style={{ 
+                                      backgroundColor: '#d9d9d9', 
+                                      borderColor: '#d9d9d9',
+                                      color: '#8c8c8c',
+                                      cursor: 'not-allowed'
+                                    }}
+                                  >
+                                    Down Payment Collected
+                                  </Button>
+                                  <div className="text-xs text-gray-500 mt-1">
+                                    {record.depositDate ? new Date(record.depositDate).toLocaleDateString() : 'Date not set'}
+                                  </div>
+                                </div>
+                              );
+                            } else {
+                              // Has arrears - show "Collect" button
+                              return (
+                                <Button 
+                                  size="small" 
+                                  type="primary" 
+                                  style={{ backgroundColor: '#52c41a', borderColor: '#52c41a' }}
+                                  onClick={() => handleDepositClick(record)}
+                                  loading={depositLoading === record.couponId}
+                                  disabled={depositLoading === record.couponId}
+                                  title={`Collect down payment: LKR ${arrears.toLocaleString()}`}
+                                >
+                                  {depositLoading === record.couponId ? 'Processing...' : 'Collect Down Payment'}
+                                </Button>
+                              );
+                            }
+                          })()}
                           <Button size="small" danger onClick={() => handleDeleteVehicleAllocationCoupon(record._id)}>
                             Delete
                           </Button>
@@ -12292,7 +13531,9 @@ export default function AdminDashboard() {
                     showQuickJumper: true,
                     showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
                   }}
-                />
+                    />
+                  </div>
+                </div>
               </div>
             </div>
           )}
@@ -12902,13 +14143,675 @@ export default function AdminDashboard() {
               </div>
             </form>
           </Modal>
+
+          {/* Deposit Modal */}
+          <Modal
+            title={
+              <div>
+                <div className="text-lg font-semibold">Collect Down Payment</div>
+                <div className="text-sm text-blue-600 mt-1">
+                  Vehicle: {selectedCouponForDeposit?.vehicleType} | Coupon: {selectedCouponForDeposit?.couponId}
+                </div>
+              </div>
+            }
+            open={depositModalOpen}
+            onCancel={() => {
+              setDepositModalOpen(false);
+              setSelectedCouponForDeposit(null);
+            }}
+            footer={[
+              <Button key="cancel" onClick={() => {
+                setDepositModalOpen(false);
+                setSelectedCouponForDeposit(null);
+              }}>
+                Cancel
+              </Button>,
+              <Button 
+                key="submit" 
+                type="primary" 
+                onClick={handleDepositSubmit}
+                loading={depositLoading === selectedCouponForDeposit?.couponId}
+                disabled={depositLoading === selectedCouponForDeposit?.couponId}
+              >
+                {depositLoading === selectedCouponForDeposit?.couponId ? 'Collecting...' : 'Collect Down Payment'}
+              </Button>
+            ]}
+            width={800}
+            style={{ top: 20 }}
+          >
+            <div className="space-y-6">
+              {/* Basic Details */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800">Basic Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Date *</label>
+                    <input
+                      type="date"
+                      name="date"
+                      value={depositForm.date}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={depositForm.name}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Vehicle Model *</label>
+                    <input
+                      type="text"
+                      name="model"
+                      value={depositForm.model}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Details *</label>
+                    <input
+                      type="text"
+                      name="details"
+                      value={depositForm.details}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Amount Details */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-green-800">Amount Details</h3>
+                <div className="mb-4 p-3 bg-blue-100 border border-blue-300 rounded-lg">
+                  <p className="text-sm text-blue-800">
+                    <strong>Note:</strong> "Actually Collected" is the amount that will be saved. "Amount to Collect" is just for reference.
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Down Payment Amount (Total) *</label>
+                    <input
+                      type="number"
+                      name="actualAmount"
+                      value={depositForm.actualAmount}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Down Payment to Collect (Max) *</label>
+                    <input
+                      type="number"
+                      name="amount"
+                      value={depositForm.amount}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      step="0.01"
+                      min="0"
+                      max={depositForm.amount}
+                      required
+                      title="Maximum down payment amount that can be collected"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Actually Collected (This will be saved) *</label>
+                    <input
+                      type="number"
+                      name="depositedAmount"
+                      value={depositForm.depositedAmount}
+                      onChange={handleDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      step="0.01"
+                      min="0"
+                      max={depositForm.amount}
+                      placeholder="Enter actual collected amount"
+                      required
+                      title="This is the amount that will be recorded as collected"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Down Payment Information */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800">Down Payment Information</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Total Down Payment</label>
+                    <input
+                      type="number"
+                      value={selectedCouponForDeposit?.downPayment || 0}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Previously Collected</label>
+                    <input
+                      type="number"
+                      value={selectedCouponForDeposit?.depositAmount || 0}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                      readOnly
+                    />
+                    {selectedCouponForDeposit?.depositCount > 1 && (
+                      <div className="text-xs text-gray-500 mt-1">
+                        {selectedCouponForDeposit.depositCount} collection(s) made
+                      </div>
+                    )}
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Remaining Down Payment</label>
+                    <input
+                      type="number"
+                      value={(() => {
+                        const downPayment = selectedCouponForDeposit?.downPayment || 0;
+                        const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
+                        const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
+                        const totalCollected = previouslyCollected + currentCollection;
+                        return Math.max(0, downPayment - totalCollected);
+                      })()}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-blue-100 text-blue-800 font-bold"
+                      readOnly
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Collection Status</label>
+                    <input
+                      type="text"
+                      value={(() => {
+                        const downPayment = selectedCouponForDeposit?.downPayment || 0;
+                        const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
+                        const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
+                        const totalCollected = previouslyCollected + currentCollection;
+                        const remaining = downPayment - totalCollected;
+                        return remaining <= 0 ? 'Down Payment Collected' : 'Partially Collected';
+                      })()}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                      readOnly
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">Additional Remarks</h3>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Remarks</label>
+                  <textarea
+                    name="remarks"
+                    value={depositForm.remarks}
+                    onChange={handleDepositFormChange}
+                    className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                    rows={3}
+                    placeholder="Additional remarks about the payment collection"
+                  />
+                </div>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Cheque Release Modal */}
+          <Modal
+            title={
+              <div>
+                <div className="text-lg font-semibold">Release Cheque (Deduct from Bank Deposits)</div>
+                <div className="text-sm text-blue-600 mt-1">
+                  Vehicle: {selectedCouponForChequeRelease?.vehicleType} | Coupon: {selectedCouponForChequeRelease?.couponId}
+                </div>
+              </div>
+            }
+            open={chequeReleaseModalOpen}
+            onCancel={() => {
+              setChequeReleaseModalOpen(false);
+              setSelectedCouponForChequeRelease(null);
+            }}
+            footer={[
+              <Button key="cancel" onClick={() => {
+                setChequeReleaseModalOpen(false);
+                setSelectedCouponForChequeRelease(null);
+              }}>
+                Cancel
+              </Button>,
+              <Button 
+                key="submit" 
+                type="primary" 
+                onClick={handleChequeReleaseSubmit}
+                loading={chequeReleaseLoading === selectedCouponForChequeRelease?.couponId}
+                disabled={chequeReleaseLoading === selectedCouponForChequeRelease?.couponId}
+              >
+                {chequeReleaseLoading === selectedCouponForChequeRelease?.couponId ? 'Releasing...' : 'Release Cheque & Deduct'}
+              </Button>
+            ]}
+            width={800}
+            style={{ top: 20 }}
+          >
+            <div className="space-y-6">
+              {/* Basic Details */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800">Basic Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Date *</label>
+                    <input
+                      type="date"
+                      name="date"
+                      value={chequeReleaseForm.date}
+                      onChange={handleChequeReleaseFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                    <input
+                      type="text"
+                      name="name"
+                      value={chequeReleaseForm.name}
+                      onChange={handleChequeReleaseFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Vehicle Model *</label>
+                    <input
+                      type="text"
+                      name="model"
+                      value={chequeReleaseForm.model}
+                      onChange={handleChequeReleaseFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Details *</label>
+                    <input
+                      type="text"
+                      name="details"
+                      value={chequeReleaseForm.details}
+                      onChange={handleChequeReleaseFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Amount Details */}
+              <div className="bg-red-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-red-800">Amount Details</h3>
+                <div className="mb-4 p-3 bg-yellow-100 border border-yellow-300 rounded-lg">
+                  <p className="text-sm text-yellow-800">
+                    <strong>Note:</strong> This amount will be deducted from Bank Deposits (negative entry)
+                  </p>
+                </div>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Cheque Amount *</label>
+                    <input
+                      type="number"
+                      name="amount"
+                      value={chequeReleaseForm.amount}
+                      onChange={handleChequeReleaseFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
+                  <div className="flex items-end">
+                    <div className="text-sm text-red-600 font-medium">
+                      This amount will be deducted from account data
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Cheque Slip Upload */}
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-yellow-800">Cheque Slip</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Upload Cheque Slip Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleChequeSlipUpload}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Upload cheque slip image (optional)</p>
+                  </div>
+                  {chequeReleaseForm.chequeSlipImage && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Preview</label>
+                      <img
+                        src={URL.createObjectURL(chequeReleaseForm.chequeSlipImage)}
+                        alt="Cheque Slip Preview"
+                        className="max-w-xs border rounded"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+
+              {/* Remarks */}
+              <div className="bg-gray-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-gray-800">Additional Remarks</h3>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Remarks</label>
+                  <textarea
+                    name="remarks"
+                    value={chequeReleaseForm.remarks}
+                    onChange={handleChequeReleaseFormChange}
+                    className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                    rows={3}
+                    placeholder="Additional remarks about the cheque release"
+                  />
+                </div>
+              </div>
+            </div>
+          </Modal>
+
+          {/* Account Data Deposit Modal */}
+          <Modal
+            title={
+              <div>
+                <div className="text-lg font-semibold">Deposit to Bank</div>
+                <div className="text-sm text-blue-600 mt-1">
+                  Source: {selectedAccountDataForDeposit?.details}
+                </div>
+              </div>
+            }
+            open={accountDataDepositModalOpen}
+            onCancel={() => {
+              setAccountDataDepositModalOpen(false);
+              setSelectedAccountDataForDeposit(null);
+            }}
+            footer={[
+              <Button key="cancel" onClick={() => {
+                setAccountDataDepositModalOpen(false);
+                setSelectedAccountDataForDeposit(null);
+              }}>
+                Cancel
+              </Button>,
+              <Button 
+                key="submit" 
+                type="primary" 
+                onClick={handleAccountDataDepositSubmit}
+                loading={accountDataDepositLoading}
+                disabled={accountDataDepositLoading}
+              >
+                {accountDataDepositLoading ? 'Depositing...' : 'Deposit to Bank'}
+              </Button>
+            ]}
+            width={800}
+            style={{ top: 20 }}
+          >
+            <div className="space-y-6">
+              {/* Basic Details */}
+              <div className="bg-blue-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-blue-800">Deposit Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Date *</label>
+                    <input
+                      type="date"
+                      name="date"
+                      value={accountDataDepositForm.date}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Depositer Name *</label>
+                    <input
+                      type="text"
+                      name="depositerName"
+                      value={accountDataDepositForm.depositerName}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Account Number *</label>
+                    <input
+                      type="text"
+                      name="accountNumber"
+                      value={accountDataDepositForm.accountNumber}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Account Name *</label>
+                    <input
+                      type="text"
+                      name="accountName"
+                      value={accountDataDepositForm.accountName}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Purpose and Amount */}
+              <div className="bg-green-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-green-800">Transaction Details</h3>
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Purpose *</label>
+                    <textarea
+                      name="purpose"
+                      value={accountDataDepositForm.purpose}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      rows={2}
+                      required
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Quantity</label>
+                    <input
+                      type="number"
+                      name="quantity"
+                      value={accountDataDepositForm.quantity}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      min="1"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Payment Amount (LKR) *</label>
+                    <input
+                      type="number"
+                      name="payment"
+                      value={accountDataDepositForm.payment}
+                      onChange={handleAccountDataDepositFormChange}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      step="0.01"
+                      min="0"
+                      required
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Slip Upload */}
+              <div className="bg-yellow-50 p-4 rounded-lg">
+                <h3 className="text-lg font-semibold mb-4 text-yellow-800">Deposit Slip</h3>
+                <div className="space-y-4">
+                  <div>
+                    <label className="block text-sm font-medium mb-1">Upload Deposit Slip Image</label>
+                    <input
+                      type="file"
+                      accept="image/*"
+                      onChange={handleAccountDataDepositSlipUpload}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                    />
+                    <p className="text-xs text-gray-500 mt-1">Upload deposit slip image (optional)</p>
+                  </div>
+                  {accountDataDepositForm.slipImage && (
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Preview</label>
+                      <img
+                        src={URL.createObjectURL(accountDataDepositForm.slipImage)}
+                        alt="Deposit Slip Preview"
+                        className="max-w-xs border rounded"
+                      />
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </Modal>
+
+          {/* View Bank Deposit Modal */}
+          <Modal
+            title={
+              <div>
+                <div className="text-lg font-semibold">Bank Deposit Details</div>
+                <div className="text-sm text-blue-600 mt-1">
+                  Deposit ID: {viewingBankDeposit?._id}
+                </div>
+              </div>
+            }
+            open={viewBankDepositModalOpen}
+            onCancel={() => {
+              setViewBankDepositModalOpen(false);
+              setViewingBankDeposit(null);
+            }}
+            footer={[
+              <Button 
+                key="export" 
+                type="primary" 
+                loading={bankDepositPdfLoading}
+                disabled={bankDepositPdfLoading}
+                onClick={async () => await exportBankDepositToPDF(viewingBankDeposit)}
+              >
+                {bankDepositPdfLoading ? 'Generating PDF...' : 'Export PDF'}
+              </Button>,
+              <Button key="close" onClick={() => {
+                setViewBankDepositModalOpen(false);
+                setViewingBankDeposit(null);
+              }}>
+                Close
+              </Button>
+            ]}
+            width={800}
+            style={{ top: 20 }}
+          >
+            {viewingBankDeposit && (
+              <div className="space-y-6">
+                {/* Basic Details */}
+                <div className="bg-blue-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-4 text-blue-800">Deposit Information</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Date</label>
+                      <div className="text-gray-900">{new Date(viewingBankDeposit.date).toLocaleDateString()}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Depositer Name</label>
+                      <div className="text-gray-900">{viewingBankDeposit.depositerName || '-'}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Account Number</label>
+                      <div className="text-gray-900">{viewingBankDeposit.accountNumber || '-'}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Account Name</label>
+                      <div className="text-gray-900">{viewingBankDeposit.accountName || '-'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Transaction Details */}
+                <div className="bg-green-50 p-4 rounded-lg">
+                  <h3 className="text-lg font-semibold mb-4 text-green-800">Transaction Details</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Purpose</label>
+                      <div className="text-gray-900">{viewingBankDeposit.purpose || '-'}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Quantity</label>
+                      <div className="text-gray-900">{viewingBankDeposit.quantity || '-'}</div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Payment Amount</label>
+                      <div className="text-gray-900 font-semibold">LKR {viewingBankDeposit.payment?.toLocaleString() || '0'}</div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Slip Image */}
+                {viewingBankDeposit.slipImage && (
+                  <div className="bg-yellow-50 p-4 rounded-lg">
+                    <h3 className="text-lg font-semibold mb-4 text-yellow-800">Deposit Slip</h3>
+                    <div>
+                      <img
+                        src={viewingBankDeposit.slipImage}
+                        alt="Deposit Slip"
+                        className="max-w-full border rounded"
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </Modal>
           
           {akrTab === 'overview' && (
             <div className="col-span-full">
               {/* Header Section */}
-              <div className="mb-8">
-                <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard Overview</h1>
-                <p className="text-gray-600">Welcome to AKR & SONS (PVT) LTD - Vehicle Dealership & Services</p>
+              <div className="mb-8 flex justify-between items-start">
+                <div>
+                  <h1 className="text-3xl font-bold text-gray-800 mb-2">Dashboard Overview</h1>
+                  <p className="text-gray-600">Welcome to AKR & SONS (PVT) LTD - Vehicle Dealership & Services</p>
+                </div>
+                
+                {/* Key Financial Metrics - Top Right Corner */}
+                <div className="flex flex-col space-y-1 text-right">
+                  {/* Downpayment Arrears */}
+                  <div className="text-sm">
+                    <span className="text-gray-600 font-medium">Downpayment Arrears:</span>
+                    <span className="text-red-600 font-semibold ml-2">LKR {vehicleAllocationCouponsStats.totalArrears?.toLocaleString() || '0'}</span>
+                    <span className="text-gray-500 text-xs ml-2">({vehicleAllocationCouponsStats.couponsWithArrears || '0'} coupons pending)</span>
+                  </div>
+                  
+                  {/* Bank Deposit Total */}
+                  <div className="text-sm">
+                    <span className="text-gray-600 font-medium">Bank Deposits:</span>
+                    <span className="text-green-600 font-semibold ml-2">LKR {bankDepositsStats.totalPayment?.toLocaleString() || '0'}</span>
+                    <span className="text-gray-500 text-xs ml-2">({bankDepositsStats.count || '0'} deposits)</span>
+                  </div>
+                  
+                  {/* Account Data Total */}
+                  <div className="text-sm">
+                    <span className="text-gray-600 font-medium">Account Data Total:</span>
+                    <span className="text-blue-600 font-semibold ml-2">LKR {accountDataStats.totalAmount?.toLocaleString() || '0'}</span>
+                    <span className="text-gray-500 text-xs ml-2">({accountDataStats.count || '0'} records)</span>
+                  </div>
+                </div>
               </div>
 
               {/* Key Metrics Cards */}
@@ -13927,10 +15830,12 @@ export default function AdminDashboard() {
                                 <Button 
                                   type="primary" 
                                   size="small"
-                                  onClick={() => markChequeAsReleased(reminder.couponId)}
+                                  onClick={() => handleChequeReleaseClick(reminder)}
                                   className="bg-green-600 hover:bg-green-700"
+                                  loading={chequeReleaseLoading === reminder.couponId}
+                                  disabled={chequeReleaseLoading === reminder.couponId}
                                 >
-                                  Mark as Done
+                                  {chequeReleaseLoading === reminder.couponId ? 'Processing...' : 'Mark as Done'}
                                 </Button>
                               </div>
                             </div>
@@ -13981,7 +15886,9 @@ export default function AdminDashboard() {
                                       </div>
                                       <div>
                                         <div className="text-gray-600">Released date</div>
-                                        <div className="font-medium">{new Date(reminder.chequeReleasedDate).toLocaleDateString()}</div>
+                                        <div className="font-medium">
+                                          {reminder.chequeReleasedDate ? new Date(reminder.chequeReleasedDate).toLocaleDateString() : 'Not set'}
+                                        </div>
                                       </div>
                                       <div>
                                         <div className="text-gray-600">Days since release</div>

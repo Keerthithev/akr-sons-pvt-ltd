@@ -4,6 +4,7 @@ const InstallmentPlan = require('../models/InstallmentPlan');
 const Customer = require('../models/Customer');
 const Vehicle = require('../models/Vehicle.cjs');
 const BikeInventory = require('../models/BikeInventory');
+const AccountData = require('../models/AccountData');
 
 // Generate the next couponId in the format 'VAC-001', 'VAC-002', ...
 async function generateCouponId() {
@@ -240,10 +241,56 @@ exports.getAllVehicleAllocationCoupons = async (req, res, next) => {
       .skip(skip)
       .limit(parseInt(limit));
 
+    // Get deposit information for each coupon
+    const couponsWithDepositInfo = await Promise.all(
+      vehicleAllocationCoupons.map(async (coupon) => {
+        const couponObj = coupon.toObject();
+        
+        // Check if there are payment collection records for this coupon and sum them
+        const depositRecords = await AccountData.aggregate([
+          {
+            $match: {
+              $or: [
+                { relatedCouponId: coupon.couponId },
+                { details: { $regex: coupon.couponId, $options: 'i' } }
+              ],
+              amount: { $gt: 0 } // Only positive amounts (collections, not deductions)
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: '$amount' },
+              latestDate: { $max: '$date' },
+              count: { $sum: 1 }
+            }
+          }
+        ]);
+        
+        // Add deposit information to the coupon
+        const depositInfo = depositRecords[0];
+        couponObj.hasDeposit = !!depositInfo;
+        couponObj.depositAmount = depositInfo ? depositInfo.totalAmount : 0;
+        couponObj.depositDate = depositInfo ? depositInfo.latestDate : null;
+        couponObj.depositCount = depositInfo ? depositInfo.count : 0;
+        
+        // Debug logging
+        if (couponObj.hasDeposit) {
+          console.log(`Found payment collections for ${coupon.couponId}:`, {
+            totalAmount: depositInfo.totalAmount,
+            latestDate: depositInfo.latestDate,
+            count: depositInfo.count
+          });
+        }
+        
+        return couponObj;
+      })
+    );
+
     const total = await VehicleAllocationCoupon.countDocuments(query);
 
     res.json({
-      vehicleAllocationCoupons,
+      vehicleAllocationCoupons: couponsWithDepositInfo,
       total,
       page: parseInt(page),
       totalPages: Math.ceil(total / limit)
@@ -562,6 +609,148 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
       { $group: { _id: null, total: { $sum: '$downPayment' } } }
     ]);
 
+    // Calculate arrears statistics using the same logic as getAllVehicleAllocationCoupons
+    // This ensures consistency with the frontend table display
+    const allCoupons = await VehicleAllocationCoupon.find().lean();
+    
+    // Get deposit information for each coupon (same logic as getAllVehicleAllocationCoupons)
+    const couponsWithDepositInfo = await Promise.all(
+      allCoupons.map(async (coupon) => {
+        const couponObj = { ...coupon };
+        
+        // Check if there are payment collection records for this coupon and sum them
+        const depositRecords = await AccountData.aggregate([
+          {
+            $match: {
+              $or: [
+                { relatedCouponId: coupon.couponId },
+                { details: { $regex: coupon.couponId, $options: 'i' } }
+              ],
+              amount: { $gt: 0 } // Only positive amounts (collections, not deductions)
+            }
+          },
+          {
+            $group: {
+              _id: null,
+              totalAmount: { $sum: '$amount' }
+            }
+          }
+        ]);
+        
+        // Add deposit information to the coupon
+        const depositInfo = depositRecords[0];
+        couponObj.depositAmount = depositInfo ? depositInfo.totalAmount : 0;
+        
+        // Debug: Show what was found for this coupon
+        console.log(`DEBUG ${coupon.couponId}: Found ${depositRecords.length} collection records, total amount: ${couponObj.depositAmount}`);
+        
+        return couponObj;
+      })
+    );
+    
+    // Calculate arrears statistics from the enriched data
+    let totalArrears = 0;
+    let couponsWithArrears = 0;
+    
+    for (const coupon of couponsWithDepositInfo) {
+      const downPayment = coupon.downPayment || 0;
+      const depositAmount = coupon.depositAmount || 0;
+      const arrears = Math.max(0, downPayment - depositAmount);
+      
+      if (arrears > 0) {
+        totalArrears += arrears;
+        couponsWithArrears++;
+      }
+    }
+    
+    const arrearsStats = {
+      totalArrears: Math.round(totalArrears * 100) / 100, // Round to 2 decimal places
+      couponsWithArrears,
+      averageArrears: couponsWithArrears > 0 ? Math.round((totalArrears / couponsWithArrears) * 100) / 100 : 0
+    };
+
+    // Debug: Show detailed calculation for each coupon using enriched data
+    console.log('=== DETAILED ARREARS CALCULATION ===');
+    console.log('Total coupons processed:', couponsWithDepositInfo.length);
+    
+    for (const coupon of couponsWithDepositInfo) {
+      const downPayment = coupon.downPayment || 0;
+      const depositAmount = coupon.depositAmount || 0;
+      const arrears = Math.max(0, downPayment - depositAmount);
+      
+      console.log(`${coupon.couponId}: Down Payment=${downPayment}, Collected=${depositAmount}, Arrears=${arrears}`);
+      
+      if (arrears > 0) {
+        console.log(`  *** HAS ARREARS: ${coupon.couponId} ***`);
+      }
+    }
+    
+    // Debug: Show all AccountData records related to VAC coupons
+    console.log('=== ACCOUNT DATA RECORDS ===');
+    const allAccountData = await AccountData.find({
+      $or: [
+        { relatedCouponId: { $exists: true, $ne: '' } },
+        { details: { $regex: 'VAC-', $options: 'i' } }
+      ],
+      amount: { $gt: 0 }
+    }).lean();
+    
+    console.log('Total AccountData records found:', allAccountData.length);
+    allAccountData.forEach(record => {
+      console.log(`AccountData: relatedCouponId="${record.relatedCouponId}", details="${record.details}", amount=${record.amount}`);
+    });
+    
+    console.log('=== FINAL ARREARS STATISTICS ===');
+    console.log('Total Arrears:', arrearsStats.totalArrears);
+    console.log('Coupons with Arrears:', arrearsStats.couponsWithArrears);
+    console.log('Average Arrears:', arrearsStats.averageArrears);
+    console.log('=== END ARREARS STATISTICS ===');
+
+    // Get total collected amount
+    const totalCollected = await AccountData.aggregate([
+      {
+        $match: {
+          $or: [
+            { relatedCouponId: { $exists: true, $ne: '' } },
+            { details: { $regex: 'VAC-', $options: 'i' } }
+          ],
+          amount: { $gt: 0 }
+        }
+      },
+      {
+        $group: {
+          _id: null,
+          totalCollected: { $sum: '$amount' }
+        }
+      }
+    ]);
+
+    // Debug: Show all AccountData records related to VAC coupons
+    console.log('=== ACCOUNT DATA DEBUG ===');
+    
+    // First, check if there are ANY AccountData records
+    const totalAccountData = await AccountData.countDocuments();
+    console.log('Total AccountData records in database:', totalAccountData);
+    
+    // Check for records with positive amounts
+    const positiveAmountRecords = await AccountData.countDocuments({ amount: { $gt: 0 } });
+    console.log('AccountData records with positive amounts:', positiveAmountRecords);
+    
+    // Check for records related to VAC coupons
+    const vacRelatedRecords = await AccountData.find({
+      $or: [
+        { relatedCouponId: { $exists: true, $ne: '' } },
+        { details: { $regex: 'VAC-', $options: 'i' } }
+      ],
+      amount: { $gt: 0 }
+    }).lean();
+    
+    console.log('Total VAC-related AccountData records found:', vacRelatedRecords.length);
+    vacRelatedRecords.forEach(record => {
+      console.log(`AccountData: relatedCouponId="${record.relatedCouponId}", details="${record.details}", amount=${record.amount}`);
+    });
+    console.log('=== END ACCOUNT DATA DEBUG ===');
+
     const cashPayments = await VehicleAllocationCoupon.countDocuments({ paymentType: 'Cash' });
     const bankDraftPayments = await VehicleAllocationCoupon.countDocuments({ paymentType: 'Bank Draft' });
     const onlinePayments = await VehicleAllocationCoupon.countDocuments({ paymentType: 'Online' });
@@ -586,6 +775,10 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
         totalAmount: totalAmount[0]?.total || 0,
         totalBalance: totalBalance[0]?.total || 0,
         totalDownPayment: totalDownPayment[0]?.total || 0,
+        totalArrears: arrearsStats.totalArrears || 0,
+        couponsWithArrears: arrearsStats.couponsWithArrears || 0,
+        averageArrears: arrearsStats.averageArrears || 0,
+        totalCollected: totalCollected[0]?.totalCollected || 0,
         cashPayments,
         bankDraftPayments,
         onlinePayments,

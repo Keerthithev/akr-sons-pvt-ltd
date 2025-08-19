@@ -7,7 +7,8 @@ const bankDepositSchema = new mongoose.Schema({
   accountName: { type: String, default: '' },
   purpose: { type: String, default: '' },
   quantity: { type: Number, default: 0 },
-  payment: { type: Number, required: true }
+  payment: { type: Number, required: true },
+  slipImage: { type: String, default: '' }
 }, { timestamps: true });
 
 bankDepositSchema.index({ date: -1 });

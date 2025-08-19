@@ -160,14 +160,51 @@ exports.getBankDepositStats = async (req, res) => {
       }
     ]);
 
+    // Get quantity breakdown by purpose categories
+    const quantityBreakdown = await BankDeposit.aggregate([
+      {
+        $group: {
+          _id: {
+            $cond: {
+              if: { $regexMatch: { input: { $toLower: '$purpose' }, regex: 'oil' } },
+              then: 'Oil',
+              else: {
+                $cond: {
+                  if: { $regexMatch: { input: { $toLower: '$purpose' }, regex: 'helmet' } },
+                  then: 'Helmet',
+                  else: 'Others'
+                }
+              }
+            }
+          },
+          quantity: { $sum: '$quantity' }
+        }
+      },
+      {
+        $sort: { _id: 1 }
+      }
+    ]);
+
     const result = stats[0] || { totalPayment: 0, totalQuantity: 0, count: 0 };
+
+    // Convert breakdown to object format
+    const breakdown = {
+      Oil: 0,
+      Helmet: 0,
+      Others: 0
+    };
+
+    quantityBreakdown.forEach(item => {
+      breakdown[item._id] = item.quantity;
+    });
 
     res.json({
       success: true,
       data: {
         totalPayment: result.totalPayment,
         totalQuantity: result.totalQuantity,
-        count: result.count
+        count: result.count,
+        quantityBreakdown: breakdown
       }
     });
   } catch (error) {

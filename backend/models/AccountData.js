@@ -15,8 +15,7 @@ const accountDataSchema = new mongoose.Schema({
   },
   amount: {
     type: Number,
-    required: true,
-    min: 0
+    required: true
   },
   model: {
     type: String,
@@ -25,6 +24,29 @@ const accountDataSchema = new mongoose.Schema({
   remarks: {
     type: String,
     default: ''
+  },
+  depositSlipImage: {
+    type: String,
+    default: ''
+  },
+  actualAmount: {
+    type: Number,
+    default: 0
+  },
+  depositedAmount: {
+    type: Number,
+    default: 0
+  },
+  relatedCouponId: {
+    type: String,
+    default: ''
+  },
+  depositedToBank: {
+    type: Boolean,
+    default: false
+  },
+  bankDepositDate: {
+    type: Date
   }
 }, {
   timestamps: true

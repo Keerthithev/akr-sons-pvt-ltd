@@ -100,6 +100,9 @@ const vehicleAllocationCouponSchema = new mongoose.Schema({
   chequeReleaseDate: { 
     type: Date 
   },
+  chequeReleasedDate: { 
+    type: Date 
+  },
   chequeReleased: { 
     type: Boolean, 
     default: false 
