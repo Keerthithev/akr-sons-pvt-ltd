@@ -942,6 +942,7 @@ export default function AdminDashboard() {
 
   // Bike Inventory State
   const [bikeInventory, setBikeInventory] = useState<any[]>([]);
+  const [filteredBikeInventory, setFilteredBikeInventory] = useState<any[]>([]);
   const [bikeInventoryLoading, setBikeInventoryLoading] = useState(false);
   const [bikeInventoryError, setBikeInventoryError] = useState("");
   const [bikeInventorySearch, setBikeInventorySearch] = useState('');
@@ -3050,6 +3051,89 @@ export default function AdminDashboard() {
       console.error("Auto-sync failed:", err.message);
     }
   };
+
+  // Filter bike inventory based on search, date, and status
+  const filterBikeInventory = () => {
+    let filtered = [...bikeInventory];
+
+    // Filter by search term
+    if (bikeInventorySearch) {
+      const searchLower = bikeInventorySearch.toLowerCase();
+      filtered = filtered.filter(bike =>
+        Object.values(bike).some(value =>
+          String(value).toLowerCase().includes(searchLower)
+        )
+      );
+    }
+
+    // Filter by status
+    if (bikeInventoryStatusFilter) {
+      filtered = filtered.filter(bike => bike.status === bikeInventoryStatusFilter);
+    }
+
+    // Filter by date (this would typically be handled by backend)
+    if (bikeInventoryDateFilter) {
+      const today = new Date();
+      const filterDate = new Date();
+      
+      switch (bikeInventoryDateFilter) {
+        case 'today':
+          filterDate.setHours(0, 0, 0, 0);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= filterDate;
+          });
+          break;
+        case 'yesterday':
+          filterDate.setDate(today.getDate() - 1);
+          filterDate.setHours(0, 0, 0, 0);
+          const yesterdayEnd = new Date(filterDate);
+          yesterdayEnd.setHours(23, 59, 59, 999);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= filterDate && bikeDate <= yesterdayEnd;
+          });
+          break;
+        case 'last7days':
+          filterDate.setDate(today.getDate() - 7);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= filterDate;
+          });
+          break;
+        case 'last30days':
+          filterDate.setDate(today.getDate() - 30);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= filterDate;
+          });
+          break;
+        case 'thisMonth':
+          filterDate.setDate(1);
+          filterDate.setHours(0, 0, 0, 0);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= filterDate;
+          });
+          break;
+        case 'lastMonth':
+          const lastMonthStart = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+          const lastMonthEnd = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59, 999);
+          filtered = filtered.filter(bike => {
+            const bikeDate = new Date(bike.date);
+            return bikeDate >= lastMonthStart && bikeDate <= lastMonthEnd;
+          });
+          break;
+      }
+    }
+
+    setFilteredBikeInventory(filtered);
+  };
+
+  // Apply filters when bike inventory or filter values change
+  useEffect(() => {
+    filterBikeInventory();
+  }, [bikeInventory, bikeInventorySearch, bikeInventoryDateFilter, bikeInventoryStatusFilter]);
 
   // Clean up bike inventory colors
   const cleanupBikeInventoryColors = async () => {
@@ -10888,19 +10972,12 @@ export default function AdminDashboard() {
                     type="text"
                     placeholder="Search by bike ID, branch, model, color, engine no, chassis number, workshop no..."
                     value={bikeInventorySearch}
-                    onChange={e => {
-                      setBikeInventorySearch(e.target.value);
-                      // Auto-search as user types
-                      fetchBikeInventory(1, e.target.value, bikeInventoryDateFilter);
-                    }}
+                    onChange={e => setBikeInventorySearch(e.target.value)}
                     className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow flex-1"
                   />
                   <select
                     value={bikeInventoryDateFilter}
-                    onChange={e => {
-                      setBikeInventoryDateFilter(e.target.value);
-                      fetchBikeInventory(1, bikeInventorySearch, e.target.value);
-                    }}
+                    onChange={e => setBikeInventoryDateFilter(e.target.value)}
                     className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow"
                   >
                     <option value="">All Dates</option>
@@ -10913,15 +10990,7 @@ export default function AdminDashboard() {
                   </select>
                   <select
                     value={bikeInventoryStatusFilter || ''}
-                    onChange={e => {
-                      setBikeInventoryStatusFilter(e.target.value);
-                      // Filter bikes by status
-                      const filteredBikes = bikeInventory.filter(bike => {
-                        if (!e.target.value) return true;
-                        return bike.status === e.target.value;
-                      });
-                      // You can implement backend filtering here if needed
-                    }}
+                    onChange={e => setBikeInventoryStatusFilter(e.target.value)}
                     className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow"
                   >
                     <option value="">All Status</option>
@@ -10957,16 +11026,17 @@ export default function AdminDashboard() {
 
               <div className="overflow-x-auto">
                 <Table
-                  dataSource={bikeInventory}
+                  dataSource={filteredBikeInventory}
                   loading={bikeInventoryLoading}
                   columns={bikeInventoryColumns}
                   rowKey="_id"
                   pagination={{
                     current: bikeInventoryPagination.current,
                     pageSize: bikeInventoryPagination.pageSize,
-                    total: bikeInventoryPagination.total,
-                    onChange: (page) => fetchBikeInventory(page, bikeInventorySearch, bikeInventoryDateFilter),
-                    showSizeChanger: false
+                    total: filteredBikeInventory.length,
+                    onChange: (page) => setBikeInventoryPagination(prev => ({ ...prev, current: page })),
+                    showSizeChanger: true,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
                   }}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1500 }}
