@@ -8,6 +8,7 @@
     "build": "vite build",
     "build:dev": "vite build --mode development",
     "build:render": "node build.js",
+    "render:build": "./render-build.sh",
     "lint": "eslint .",
     "preview": "vite preview"
   },

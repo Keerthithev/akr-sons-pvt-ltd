@@ -82,7 +82,13 @@ const distPath = path.join(__dirname, 'dist');
 console.log('Static files path:', distPath);
 console.log('Dist folder exists:', require('fs').existsSync(distPath));
 
-app.use(express.static(distPath));
+// Only serve static files if dist folder exists
+if (require('fs').existsSync(distPath)) {
+  app.use(express.static(distPath));
+  console.log('✅ Static files middleware enabled');
+} else {
+  console.log('⚠️ Dist folder not found, static files disabled');
+}
 
 // Catch-all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
@@ -93,12 +99,51 @@ app.get('*', (req, res) => {
   if (require('fs').existsSync(indexPath)) {
     res.sendFile(indexPath);
   } else {
-    res.status(404).json({ 
-      error: 'Frontend not found', 
-      message: 'React app not built or dist folder missing',
-      path: indexPath,
-      exists: require('fs').existsSync(indexPath)
-    });
+    // Fallback: Send a simple HTML page with instructions
+    res.status(404).send(`
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>AKR & Sons - Deployment Issue</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 40px; text-align: center; }
+            .container { max-width: 600px; margin: 0 auto; }
+            .error { color: #d32f2f; background: #ffebee; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .success { color: #388e3c; background: #e8f5e8; padding: 20px; border-radius: 8px; margin: 20px 0; }
+            .info { background: #e3f2fd; padding: 20px; border-radius: 8px; margin: 20px 0; }
+          </style>
+        </head>
+        <body>
+          <div class="container">
+            <h1>🚀 AKR & Sons</h1>
+            
+            <div class="error">
+              <h2>⚠️ Frontend Not Found</h2>
+              <p>The React frontend has not been built or the dist folder is missing.</p>
+              <p><strong>Path:</strong> ${indexPath}</p>
+              <p><strong>Exists:</strong> ${require('fs').existsSync(indexPath)}</p>
+            </div>
+            
+            <div class="info">
+              <h3>🔧 What's Working:</h3>
+              <p>✅ Backend server is running</p>
+              <p>✅ API endpoints are functional</p>
+              <p>✅ Health check: <a href="/api/health">/api/health</a></p>
+            </div>
+            
+            <div class="success">
+              <h3>📋 Next Steps:</h3>
+              <p>1. Check Render build logs</p>
+              <p>2. Ensure build script runs successfully</p>
+              <p>3. Verify dist folder is copied to backend</p>
+              <p>4. Redeploy with updated build process</p>
+            </div>
+            
+            <p><em>This is a temporary page while the frontend is being deployed.</em></p>
+          </div>
+        </body>
+      </html>
+    `);
   }
 });
 

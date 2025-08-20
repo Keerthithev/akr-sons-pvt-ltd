@@ -3,7 +3,7 @@ services:
     name: akr-sons-pvt-ltd
     env: node
     plan: starter
-    buildCommand: ./deploy.sh
+    buildCommand: ./render-build.sh
     startCommand: cd backend && npm start
     envVars:
       - key: NODE_ENV
