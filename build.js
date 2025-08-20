@@ -30,6 +30,17 @@ try {
   // Copy dist folder
   fs.cpSync(frontendDistPath, backendDistPath, { recursive: true });
 
+  // Step 4: Verify the copy worked
+  console.log('🔍 Verifying build...');
+  if (fs.existsSync(backendDistPath)) {
+    const files = fs.readdirSync(backendDistPath);
+    console.log('✅ Dist folder copied successfully!');
+    console.log('📁 Files in backend/dist:', files.length);
+    console.log('📄 index.html exists:', fs.existsSync(path.join(backendDistPath, 'index.html')));
+  } else {
+    throw new Error('Dist folder was not copied to backend!');
+  }
+
   console.log('✅ Build completed successfully!');
   console.log('📂 Frontend built and copied to backend/dist');
   console.log('🚀 Ready for deployment on Render!');

@@ -78,11 +78,28 @@ app.use('/api/additional-info', additionalInfoRoutes);
 app.use('/api/vehicle-allocation-coupons', vehicleAllocationCouponRoutes);
 
 // Serve static files from the React app build directory
-app.use(express.static(path.join(__dirname, 'dist')));
+const distPath = path.join(__dirname, 'dist');
+console.log('Static files path:', distPath);
+console.log('Dist folder exists:', require('fs').existsSync(distPath));
+
+app.use(express.static(distPath));
 
 // Catch-all handler: send back React's index.html file for any non-API routes
 app.get('*', (req, res) => {
-  res.sendFile(path.join(__dirname, 'dist/index.html'));
+  const indexPath = path.join(__dirname, 'dist/index.html');
+  console.log('Serving index.html from:', indexPath);
+  console.log('Index.html exists:', require('fs').existsSync(indexPath));
+  
+  if (require('fs').existsSync(indexPath)) {
+    res.sendFile(indexPath);
+  } else {
+    res.status(404).json({ 
+      error: 'Frontend not found', 
+      message: 'React app not built or dist folder missing',
+      path: indexPath,
+      exists: require('fs').existsSync(indexPath)
+    });
+  }
 });
 
 // Error Handler
