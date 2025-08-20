@@ -3,6 +3,7 @@ const cors = require('cors');
 const dotenv = require('dotenv');
 const mongoose = require('mongoose');
 const cookieParser = require('cookie-parser');
+const path = require('path');
 const errorHandler = require('./middleware/errorHandler');
 const authRoutes = require('./routes/auth');
 const vehicleRoutes = require('./routes/vehicle');
@@ -75,6 +76,14 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/service-warranty', serviceWarrantyRoutes);
 app.use('/api/additional-info', additionalInfoRoutes);
 app.use('/api/vehicle-allocation-coupons', vehicleAllocationCouponRoutes);
+
+// Serve static files from the React app build directory
+app.use(express.static(path.join(__dirname, 'dist')));
+
+// Catch-all handler: send back React's index.html file for any non-API routes
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, 'dist/index.html'));
+});
 
 // Error Handler
 app.use(errorHandler);
