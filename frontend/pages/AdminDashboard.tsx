@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Layout, Menu, Button, Modal, Table, Tag, message, Spin, Descriptions, Drawer, Row, Col, Card, Steps, Switch } from "antd";
-import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
+import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined, ReloadOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import jsPDF from 'jspdf';
 
@@ -948,7 +948,7 @@ export default function AdminDashboard() {
   const [bikeInventorySearch, setBikeInventorySearch] = useState('');
   const [bikeInventoryDateFilter, setBikeInventoryDateFilter] = useState('');
   const [bikeInventoryStatusFilter, setBikeInventoryStatusFilter] = useState('');
-  const [bikeInventoryPagination, setBikeInventoryPagination] = useState({ current: 1, pageSize: 50, total: 0 });
+  const [bikeInventoryPagination, setBikeInventoryPagination] = useState({ current: 1, pageSize: 1000, total: 0 });
   const [bikeInventoryStats, setBikeInventoryStats] = useState<any>({
     totalBikes: 0,
     totalStockQuantity: 0,
@@ -3042,9 +3042,8 @@ export default function AdminDashboard() {
       if (res.ok) {
         const result = await res.json();
         if (result.success && result.summary.bikesUpdatedToOut > 0) {
-          console.log(`Auto-sync completed: Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status`);
-          // Refresh bike inventory data
-          fetchBikeInventory();
+          console.log(`Auto-sync completed: Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status. Click "Refresh" to see the changes.`);
+          // Removed automatic refresh - user will need to manually refresh
         }
       }
     } catch (err: any) {
@@ -3054,6 +3053,10 @@ export default function AdminDashboard() {
 
   // Filter bike inventory based on search, date, and status
   const filterBikeInventory = () => {
+    console.log('Filtering bike inventory...');
+    console.log('Total bikes before filtering:', bikeInventory.length);
+    console.log('Current filters - Search:', bikeInventorySearch, 'Date:', bikeInventoryDateFilter, 'Status:', bikeInventoryStatusFilter);
+    
     let filtered = [...bikeInventory];
 
     // Filter by search term
@@ -3064,11 +3067,13 @@ export default function AdminDashboard() {
           String(value).toLowerCase().includes(searchLower)
         )
       );
+      console.log('After search filter:', filtered.length, 'bikes');
     }
 
     // Filter by status
     if (bikeInventoryStatusFilter) {
       filtered = filtered.filter(bike => bike.status === bikeInventoryStatusFilter);
+      console.log('After status filter:', filtered.length, 'bikes');
     }
 
     // Filter by date (this would typically be handled by backend)
@@ -3125,8 +3130,17 @@ export default function AdminDashboard() {
           });
           break;
       }
+      console.log('After date filter:', filtered.length, 'bikes');
     }
 
+    // Sort by Bike ID in ascending order (1, 2, 3, 4, 5...)
+    filtered.sort((a, b) => {
+      const bikeIdA = parseInt(a.bikeId) || 0;
+      const bikeIdB = parseInt(b.bikeId) || 0;
+      return bikeIdA - bikeIdB;
+    });
+
+    console.log('Final filtered bikes:', filtered.length);
     setFilteredBikeInventory(filtered);
   };
 
@@ -3150,11 +3164,9 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const data = await res.json();
       
-      message.success(`Cleaned up ${data.updatedCount} color entries`);
+      message.success(`Cleaned up ${data.updatedCount} color entries. Click "Refresh" to see the changes.`);
       
-      // Refresh the data
-      fetchBikeInventory();
-      fetchDetailedStockInfo();
+      // Removed automatic refresh - user will need to manually refresh
     } catch (err: any) {
       console.error("Failed to cleanup colors:", err.message);
       message.error('Failed to cleanup colors');
@@ -5596,6 +5608,7 @@ export default function AdminDashboard() {
         search: search
       });
       
+      console.log('Fetching bike inventory with params:', params.toString());
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -5605,10 +5618,14 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
       
+      console.log('Bike inventory response:', response);
+      console.log('Number of bikes received:', response.data?.length || 0);
+      
       setBikeInventory(response.data);
       setBikeInventoryPagination(response.pagination);
       setBikeInventoryLoading(false);
     } catch (err: any) {
+      console.error('Error fetching bike inventory:', err);
       setBikeInventoryError("Failed to load bike inventory: " + err.message);
       setBikeInventoryLoading(false);
     }
@@ -6266,7 +6283,7 @@ export default function AdminDashboard() {
       
       if (!res.ok) throw new Error("Failed to save bike inventory");
       
-      message.success(editingBikeInventory ? 'Bike inventory updated successfully' : 'Bike inventory created successfully');
+      message.success(editingBikeInventory ? 'Bike inventory updated successfully. Click "Refresh" to see the changes.' : 'Bike inventory created successfully. Click "Refresh" to see the changes.');
       setBikeInventoryModalOpen(false);
       setEditingBikeInventory(null);
       setBikeInventoryForm({
@@ -6280,9 +6297,7 @@ export default function AdminDashboard() {
         engineNo: '',
         chassisNumber: ''
       });
-      fetchBikeInventory();
-      fetchBikeInventoryStats();
-      fetchDetailedStockInfo(); // Refresh detailed stock information
+      // Removed automatic refresh - user will need to manually refresh
     } catch (error) {
       console.error('Error saving bike inventory:', error);
       message.error('Failed to save bike inventory');
@@ -6305,10 +6320,8 @@ export default function AdminDashboard() {
       
       if (!res.ok) throw new Error("Failed to delete bike inventory");
       
-      message.success('Bike inventory deleted successfully');
-      fetchBikeInventory();
-      fetchBikeInventoryStats();
-      fetchDetailedStockInfo(); // Refresh detailed stock information
+      message.success('Bike inventory deleted successfully. Click "Refresh" to see the changes.');
+      // Removed automatic refresh - user will need to manually refresh
     } catch (error) {
       console.error('Error deleting bike inventory:', error);
       message.error('Failed to delete bike inventory');
@@ -6355,8 +6368,8 @@ export default function AdminDashboard() {
       const result = await res.json();
       
       if (result.success) {
-        message.success(`Sync completed! Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status`);
-        fetchBikeInventory(); // Refresh the bike inventory
+        message.success(`Sync completed! Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status. Click "Refresh" to see the changes.`);
+        // Removed automatic refresh - user will need to manually refresh
       } else {
         message.error(result.message || 'Sync failed');
       }
@@ -11017,6 +11030,55 @@ export default function AdminDashboard() {
                     setBikeInventoryModalOpen(true);
                   }}>
                     Add Record
+                  </Button>
+                  <Button 
+                    type="default" 
+                    onClick={async () => {
+                      try {
+                        console.log('Refreshing bike inventory - clearing filters...');
+                        // Clear filters to show all bikes including newly added ones
+                        setBikeInventorySearch('');
+                        setBikeInventoryDateFilter('');
+                        setBikeInventoryStatusFilter('');
+                        
+                        // Reset to first page
+                        setBikeInventoryPagination(prev => ({ ...prev, current: 1 }));
+                        
+                        console.log('Fetching fresh bike inventory data...');
+                        // Fetch fresh data
+                        await fetchBikeInventory(1, '');
+                        console.log('Fetching bike inventory stats...');
+                        await fetchBikeInventoryStats();
+                        console.log('Fetching detailed stock info...');
+                        await fetchDetailedStockInfo();
+                        console.log('Bike inventory refresh completed successfully');
+                        message.success('Bike inventory refreshed successfully. All filters cleared to show latest data.');
+                      } catch (error) {
+                        console.error('Error refreshing bike inventory:', error);
+                        message.error('Failed to refresh bike inventory');
+                      }
+                    }}
+                    icon={<ReloadOutlined />}
+                  >
+                    Refresh All
+                  </Button>
+                  <Button 
+                    type="default" 
+                    onClick={async () => {
+                      try {
+                        // Keep current filters but refresh data
+                        await fetchBikeInventory(bikeInventoryPagination.current, bikeInventorySearch);
+                        await fetchBikeInventoryStats();
+                        await fetchDetailedStockInfo();
+                        message.success('Bike inventory refreshed with current filters.');
+                      } catch (error) {
+                        console.error('Error refreshing bike inventory:', error);
+                        message.error('Failed to refresh bike inventory');
+                      }
+                    }}
+                    icon={<ReloadOutlined />}
+                  >
+                    Refresh
                   </Button>
                   <Button type="default" onClick={exportBikeInventoryToPDF}>
                     Export PDF

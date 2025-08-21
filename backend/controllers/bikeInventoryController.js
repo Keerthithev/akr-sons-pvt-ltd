@@ -6,7 +6,7 @@ const VehicleAllocationCoupon = require('../models/VehicleAllocationCoupon');
 const getAllBikeInventory = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 10;
+    const limit = parseInt(req.query.limit) || 1000;
     const search = req.query.search || '';
     const dateFilter = req.query.dateFilter || '';
     const skip = (page - 1) * limit;
@@ -69,7 +69,7 @@ const getAllBikeInventory = async (req, res) => {
 
     const [bikes, total] = await Promise.all([
       BikeInventory.find(query)
-        .sort({ date: -1 })
+        .sort({ bikeId: 1 }) // Sort by Bike ID in ascending order (1, 2, 3, 4, 5...)
         .skip(skip)
         .limit(limit),
       BikeInventory.countDocuments(query)

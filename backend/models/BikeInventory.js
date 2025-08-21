@@ -2,7 +2,7 @@ const mongoose = require('mongoose');
 
 const bikeInventorySchema = new mongoose.Schema({
   date: { type: Date, required: true },
-  bikeId: { type: String, default: '' },
+  bikeId: { type: String, default: '', unique: true, required: true },
   branch: { type: String, default: '' },
   brand: { type: String, default: '' },
   category: { type: String, default: '' },
@@ -37,7 +37,7 @@ bikeInventorySchema.index({ branch: 1 });
 bikeInventorySchema.index({ brand: 1 });
 bikeInventorySchema.index({ category: 1 });
 bikeInventorySchema.index({ model: 1 });
-bikeInventorySchema.index({ bikeId: 1 });
+bikeInventorySchema.index({ bikeId: 1 }, { unique: true });
 bikeInventorySchema.index({ engineNo: 1 });
 bikeInventorySchema.index({ chassisNumber: 1 });
 
