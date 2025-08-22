@@ -420,6 +420,35 @@ const bulkImportBikeInventory = async (req, res) => {
 // Get bike inventory statistics
 const getBikeInventoryStats = async (req, res) => {
   try {
+    const now = new Date();
+    
+    // Calculate date ranges
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(now.getFullYear(), now.getMonth(), now.getDate() + 1);
+    const last7DaysStart = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
+    const last7DaysEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+    const last30DaysStart = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+    const last30DaysEnd = new Date(now.getTime() + 24 * 60 * 60 * 1000);
+
+    // Get time-based counts
+    const [todayBikes, last7DaysBikes, last30DaysBikes] = await Promise.all([
+      BikeInventory.countDocuments({
+        date: { $gte: todayStart, $lt: todayEnd }
+      }),
+      BikeInventory.countDocuments({
+        date: { $gte: last7DaysStart, $lt: last7DaysEnd }
+      }),
+      BikeInventory.countDocuments({
+        date: { $gte: last30DaysStart, $lt: last30DaysEnd }
+      })
+    ]);
+
+    // Get status-based counts
+    const [bikesIn, bikesOut] = await Promise.all([
+      BikeInventory.countDocuments({ status: 'in' }),
+      BikeInventory.countDocuments({ status: 'out' })
+    ]);
+
     const stats = await BikeInventory.aggregate([
       {
         $group: {
@@ -467,6 +496,11 @@ const getBikeInventoryStats = async (req, res) => {
 
     res.json({
       ...result,
+      newBikesLast30Days: last30DaysBikes,
+      newBikesLast7Days: last7DaysBikes,
+      newBikesToday: todayBikes,
+      bikesIn: bikesIn,
+      bikesOut: bikesOut,
       brandStats,
       branchStats
     });
@@ -492,12 +526,18 @@ exports.syncBikeStatusWithVAC = async (req, res, next) => {
       { $set: { status: 'in', allocatedCouponId: '' } }
     );
     
-    // Step 2: Get all VACs that have engine numbers
+    // Step 2: Reset all bikes to 'in' status first
+    await BikeInventory.updateMany(
+      {},
+      { $set: { status: 'in', allocatedCouponId: '' } }
+    );
+    
+    // Step 3: Get all VACs that have engine numbers
     const vacsWithEngines = await VehicleAllocationCoupon.find({
       engineNo: { $exists: true, $ne: '' }
     });
     
-    // Step 3: Update bike status for each VAC
+    // Step 4: Update bike status for each VAC
     let updatedCount = 0;
     const updateResults = [];
     
@@ -524,7 +564,7 @@ exports.syncBikeStatusWithVAC = async (req, res, next) => {
       }
     }
 
-    // Step 4: Get summary
+    // Step 5: Get summary
     const totalBikes = await BikeInventory.countDocuments();
     const bikesIn = await BikeInventory.countDocuments({ status: 'in' });
     const bikesOut = await BikeInventory.countDocuments({ status: 'out' });

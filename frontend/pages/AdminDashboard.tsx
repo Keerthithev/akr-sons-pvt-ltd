@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 import { Layout, Menu, Button, Modal, Table, Tag, message, Spin, Descriptions, Drawer, Row, Col, Card, Steps, Switch } from "antd";
-import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined, ReloadOutlined } from "@ant-design/icons";
+import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import jsPDF from 'jspdf';
 
@@ -945,6 +945,8 @@ export default function AdminDashboard() {
   const [filteredBikeInventory, setFilteredBikeInventory] = useState<any[]>([]);
   const [bikeInventoryLoading, setBikeInventoryLoading] = useState(false);
   const [bikeInventoryError, setBikeInventoryError] = useState("");
+  const [bikeInventorySubmitting, setBikeInventorySubmitting] = useState(false);
+  const [bikeInventoryDeleting, setBikeInventoryDeleting] = useState<string | null>(null);
   const [bikeInventorySearch, setBikeInventorySearch] = useState('');
   const [bikeInventoryDateFilter, setBikeInventoryDateFilter] = useState('');
   const [bikeInventoryStatusFilter, setBikeInventoryStatusFilter] = useState('');
@@ -981,6 +983,7 @@ export default function AdminDashboard() {
     nextBikeId: '1',
     vehicles: []
   });
+  const [bikeInventorySyncKey, setBikeInventorySyncKey] = useState(0);
   
   // Stock update state
   const [stockUpdateModalOpen, setStockUpdateModalOpen] = useState(false);
@@ -3042,8 +3045,9 @@ export default function AdminDashboard() {
       if (res.ok) {
         const result = await res.json();
         if (result.success && result.summary.bikesUpdatedToOut > 0) {
-          console.log(`Auto-sync completed: Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status. Click "Refresh" to see the changes.`);
-          // Removed automatic refresh - user will need to manually refresh
+          console.log(`Auto-sync completed: Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status`);
+          // Refresh bike inventory data
+          fetchBikeInventory();
         }
       }
     } catch (err: any) {
@@ -3053,10 +3057,6 @@ export default function AdminDashboard() {
 
   // Filter bike inventory based on search, date, and status
   const filterBikeInventory = () => {
-    console.log('Filtering bike inventory...');
-    console.log('Total bikes before filtering:', bikeInventory.length);
-    console.log('Current filters - Search:', bikeInventorySearch, 'Date:', bikeInventoryDateFilter, 'Status:', bikeInventoryStatusFilter);
-    
     let filtered = [...bikeInventory];
 
     // Filter by search term
@@ -3067,13 +3067,11 @@ export default function AdminDashboard() {
           String(value).toLowerCase().includes(searchLower)
         )
       );
-      console.log('After search filter:', filtered.length, 'bikes');
     }
 
     // Filter by status
     if (bikeInventoryStatusFilter) {
       filtered = filtered.filter(bike => bike.status === bikeInventoryStatusFilter);
-      console.log('After status filter:', filtered.length, 'bikes');
     }
 
     // Filter by date (this would typically be handled by backend)
@@ -3130,7 +3128,6 @@ export default function AdminDashboard() {
           });
           break;
       }
-      console.log('After date filter:', filtered.length, 'bikes');
     }
 
     // Sort by Bike ID in ascending order (1, 2, 3, 4, 5...)
@@ -3140,7 +3137,6 @@ export default function AdminDashboard() {
       return bikeIdA - bikeIdB;
     });
 
-    console.log('Final filtered bikes:', filtered.length);
     setFilteredBikeInventory(filtered);
   };
 
@@ -3164,9 +3160,11 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const data = await res.json();
       
-      message.success(`Cleaned up ${data.updatedCount} color entries. Click "Refresh" to see the changes.`);
+      message.success(`Cleaned up ${data.updatedCount} color entries`);
       
-      // Removed automatic refresh - user will need to manually refresh
+      // Refresh the data
+      fetchBikeInventory();
+      fetchDetailedStockInfo();
     } catch (err: any) {
       console.error("Failed to cleanup colors:", err.message);
       message.error('Failed to cleanup colors');
@@ -3824,6 +3822,12 @@ export default function AdminDashboard() {
       if (selectedCompany) {
         fetchVehicles(selectedCompany._id);
       }
+      // Refresh bike inventory to update status after VAC deletion
+      if (akrTab === 'bikeInventory') {
+        fetchBikeInventory(1, bikeInventorySearch);
+        fetchBikeInventoryStats();
+        fetchDetailedStockInfo();
+      }
     } catch (error) {
       console.error('Error deleting vehicle allocation coupon:', error);
       message.error('Failed to delete vehicle allocation coupon');
@@ -4380,287 +4384,390 @@ export default function AdminDashboard() {
 
       const currentDate = new Date().toLocaleDateString('en-GB');
       const currentTime = new Date().toLocaleTimeString('en-GB');
+      const documentDate = record.date ? new Date(record.date).toLocaleDateString('en-GB') : currentDate;
+      const documentTime = record.vehicleIssueTime || currentTime;
       
       const htmlContent = `
         <!DOCTYPE html>
         <html>
           <head>
             <title>Vehicle Allocation Coupon - ${record.fullName} - ${currentDate}</title>
+
             <style>
               * { box-sizing: border-box; }
               body { 
-                font-family: Arial, sans-serif; 
+                font-family: 'Times New Roman', serif; 
                 margin: 0; 
-                padding: 20px; 
-                line-height: 1.4;
+                padding: 15px; 
+                line-height: 1.3;
+                font-size: 12px;
+                color: #000;
               }
               .header { 
-                text-align: center !important; 
-                margin-bottom: 30px; 
-                border-bottom: 2px solid #333; 
-                padding-bottom: 15px;
-                width: 100%;
+                text-align: center; 
+                margin-bottom: 20px; 
+                border-bottom: 2px solid #000; 
+                padding-bottom: 10px;
               }
-
-              .company-name { 
-                font-size: 28px; 
+              .main-title { 
+                font-size: 16px; 
                 font-weight: bold; 
-                color: #333; 
-                margin: 0 0 10px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
+                margin: 0 0 5px 0;
+                text-transform: uppercase;
               }
-              .report-title { 
-                font-size: 20px; 
-                color: #666; 
-                margin: 10px 0 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
-              }
-              .report-info { 
+              .company-name { 
                 font-size: 14px; 
-                color: #666; 
+                font-weight: bold; 
                 margin: 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
               }
-              .customer-details { 
-                margin: 20px 0; 
-                padding: 15px; 
-                background: #f5f5f5; 
-                border-radius: 5px;
-                width: 100%;
+              .document-info { 
+                font-size: 11px; 
+                margin: 8px 0;
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
+              }
+              .info-item {
+                margin: 2px 0;
+                font-weight: bold;
+              }
+              .details-section { 
+                margin: 15px 0; 
+                border: 1px solid #000;
+                padding: 10px;
               }
               .detail-row { 
                 display: flex; 
-                justify-content: space-between; 
-                margin: 8px 0;
+                margin: 4px 0;
                 border-bottom: 1px solid #ddd;
-                padding-bottom: 5px;
+                padding-bottom: 2px;
+              }
+              .detail-number { 
+                font-weight: bold; 
+                min-width: 30px;
+                margin-right: 10px;
               }
               .detail-label { 
                 font-weight: bold; 
-                color: #333;
-                min-width: 150px;
+                min-width: 200px;
+                margin-right: 10px;
               }
               .detail-value { 
-                color: #666;
-                text-align: right;
+                flex: 1;
+                font-weight: normal;
               }
-              .section-title { 
-                font-size: 18px; 
+              .dealer-checklist { 
+                margin: 15px 0; 
+                border: 1px solid #000;
+                padding: 10px;
+              }
+              .checklist-title {
                 font-weight: bold; 
-                color: #333; 
-                margin: 20px 0 10px 0;
-                border-bottom: 2px solid #333;
-                padding-bottom: 5px;
+                margin-bottom: 8px;
+                font-size: 11px;
               }
-              .footer { 
-                margin-top: 40px; 
+              .checklist-item {
+                margin: 3px 0;
+                font-size: 11px;
+              }
+              .signature-section {
+                margin: 20px 0;
+                display: flex;
+                justify-content: space-between;
+              }
+              .signature-box {
+                border: 1px solid #000;
+                padding: 10px;
+                width: 45%;
                 text-align: center; 
-                font-size: 12px; 
-                color: #666;
-                border-top: 1px solid #ddd;
-                padding-top: 20px;
               }
+              .signature-line {
+                border-top: 1px solid #000;
+                margin-top: 30px;
+                padding-top: 5px;
+                font-size: 10px;
+              }
+              .dealer-info {
+                margin-top: 10px;
+                font-size: 10px;
+                font-weight: bold;
+              }
+              .important-notes {
+                margin: 15px 0;
+                border: 1px solid #000;
+                padding: 10px;
+                font-size: 10px;
+              }
+              .notes-title {
+                font-weight: bold;
+                margin-bottom: 8px;
+                text-decoration: underline;
+              }
+              .form-id {
+                text-align: right;
+                font-size: 10px;
+                margin-top: 10px;
+              }
+
               @media print {
-                body { margin: 0; padding: 15px; }
+                body { margin: 0; padding: 10px; }
                 .header { page-break-inside: avoid; }
-                .customer-details { page-break-inside: avoid; }
+                .details-section { page-break-inside: avoid; }
               }
             </style>
           </head>
           <body>
             <div class="header">
-              <div class="company-name">AKR & SON'S (PVT) LTD</div>
-              <div class="report-title">Vehicle Allocation Coupon</div>
-              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
+              <div class="main-title">Vehicle Allocation Coupon issued by sales dealers on behalf of</div>
+              <div class="company-name">AKR & SONS (PVT) LTD</div>
+              <div class="document-info">
+                <span class="info-item">Date & Time: ${documentDate} ${documentTime}</span>
+                <span class="info-item">Document No.: ${record.couponId || 'N/A'}</span>
+                <span class="info-item">Generated By: AKR & SONS PVT LTD</span>
+              </div>
             </div>
 
-            <div class="customer-details">
-              <div class="section-title">Customer Information</div>
+            <div class="details-section">
               <div class="detail-row">
-                <span class="detail-label">Coupon ID:</span>
-                <span class="detail-value">${record.couponId || 'N/A'}</span>
+                <span class="detail-number">01</span>
+                <span class="detail-label">Full Name:</span>
+                <span class="detail-value">${record.fullName ? 'MR. ' + record.fullName.toUpperCase() : 'N/A'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Customer Name:</span>
-                <span class="detail-value">${record.fullName || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">NIC Number:</span>
-                <span class="detail-value">${record.nicNo || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Contact Number:</span>
-                <span class="detail-value">${record.contactNo || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Address:</span>
+                <span class="detail-number">02</span>
+                <span class="detail-label">Address to be registered the vehicle:</span>
                 <span class="detail-value">${record.address || 'N/A'}</span>
               </div>
               <div class="detail-row">
+                <span class="detail-number">03</span>
+                <span class="detail-label">National Identity Card:</span>
+                <span class="detail-value">${record.nicNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-number">04</span>
+                <span class="detail-label">Telephone No.:</span>
+                <span class="detail-value">${record.contactNo || 'N/A'}</span>
+              </div>
+              <div class="detail-row">
+                <span class="detail-number">05</span>
                 <span class="detail-label">Occupation:</span>
                 <span class="detail-value">${record.occupation || 'N/A'}</span>
               </div>
               <div class="detail-row">
+                <span class="detail-number">06</span>
                 <span class="detail-label">Date of Birth:</span>
                 <span class="detail-value">${record.dateOfBirth ? new Date(record.dateOfBirth).toLocaleDateString('en-GB') : 'N/A'}</span>
               </div>
+              <div class="detail-row">
+                <span class="detail-number">07</span>
+                <span class="detail-label">Vehicle Type / Model / Total Price:</span>
+                <span class="detail-value">${record.vehicleType || 'N/A'} - Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
             </div>
-
-            <div class="customer-details">
-              <div class="section-title">Vehicle Information</div>
               <div class="detail-row">
-                <span class="detail-label">Vehicle Type:</span>
-                <span class="detail-value">${record.vehicleType || 'N/A'}</span>
+                  <span class="detail-number">08</span>
+                  <span class="detail-label">Workshop No.:</span>
+                  <span class="detail-value">: ${record.workshopNo || 'N/A'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Engine Number:</span>
-                <span class="detail-value">${record.engineNo || 'N/A'}</span>
+                  <span class="detail-number">10</span>
+                  <span class="detail-label">Chassis No.:</span>
+                  <span class="detail-value">: ${record.chassisNo || 'N/A'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Chassis Number:</span>
-                <span class="detail-value">${record.chassisNo || 'N/A'}</span>
+                  <span class="detail-number">11</span>
+                  <span class="detail-label">Engine No.:</span>
+                  <span class="detail-value">: ${record.engineNo || 'N/A'}</span>
               </div>
               <div class="detail-row">
+                  <span class="detail-number">12</span>
                 <span class="detail-label">Date of Purchase:</span>
-                <span class="detail-value">${record.dateOfPurchase ? new Date(record.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}</span>
+                  <span class="detail-value">: ${record.dateOfPurchase ? new Date(record.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}</span>
               </div>
+                <div class="detail-row">
+                  <span class="detail-number">13</span>
+                  <span class="detail-label">Type of Sale:</span>
+                  <span class="detail-value">: ${record.paymentMethod || 'N/A'}</span>
             </div>
-
-            <div class="customer-details">
-              <div class="section-title">Payment Information</div>
               <div class="detail-row">
-                <span class="detail-label">Payment Method:</span>
-                <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
+                  <span class="detail-number">14</span>
+                  <span class="detail-label">Leasing Company and PO. Value:</span>
+                  <span class="detail-value">: ${record.leasingCompany || 'N/A'} - Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Payment Type:</span>
-                <span class="detail-value">${record.paymentType || 'N/A'}</span>
+                  <span class="detail-number">15</span>
+                  <span class="detail-label">Vehicle Delivered / Not:</span>
+                  <span class="detail-value">: ${record.status === 'Completed' ? 'YES' : 'NO'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value">LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Down Payment:</span>
-                <span class="detail-value">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Balance:</span>
-                <span class="detail-value">LKR ${record.balance ? parseFloat(record.balance).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Registration Fee:</span>
-                <span class="detail-value">LKR ${record.regFee ? parseFloat(record.regFee).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Document Charge:</span>
-                <span class="detail-value">LKR ${record.docCharge ? parseFloat(record.docCharge).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Insurance:</span>
-                <span class="detail-value">LKR ${record.insuranceCo ? parseFloat(record.insuranceCo).toLocaleString() : '0'}</span>
-              </div>
-              ${record.discountApplied ? `
-              <div class="detail-row">
-                <span class="detail-label">Discount Applied:</span>
-                <span class="detail-value">Yes</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Discount Amount:</span>
-                <span class="detail-value">LKR ${record.discountAmount ? parseFloat(record.discountAmount).toLocaleString() : '0'}</span>
-              </div>
-              ` : ''}
             </div>
 
             ${record.paymentMethod === 'Leasing via AKR' || record.paymentMethod === 'Leasing via Other Company' ? `
-            <div class="customer-details">
-              <div class="section-title">Leasing Company Information</div>
+            <div class="details-section">
+              <div style="font-weight: bold; margin-bottom: 10px; text-decoration: underline;">Payment & Installment Details:</div>
               <div class="detail-row">
-                <span class="detail-label">Leasing Company:</span>
-                <span class="detail-value">${record.leasingCompany || 'N/A'}</span>
+                <span class="detail-label">Total Amount:</span>
+                <span class="detail-value">Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Officer Name:</span>
-                <span class="detail-value">${record.officerName || 'N/A'}</span>
+                <span class="detail-label">Down Payment:</span>
+                <span class="detail-value">Rs.${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
               </div>
               <div class="detail-row">
-                <span class="detail-label">Contact Number:</span>
-                <span class="detail-value">${record.officerContactNo || 'N/A'}</span>
+                <span class="detail-label">Balance Amount:</span>
+                <span class="detail-value">Rs.${record.balance ? parseFloat(record.balance).toLocaleString() : '0'}</span>
               </div>
+              ${record.regFee && record.regFee > 0 ? `
               <div class="detail-row">
-                <span class="detail-label">Commission:</span>
-                <span class="detail-value">${record.commissionPercentage ? record.commissionPercentage + '%' : 'N/A'}</span>
+                <span class="detail-label">Registration Fee:</span>
+                <span class="detail-value">Rs.${parseFloat(record.regFee).toLocaleString()}</span>
               </div>
+              ` : ''}
+              ${record.docCharge && record.docCharge > 0 ? `
+              <div class="detail-row">
+                <span class="detail-label">Document Charge:</span>
+                <span class="detail-value">Rs.${parseFloat(record.docCharge).toLocaleString()}</span>
+              </div>
+              ` : ''}
+              ${record.insuranceCo && record.insuranceCo > 0 ? `
+              <div class="detail-row">
+                <span class="detail-label">Insurance:</span>
+                <span class="detail-value">Rs.${parseFloat(record.insuranceCo).toLocaleString()}</span>
+              </div>
+              ` : ''}
+              ${record.discountApplied ? `
+              <div class="detail-row">
+                <span class="detail-label">Discount Applied:</span>
+                <span class="detail-value">Rs.${record.discountAmount ? parseFloat(record.discountAmount).toLocaleString() : '0'}</span>
+              </div>
+              ` : ''}
+              ${record.interestAmount && record.interestAmount > 0 ? `
+              <div class="detail-row">
+                <span class="detail-label">Interest Amount:</span>
+                <span class="detail-value">Rs.${parseFloat(record.interestAmount).toLocaleString()}</span>
+              </div>
+              ` : ''}
             </div>
             ` : ''}
 
             ${record.paymentMethod === 'Leasing via AKR' ? `
-            <div class="customer-details">
-              <div class="section-title">Installment Details</div>
-              <div class="detail-row">
-                <span class="detail-label">1st Installment Amount:</span>
-                <span class="detail-value">LKR ${record.firstInstallment?.amount ? parseFloat(record.firstInstallment.amount).toLocaleString() : '0'}</span>
+            <div class="details-section">
+              <div style="font-weight: bold; margin-bottom: 10px; text-decoration: underline; font-size: 13px;">INSTALLMENT PAYMENT SCHEDULE:</div>
+              <div style="border: 1px solid #000; padding: 8px; margin-bottom: 10px;">
+                <div style="font-weight: bold; margin-bottom: 5px; text-align: center; border-bottom: 1px solid #000; padding-bottom: 3px;">AKR EASY CREDIT (PVT) LTD</div>
+                ${record.firstInstallment && record.firstInstallment.amount > 0 ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">1st Installment:</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${parseFloat(record.firstInstallment.amount).toLocaleString()}</span>
+                  <span style="margin-left: 10px;">Due: ${record.firstInstallment.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : 'TBD'}</span>
+                  <span style="margin-left: 10px; font-weight: bold; color: ${record.firstInstallment.paidAmount > 0 ? 'green' : 'red'};">
+                    ${record.firstInstallment.paidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+                  </span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">1st Installment Date:</span>
-                <span class="detail-value">${record.firstInstallment?.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+                ` : ''}
+                ${record.secondInstallment && record.secondInstallment.amount > 0 ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">2nd Installment:</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${parseFloat(record.secondInstallment.amount).toLocaleString()}</span>
+                  <span style="margin-left: 10px;">Due: ${record.secondInstallment.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : 'TBD'}</span>
+                  <span style="margin-left: 10px; font-weight: bold; color: ${record.secondInstallment.paidAmount > 0 ? 'green' : 'red'};">
+                    ${record.secondInstallment.paidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+                  </span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">2nd Installment Amount:</span>
-                <span class="detail-value">LKR ${record.secondInstallment?.amount ? parseFloat(record.secondInstallment.amount).toLocaleString() : '0'}</span>
+                ` : ''}
+                ${record.thirdInstallment && record.thirdInstallment.amount > 0 ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">3rd Installment:</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${parseFloat(record.thirdInstallment.amount).toLocaleString()}</span>
+                  <span style="margin-left: 10px;">Due: ${record.thirdInstallment.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : 'TBD'}</span>
+                  <span style="margin-left: 10px; font-weight: bold; color: ${record.thirdInstallment.paidAmount > 0 ? 'green' : 'red'};">
+                    ${record.thirdInstallment.paidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+                  </span>
+                </div>
+                ` : ''}
               </div>
+              ${record.chequeNo ? `
               <div class="detail-row">
-                <span class="detail-label">2nd Installment Date:</span>
-                <span class="detail-value">${record.secondInstallment?.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+                <span class="detail-label">Cheque No:</span>
+                <span class="detail-value">${record.chequeNo}</span>
               </div>
+              ` : ''}
+              ${record.chequeAmount && record.chequeAmount > 0 ? `
               <div class="detail-row">
-                <span class="detail-label">3rd Installment Amount:</span>
-                <span class="detail-value">LKR ${record.thirdInstallment?.amount ? parseFloat(record.thirdInstallment.amount).toLocaleString() : '0'}</span>
+                <span class="detail-label">Cheque Amount:</span>
+                <span class="detail-value">Rs.${parseFloat(record.chequeAmount).toLocaleString()}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">3rd Installment Date:</span>
-                <span class="detail-value">${record.thirdInstallment?.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+              ` : ''}
+            </div>
+            ` : ''}
+
+            ${record.leasingCompany ? `
+            <div class="details-section">
+              <div style="font-weight: bold; margin-bottom: 10px; text-decoration: underline; font-size: 13px;">LEASING COMPANY DETAILS:</div>
+              <div style="border: 1px solid #000; padding: 8px; margin-bottom: 10px;">
+                <div style="font-weight: bold; margin-bottom: 5px; text-align: center; border-bottom: 1px solid #000; padding-bottom: 3px;">${record.leasingCompany}</div>
+                ${record.officerName ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">Officer Name:</span>
+                  <span class="detail-value" style="flex: 1;">${record.officerName}</span>
+              </div>
+                ` : ''}
+                ${record.officerContactNo ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">Contact Number:</span>
+                  <span class="detail-value" style="flex: 1;">${record.officerContactNo}</span>
+              </div>
+                ` : ''}
+                ${record.commissionPercentage && record.commissionPercentage > 0 ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">Commission Rate:</span>
+                  <span class="detail-value" style="flex: 1;">${record.commissionPercentage}%</span>
+              </div>
+                ` : ''}
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">Lease Amount:</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
+              </div>
+                ${record.interestAmount && record.interestAmount > 0 ? `
+                <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
+                  <span class="detail-label" style="min-width: 120px;">Interest Amount:</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${parseFloat(record.interestAmount).toLocaleString()}</span>
+              </div>
+                ` : ''}
               </div>
             </div>
             ` : ''}
 
-            <div class="customer-details">
-              <div class="section-title">Additional Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Workshop No:</span>
-                <span class="detail-value">${record.workshopNo || 'N/A'}</span>
+            <div class="dealer-checklist">
+              <div class="checklist-title">Following is to be filled by the dealer. If you send the following here with please mark infront of it.</div>
+              <div class="checklist-item">(a) Two Photographs ()</div>
+              <div class="checklist-item">(b) Photocopy of National ID Card ()</div>
+              <div class="checklist-item">(c) Instruction Sheet ()</div>
+              <div class="checklist-item">(d) Relevant Cheque & No ()</div>
+              <div class="checklist-item">(e) Copy of issued bill ()</div>
+              <div class="checklist-item">(f) M.T.A - 02 Form ()</div>
+              <div style="margin-top: 10px;">
+                <div style="border: 1px solid #000; padding: 5px; display: inline-block; margin-right: 10px;">Other</div>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Branch:</span>
-                <span class="detail-value">${record.branch || 'N/A'}</span>
+              <div style="margin-top: 10px; font-weight: bold;">I certify that the above details are accurate.</div>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Date:</span>
-                <span class="detail-value">${record.date ? new Date(record.date).toLocaleDateString('en-GB') : 'N/A'}</span>
+
+            <div class="signature-section">
+              <div class="signature-box">
+                <div class="signature-line">Customer's Signature</div>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Status:</span>
-                <span class="detail-value">${record.status || 'N/A'}</span>
+              <div class="signature-box">
+                <div class="signature-line">Dealer's Signature</div>
+                <div class="dealer-info">AKR & SONS PVT LTD (AC2024023303)<br>CHILAWATHURAI ROAD, MURUNKAN</div>
               </div>
-              ${record.notes ? `
-              <div class="detail-row">
-                <span class="detail-label">Notes:</span>
-                <span class="detail-value">${record.notes}</span>
-              </div>
-              ` : ''}
             </div>
 
-            <div class="footer">
-              <div>Contact: akrfuture@gmail.com</div>
-              <div>Phone: 0232231222, 0773111266</div>
-              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+            <div class="important-notes">
+              <div class="notes-title">Important Notes:</div>
+              <div style="margin-bottom: 8px;">1. The dealer shall fill this form in the customer's presence and the customer shall obtain a receipt.</div>
+              <div style="margin-bottom: 8px;">2. A vehicle shall not be admitted on the road unless it has a registration number, insurance certificate, revenue license, and the driver has a valid driving license.</div>
+              <div>3. The registration number of the vehicle should be informed to the company upon completion of registration.</div>
             </div>
+            
+
           </body>
         </html>
       `;
@@ -4978,234 +5085,295 @@ export default function AdminDashboard() {
             <style>
               * { box-sizing: border-box; }
               body { 
-                font-family: Arial, sans-serif; 
+                font-family: 'Times New Roman', serif; 
                 margin: 0; 
-                padding: 20px; 
-                line-height: 1.4;
+                padding: 15px; 
+                line-height: 1.3;
+                font-size: 12px;
+                color: #000;
               }
               .header { 
-                text-align: center !important; 
-                margin-bottom: 30px; 
-                border-bottom: 2px solid #333; 
-                padding-bottom: 15px;
-                width: 100%;
+                text-align: center; 
+                margin-bottom: 20px; 
+                border-bottom: 2px solid #000; 
+                padding-bottom: 10px;
+              }
+              .main-title { 
+                font-size: 16px; 
+                font-weight: bold; 
+                margin: 0 0 5px 0;
+                text-transform: uppercase;
               }
               .company-name { 
-                font-size: 28px; 
+                font-size: 14px; 
                 font-weight: bold; 
-                color: #333; 
-                margin: 0 0 10px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
-              }
-              .report-title { 
-                font-size: 20px; 
-                color: #666; 
-                margin: 10px 0 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
+                margin: 5px 0;
               }
               .report-info { 
-                font-size: 14px; 
-                color: #666; 
-                margin: 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
+                font-size: 11px; 
+                margin: 8px 0;
+                display: flex;
+                justify-content: space-between;
+                flex-wrap: wrap;
               }
-              .customer-details { 
-                margin: 20px 0; 
-                padding: 15px; 
-                background: #f5f5f5; 
-                border-radius: 5px;
-                width: 100%;
+              .info-item {
+                margin: 2px 0;
+                font-weight: bold;
               }
-              .detail-row { 
+              .section { 
+                margin: 15px 0; 
+                border: 1px solid #000;
+                padding: 10px;
+              }
+              .section-title {
+                font-weight: bold;
+                margin-bottom: 8px;
+                font-size: 13px;
+                text-decoration: underline;
+              }
+              .info-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 8px;
+                margin: 10px 0;
+              }
+              .info-item {
                 display: flex; 
                 justify-content: space-between; 
-                margin: 8px 0;
+                margin: 3px 0;
+                padding: 2px 0;
                 border-bottom: 1px solid #ddd;
-                padding-bottom: 5px;
               }
-              .detail-label { 
+              .info-label {
                 font-weight: bold; 
-                color: #333;
-                min-width: 150px;
+                min-width: 120px;
+                margin-right: 10px;
               }
-              .detail-value { 
+              .info-value {
+                flex: 1;
+                font-weight: normal;
+              }
+              .installment-details {
+                background: #fff3cd;
+                padding: 8px;
+                border: 1px solid #000;
+                margin-top: 8px;
+              }
+              .installment-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr 1fr;
+                gap: 8px;
+              }
+              .installment-item {
+                border: 1px solid #ddd;
+                padding: 5px;
+                text-align: center;
+              }
+              .installment-amount {
+                font-weight: bold; 
+                font-size: 11px;
+              }
+              .installment-date {
+                font-size: 9px;
                 color: #666;
-                text-align: right;
+                margin: 2px 0;
               }
-              .section-title { 
-                font-size: 18px; 
-                font-weight: bold; 
-                color: #333; 
-                margin: 20px 0 10px 0;
-                border-bottom: 2px solid #333;
-                padding-bottom: 5px;
+              .installment-status {
+                font-size: 9px;
+                padding: 1px 4px;
+                border-radius: 2px;
+                margin-top: 2px;
+              }
+              .status-paid {
+                background: #10b981;
+                color: white;
+              }
+              .status-unpaid {
+                background: #ef4444;
+                color: white;
+              }
+              .leasing-section {
+                background: #dbeafe;
+                padding: 8px;
+                border: 1px solid #000;
+                margin-top: 8px;
+              }
+              .payment-summary {
+                background: #f0f9ff;
+                padding: 8px;
+                border: 1px solid #000;
+                margin-top: 8px;
               }
               .footer { 
-                margin-top: 40px; 
+                margin-top: 20px; 
                 text-align: center; 
-                font-size: 12px; 
-                color: #666;
-                border-top: 1px solid #ddd;
-                padding-top: 20px;
+                font-size: 10px; 
+                color: #000;
+                border-top: 1px solid #000;
+                padding-top: 10px;
               }
               @media print {
-                body { margin: 0; padding: 15px; }
+                body { margin: 0; padding: 10px; }
                 .header { page-break-inside: avoid; }
-                .customer-details { page-break-inside: avoid; }
+                .section { page-break-inside: avoid; }
               }
             </style>
           </head>
           <body>
             <div class="header">
-              <div class="company-name">AKR & SON'S (PVT) LTD</div>
-              <div class="report-title">Installment Plan</div>
-              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
-            </div>
-
-            <div class="customer-details">
-              <div class="section-title">Plan Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Installment ID:</span>
-                <span class="detail-value">${record.installmentId || '-'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Customer Name:</span>
-                <span class="detail-value">${record.customerName || '-'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Phone Number:</span>
-                <span class="detail-value">${record.customerPhone || '-'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Address:</span>
-                <span class="detail-value">${record.customerAddress || '-'}</span>
+              <div class="main-title">Installment Plan Report</div>
+              <div class="company-name">AKR & SONS (PVT) LTD</div>
+              <div class="report-info">
+                <span class="info-item">Generated on: ${currentDate} at ${currentTime}</span>
+                <span class="info-item">Installment ID: ${record.installmentId || 'N/A'}</span>
               </div>
             </div>
 
-            <div class="customer-details">
-              <div class="section-title">Vehicle Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Vehicle Model:</span>
-                <span class="detail-value">${record.vehicleModel || '-'}</span>
+            <div class="section">
+              <div class="section-title">CUSTOMER INFORMATION</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Customer Name:</span>
+                  <span class="info-value">${record.customerName || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Engine Number:</span>
-                <span class="detail-value">${record.engineNumber || '-'}</span>
+                <div class="info-item">
+                  <span class="info-label">Phone Number:</span>
+                  <span class="info-value">${record.customerPhone || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Chassis Number:</span>
-                <span class="detail-value">${record.chassisNumber || '-'}</span>
+                <div class="info-item">
+                  <span class="info-label">Address:</span>
+                  <span class="info-value">${record.customerAddress || 'N/A'}</span>
               </div>
-            </div>
-
-            <div class="customer-details">
-              <div class="section-title">Payment Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Payment Method:</span>
-                <span class="detail-value">${record.paymentMethod || '-'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value">LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Down Payment:</span>
-                <span class="detail-value">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Balance Amount:</span>
-                <span class="detail-value">LKR ${record.balanceAmount ? parseFloat(record.balanceAmount).toLocaleString() : '0'}</span>
               </div>
             </div>
 
-            <div class="customer-details">
-              <div class="section-title">Installment Details</div>
-              <div class="detail-row">
-                <span class="detail-label">1st Installment Amount:</span>
-                <span class="detail-value">LKR ${record.firstInstallmentAmount ? parseFloat(record.firstInstallmentAmount).toLocaleString() : '0'}</span>
+            <div class="section">
+              <div class="section-title">VEHICLE INFORMATION</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Vehicle Model:</span>
+                  <span class="info-value">${record.vehicleModel || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">1st Installment Date:</span>
-                <span class="detail-value">${record.firstInstallment?.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+                <div class="info-item">
+                  <span class="info-label">Engine Number:</span>
+                  <span class="info-value">${record.engineNumber || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">1st Installment Status:</span>
-                <span class="detail-value">${record.firstInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+                <div class="info-item">
+                  <span class="info-label">Chassis Number:</span>
+                  <span class="info-value">${record.chassisNumber || 'N/A'}</span>
+                </div>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">2nd Installment Amount:</span>
-                <span class="detail-value">LKR ${record.secondInstallmentAmount ? parseFloat(record.secondInstallmentAmount).toLocaleString() : '0'}</span>
+            </div>
+
+            <div class="section">
+              <div class="section-title">PAYMENT INFORMATION</div>
+              <div class="info-grid">
+                <div class="info-item">
+                  <span class="info-label">Payment Method:</span>
+                  <span class="info-value">${record.paymentMethod || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">2nd Installment Date:</span>
-                <span class="detail-value">${record.secondInstallment?.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+                <div class="info-item">
+                  <span class="info-label">Total Amount:</span>
+                  <span class="info-value">Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">2nd Installment Status:</span>
-                <span class="detail-value">${record.secondInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+                <div class="info-item">
+                  <span class="info-label">Down Payment:</span>
+                  <span class="info-value">Rs.${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">3rd Installment Amount:</span>
-                <span class="detail-value">LKR ${record.thirdInstallmentAmount ? parseFloat(record.thirdInstallmentAmount).toLocaleString() : '0'}</span>
+                <div class="info-item">
+                  <span class="info-label">Balance Amount:</span>
+                  <span class="info-value">Rs.${record.balanceAmount ? parseFloat(record.balanceAmount).toLocaleString() : '0'}</span>
+                </div>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">3rd Installment Date:</span>
-                <span class="detail-value">${record.thirdInstallment?.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : '-'}</span>
+            </div>
+
+            <div class="section">
+              <div class="section-title">INSTALLMENT PAYMENT SCHEDULE</div>
+              <div class="installment-details">
+                <div class="installment-grid">
+                  <div class="installment-item">
+                    <div class="installment-amount">1st Installment</div>
+                    <div class="installment-amount">Rs.${record.firstInstallmentAmount ? parseFloat(record.firstInstallmentAmount).toLocaleString() : '0'}</div>
+                    <div class="installment-date">
+                      ${record.firstInstallment?.date ? new Date(record.firstInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
               </div>
-              <div class="detail-row">
-                <span class="detail-label">3rd Installment Status:</span>
-                <span class="detail-value">${record.thirdInstallmentPaidAmount > 0 ? 'Paid' : 'Pending'}</span>
+                    <div class="installment-status ${record.firstInstallmentPaidAmount > 0 ? 'status-paid' : 'status-unpaid'}">
+                      ${record.firstInstallmentPaidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+              </div>
+              </div>
+                  <div class="installment-item">
+                    <div class="installment-amount">2nd Installment</div>
+                    <div class="installment-amount">Rs.${record.secondInstallmentAmount ? parseFloat(record.secondInstallmentAmount).toLocaleString() : '0'}</div>
+                    <div class="installment-date">
+                      ${record.secondInstallment?.date ? new Date(record.secondInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
+              </div>
+                    <div class="installment-status ${record.secondInstallmentPaidAmount > 0 ? 'status-paid' : 'status-unpaid'}">
+                      ${record.secondInstallmentPaidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+              </div>
+              </div>
+                  <div class="installment-item">
+                    <div class="installment-amount">3rd Installment</div>
+                    <div class="installment-amount">Rs.${record.thirdInstallmentAmount ? parseFloat(record.thirdInstallmentAmount).toLocaleString() : '0'}</div>
+                    <div class="installment-date">
+                      ${record.thirdInstallment?.date ? new Date(record.thirdInstallment.date).toLocaleDateString('en-GB') : 'N/A'}
+              </div>
+                    <div class="installment-status ${record.thirdInstallmentPaidAmount > 0 ? 'status-paid' : 'status-unpaid'}">
+                      ${record.thirdInstallmentPaidAmount > 0 ? '✓ PAID' : '○ PENDING'}
+              </div>
+                  </div>
+                </div>
               </div>
             </div>
 
             ${record.leasingCompany ? `
-            <div class="customer-details">
-              <div class="section-title">Leasing Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Leasing Company:</span>
-                <span class="detail-value">${record.leasingCompany || '-'}</span>
+            <div class="section">
+              <div class="section-title">LEASING COMPANY DETAILS</div>
+              <div class="leasing-section">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <span class="info-label">Company:</span>
+                    <span class="info-value">${record.leasingCompany || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Officer Name:</span>
-                <span class="detail-value">${record.officerName || '-'}</span>
+                  <div class="info-item">
+                    <span class="info-label">Officer:</span>
+                    <span class="info-value">${record.officerName || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Contact Number:</span>
-                <span class="detail-value">${record.officerContactNo || '-'}</span>
+                  <div class="info-item">
+                    <span class="info-label">Contact:</span>
+                    <span class="info-value">${record.officerContactNo || 'N/A'}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Commission:</span>
-                <span class="detail-value">${record.commissionPercentage ? record.commissionPercentage + '%' : '-'}</span>
+                  <div class="info-item">
+                    <span class="info-label">Commission:</span>
+                    <span class="info-value">${record.commissionPercentage ? record.commissionPercentage + '%' : 'N/A'}</span>
+                  </div>
+                </div>
               </div>
             </div>
             ` : ''}
 
-            <div class="customer-details">
-              <div class="section-title">Payment Summary</div>
-              <div class="detail-row">
-                <span class="detail-label">Total Paid:</span>
-                <span class="detail-value">LKR ${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)).toLocaleString()}</span>
+            <div class="section">
+              <div class="section-title">PAYMENT SUMMARY</div>
+              <div class="payment-summary">
+                <div class="info-grid">
+                  <div class="info-item">
+                    <span class="info-label">Total Paid:</span>
+                    <span class="info-value">Rs.${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)).toLocaleString()}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Remaining Balance:</span>
-                <span class="detail-value">LKR ${(record.balanceAmount - ((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0))).toLocaleString()}</span>
+                  <div class="info-item">
+                    <span class="info-label">Remaining Balance:</span>
+                    <span class="info-value">Rs.${(record.balanceAmount - ((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0))).toLocaleString()}</span>
               </div>
-              <div class="detail-row">
-                <span class="detail-label">Payment Status:</span>
-                <span class="detail-value">${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)) >= record.balanceAmount ? 'Fully Paid' : 'Partially Paid'}</span>
+                  <div class="info-item">
+                    <span class="info-label">Payment Status:</span>
+                    <span class="info-value">${((record.firstInstallmentPaidAmount || 0) + (record.secondInstallmentPaidAmount || 0) + (record.thirdInstallmentPaidAmount || 0)) >= record.balanceAmount ? 'FULLY PAID' : 'PARTIALLY PAID'}</span>
+                  </div>
+                </div>
               </div>
             </div>
 
             <div class="footer">
-              <div>Contact: akrfuture@gmail.com</div>
-              <div>Phone: 0232231222, 0773111266</div>
-              <div>Address: Silavathurai road, Murunkan, Mannar</div>
+              <p>Contact: akrfuture@gmail.com | 0232231222, 0773111266</p>
+              <p>Silavathurai road, Murunkan, Mannar</p>
             </div>
           </body>
         </html>
@@ -5226,8 +5394,8 @@ export default function AdminDashboard() {
     }
   };
 
-  // Export individual sales transaction to PDF
-  const exportIndividualSalesTransactionToPDF = (record: any) => {
+  // Export individual sales transaction to PDF (legacy; replaced by styled version below)
+  const exportIndividualSalesTransactionToPDFLegacy = (record: any) => {
     try {
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
@@ -5604,11 +5772,10 @@ export default function AdminDashboard() {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
         page: page.toString(),
-        limit: bikeInventoryPagination.pageSize.toString(),
+        limit: (bikeInventoryPagination?.pageSize || 10).toString(),
         search: search
       });
       
-      console.log('Fetching bike inventory with params:', params.toString());
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -5617,9 +5784,6 @@ export default function AdminDashboard() {
       });
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
-      
-      console.log('Bike inventory response:', response);
-      console.log('Number of bikes received:', response.data?.length || 0);
       
       setBikeInventory(response.data);
       setBikeInventoryPagination(response.pagination);
@@ -5670,10 +5834,18 @@ export default function AdminDashboard() {
   // Load bike inventory when tab is selected
   useEffect(() => {
     if (akrTab === 'bikeInventory') {
-      fetchBikeInventory(1, bikeInventorySearch, bikeInventoryDateFilter);
+      fetchBikeInventory(1, bikeInventorySearch);
       fetchBikeInventoryDropdownData();
+      fetchBikeInventoryStats();
     }
   }, [akrTab]);
+
+  // Refresh bike inventory when search or filters change
+  useEffect(() => {
+    if (akrTab === 'bikeInventory') {
+      fetchBikeInventory(1, bikeInventorySearch);
+    }
+  }, [bikeInventorySearch, bikeInventoryDateFilter, bikeInventoryStatusFilter]);
 
   // Handle account data form changes
   const handleAccountDataFormChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -6264,6 +6436,7 @@ export default function AdminDashboard() {
 
   // Create or update bike inventory
   const handleBikeInventorySubmit = async () => {
+    setBikeInventorySubmitting(true);
     try {
       const token = localStorage.getItem('adminToken');
       const url = editingBikeInventory 
@@ -6283,7 +6456,7 @@ export default function AdminDashboard() {
       
       if (!res.ok) throw new Error("Failed to save bike inventory");
       
-      message.success(editingBikeInventory ? 'Bike inventory updated successfully. Click "Refresh" to see the changes.' : 'Bike inventory created successfully. Click "Refresh" to see the changes.');
+      message.success(editingBikeInventory ? 'Bike inventory updated successfully' : 'Bike inventory created successfully');
       setBikeInventoryModalOpen(false);
       setEditingBikeInventory(null);
       setBikeInventoryForm({
@@ -6297,10 +6470,14 @@ export default function AdminDashboard() {
         engineNo: '',
         chassisNumber: ''
       });
-      // Removed automatic refresh - user will need to manually refresh
+      fetchBikeInventory(1, bikeInventorySearch);
+      fetchBikeInventoryStats();
+      fetchDetailedStockInfo(); // Refresh detailed stock information
     } catch (error) {
       console.error('Error saving bike inventory:', error);
       message.error('Failed to save bike inventory');
+    } finally {
+      setBikeInventorySubmitting(false);
     }
   };
 
@@ -6308,6 +6485,7 @@ export default function AdminDashboard() {
   const handleDeleteBikeInventory = async (id: string) => {
     if (!window.confirm('Are you sure you want to delete this record?')) return;
     
+    setBikeInventoryDeleting(id);
     try {
       const token = localStorage.getItem('adminToken');
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/${id}`, {
@@ -6320,11 +6498,15 @@ export default function AdminDashboard() {
       
       if (!res.ok) throw new Error("Failed to delete bike inventory");
       
-      message.success('Bike inventory deleted successfully. Click "Refresh" to see the changes.');
-      // Removed automatic refresh - user will need to manually refresh
+      message.success('Bike inventory deleted successfully');
+      fetchBikeInventory(1, bikeInventorySearch);
+      fetchBikeInventoryStats();
+      fetchDetailedStockInfo(); // Refresh detailed stock information
     } catch (error) {
       console.error('Error deleting bike inventory:', error);
       message.error('Failed to delete bike inventory');
+    } finally {
+      setBikeInventoryDeleting(null);
     }
   };
 
@@ -6352,10 +6534,12 @@ export default function AdminDashboard() {
     setViewBikeInventoryModalOpen(true);
   };
 
-  // Sync bike status with Vehicle Allocation Coupons
+  // Sync bike status with Vehicle Allocation Coupons and refresh all data
   const handleSyncBikeStatus = async () => {
     try {
       const token = localStorage.getItem('adminToken');
+      
+      // First, sync the bike status with VACs
       const res = await fetch(`${import.meta.env.VITE_API_URL}/api/bike-inventory/sync-status`, {
         method: 'POST',
         headers: {
@@ -6368,8 +6552,42 @@ export default function AdminDashboard() {
       const result = await res.json();
       
       if (result.success) {
-        message.success(`Sync completed! Updated ${result.summary.bikesUpdatedToOut} bikes to OUT status. Click "Refresh" to see the changes.`);
-        // Removed automatic refresh - user will need to manually refresh
+        console.log('Sync successful, refreshing data...');
+        
+
+        
+        // Force a complete refresh by clearing current data first
+        setBikeInventory([]);
+        setFilteredBikeInventory([]);
+        setBikeInventoryStats({});
+        setBikeInventorySyncKey(prev => prev + 1); // Force re-render
+        
+        // Wait a moment for state to clear
+        await new Promise(resolve => setTimeout(resolve, 100));
+        
+        // Then refresh all bike inventory data from backend
+        try {
+          // Refresh bike inventory data
+          await fetchBikeInventory(1, bikeInventorySearch);
+          
+          // Refresh stats
+          await fetchBikeInventoryStats();
+          
+          // Refresh detailed stock info
+          await fetchDetailedStockInfo();
+          
+          // Refresh dropdown data
+          await fetchBikeInventoryDropdownData();
+          
+        } catch (refreshError) {
+          console.error('Error refreshing data:', refreshError);
+          message.error('Error refreshing data: ' + refreshError.message);
+        }
+        
+        // Add a small delay to ensure data is loaded
+        setTimeout(() => {
+          message.success(`Sync & Refresh completed! ${result.summary.bikesUpdatedToOut} bikes set to OUT, ${result.summary.bikesIn} bikes available (IN). All data refreshed from backend.`);
+        }, 500);
       } else {
         message.error(result.message || 'Sync failed');
       }
@@ -8209,7 +8427,13 @@ export default function AdminDashboard() {
           <Button type="link" size="small" onClick={() => handleEditBikeInventory(record)}>
             Edit
           </Button>
-          <Button type="link" size="small" danger onClick={() => handleDeleteBikeInventory(record._id)}>
+          <Button 
+            type="link" 
+            size="small" 
+            danger 
+            loading={bikeInventoryDeleting === record._id}
+            onClick={() => handleDeleteBikeInventory(record._id)}
+          >
             Delete
           </Button>
         </div>
@@ -8701,6 +8925,309 @@ export default function AdminDashboard() {
     setViewSalesTransactionModalOpen(true);
   };
 
+  // Export individual sales transaction to PDF
+  const exportIndividualSalesTransactionToPDF = async (record: any) => {
+    const printWindow = window.open('', '_blank');
+    if (!printWindow) return;
+
+    const currentDate = new Date().toLocaleDateString('en-GB');
+    const currentTime = new Date().toLocaleTimeString('en-GB');
+    
+    const htmlContent = `
+      <!DOCTYPE html>
+      <html>
+        <head>
+          <title>Sales Transaction - ${record.customerName} - ${currentDate}</title>
+          <style>
+            * { box-sizing: border-box; }
+            body { 
+              font-family: 'Times New Roman', serif; 
+              margin: 0; 
+              padding: 15px; 
+              line-height: 1.3;
+              font-size: 12px;
+              color: #000;
+            }
+            .header { 
+              text-align: center; 
+              margin-bottom: 20px; 
+              border-bottom: 2px solid #000; 
+              padding-bottom: 10px;
+            }
+            .main-title { 
+              font-size: 16px; 
+              font-weight: bold; 
+              margin: 0 0 5px 0;
+              text-transform: uppercase;
+            }
+            .company-name { 
+              font-size: 14px; 
+              font-weight: bold; 
+              margin: 5px 0;
+            }
+            .report-info { 
+              font-size: 11px; 
+              margin: 8px 0;
+              display: flex;
+              justify-content: space-between;
+              flex-wrap: wrap;
+            }
+            .info-item {
+              margin: 2px 0;
+              font-weight: bold;
+            }
+            .details-section { 
+              margin: 15px 0; 
+              border: 1px solid #000;
+              padding: 10px;
+            }
+            .section-title {
+              font-weight: bold;
+              margin-bottom: 8px;
+              font-size: 13px;
+              text-decoration: underline;
+            }
+            .details-grid {
+              display: grid;
+              grid-template-columns: 1fr 1fr;
+              gap: 10px;
+              margin: 10px 0;
+            }
+            .detail-section {
+              background: #f8f9fa;
+              padding: 8px;
+              border: 1px solid #ddd;
+            }
+            .detail-section h4 {
+              margin: 0 0 6px 0;
+              color: #000;
+              font-size: 11px;
+              font-weight: bold;
+            }
+            .detail-item {
+              display: flex;
+              justify-content: space-between;
+              margin: 2px 0;
+              font-size: 10px;
+            }
+            .detail-label {
+              color: #000;
+              font-weight: bold;
+              min-width: 80px;
+            }
+            .detail-value {
+              font-weight: normal;
+            }
+            .payment-section {
+              background: #fff3cd;
+              padding: 8px;
+              border: 1px solid #000;
+              margin-top: 8px;
+            }
+            .payment-grid {
+              display: grid;
+              grid-template-columns: repeat(4, 1fr);
+              gap: 8px;
+            }
+            .leasing-section {
+              background: #dbeafe;
+              padding: 8px;
+              border: 1px solid #000;
+              margin-top: 8px;
+            }
+            .footer { 
+              margin-top: 20px; 
+              text-align: center; 
+              font-size: 10px; 
+              color: #000;
+              border-top: 1px solid #000;
+              padding-top: 10px;
+            }
+            @media print {
+              body { margin: 0; padding: 10px; }
+              .header { page-break-inside: avoid; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="main-title">Sales Transaction Report</div>
+            <div class="company-name">AKR & SONS (PVT) LTD</div>
+            <div class="report-info">
+              <span class="info-item">Generated on: ${currentDate} at ${currentTime}</span>
+              <span class="info-item">Transaction ID: ${record.invoiceNo || 'N/A'}</span>
+              <span class="info-item">Customer: ${record.customerName || 'N/A'}</span>
+            </div>
+          </div>
+
+          <div class="details-section">
+            <div class="section-title">TRANSACTION INFORMATION</div>
+            <div class="details-grid">
+              <div class="detail-section">
+                <h4>CUSTOMER DETAILS</h4>
+                <div class="detail-item">
+                  <span class="detail-label">Name:</span>
+                  <span class="detail-value">${record.customerName || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Phone:</span>
+                  <span class="detail-value">${record.customerPhone || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Address:</span>
+                  <span class="detail-value">${record.customerAddress || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Branch:</span>
+                  <span class="detail-value">${record.branch || 'N/A'}</span>
+                </div>
+              </div>
+              
+              <div class="detail-section">
+                <h4>VEHICLE DETAILS</h4>
+                <div class="detail-item">
+                  <span class="detail-label">Model:</span>
+                  <span class="detail-value">${record.vehicleModel || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Engine No:</span>
+                  <span class="detail-value">${record.engineNumber || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Chassis No:</span>
+                  <span class="detail-value">${record.chassisNumber || 'N/A'}</span>
+                </div>
+                <div class="detail-item">
+                  <span class="detail-label">Insurance:</span>
+                  <span class="detail-value">Rs.${record.insuranceCo?.toLocaleString() || '0'}</span>
+                </div>
+                ${record.bikeColor && record.bikeColor !== 'N/A' ? `
+                <div class="detail-item">
+                  <span class="detail-label">Color:</span>
+                  <span class="detail-value">${record.bikeColor}</span>
+                </div>
+                ` : ''}
+                ${record.bikeCategory && record.bikeCategory !== 'N/A' ? `
+                <div class="detail-item">
+                  <span class="detail-label">Category:</span>
+                  <span class="detail-value">${record.bikeCategory}</span>
+                </div>
+                ` : ''}
+              </div>
+            </div>
+          </div>
+
+          <div class="details-section">
+            <div class="section-title">PURCHASE INFORMATION</div>
+            <div class="details-grid">
+              <div class="detail-item">
+                <span class="detail-label">Purchase Date:</span>
+                <span class="detail-value">${record.salesDate ? new Date(record.salesDate).toLocaleDateString('en-GB') : 'N/A'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Issue Time:</span>
+                <span class="detail-value">${record.vehicleIssueTime || 'N/A'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Transaction ID:</span>
+                <span class="detail-value">${record.invoiceNo || 'N/A'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Status:</span>
+                <span class="detail-value">${record.paymentStatus || 'N/A'}</span>
+              </div>
+            </div>
+          </div>
+
+          <div class="payment-section">
+            <h4 style="margin-bottom: 6px; font-size: 11px; font-weight: bold;">PAYMENT DETAILS</h4>
+            <div class="payment-grid">
+              <div class="detail-item">
+                <span class="detail-label">Total Amount:</span>
+                <span class="detail-value">Rs.${record.sellingPrice?.toLocaleString() || '0'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Down Payment:</span>
+                <span class="detail-value">Rs.${record.downPayment?.toLocaleString() || '0'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Balance Amount:</span>
+                <span class="detail-value">Rs.${record.balanceAmount?.toLocaleString() || '0'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Payment Method:</span>
+                <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
+              </div>
+              ${record.regFee > 0 ? `
+              <div class="detail-item">
+                <span class="detail-label">Registration Fee:</span>
+                <span class="detail-value">Rs.${record.regFee?.toLocaleString() || '0'}</span>
+              </div>
+              ` : ''}
+              ${record.docCharge > 0 ? `
+              <div class="detail-item">
+                <span class="detail-label">Document Charge:</span>
+                <span class="detail-value">Rs.${record.docCharge?.toLocaleString() || '0'}</span>
+              </div>
+              ` : ''}
+              ${record.discountApplied ? `
+              <div class="detail-item">
+                <span class="detail-label">Discount Amount:</span>
+                <span class="detail-value">Rs.${record.discountAmount?.toLocaleString() || '0'}</span>
+              </div>
+              ` : ''}
+              <div class="detail-item">
+                <span class="detail-label">Final Amount:</span>
+                <span class="detail-value">Rs.${record.finalAmount?.toLocaleString() || '0'}</span>
+              </div>
+            </div>
+          </div>
+
+          ${record.leasingCompany && record.leasingCompany.trim() !== '' ? `
+          <div class="leasing-section">
+            <h4 style="margin-bottom: 6px; font-size: 11px; font-weight: bold;">LEASING COMPANY DETAILS</h4>
+            <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+              <div class="detail-item">
+                <span class="detail-label">Company:</span>
+                <span class="detail-value">${record.leasingCompany}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Officer:</span>
+                <span class="detail-value">${record.officerName || 'N/A'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Contact:</span>
+                <span class="detail-value">${record.officerContactNo || 'N/A'}</span>
+              </div>
+              <div class="detail-item">
+                <span class="detail-label">Commission:</span>
+                <span class="detail-value">${record.commissionPercentage || 0}%</span>
+              </div>
+            </div>
+          </div>
+          ` : ''}
+
+          <div class="footer">
+            <div>Contact: akrfuture@gmail.com</div>
+            <div>Phone: 0232231222, 0773111266</div>
+            <div>Address: Silavathurai road, Murunkan, Mannar</div>
+          </div>
+          
+          <script>
+            window.onload = function() {
+              setTimeout(function() {
+                window.print();
+              }, 500);
+            };
+          </script>
+        </body>
+      </html>
+    `;
+
+    printWindow.document.write(htmlContent);
+    printWindow.document.close();
+  };
+
   // Export sales transactions to PDF
   const exportSalesTransactionsToPDF = async () => {
     try {
@@ -8711,7 +9238,8 @@ export default function AdminDashboard() {
         search: salesTransactionsSearch
       });
       
-      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/sales-transactions?${params}`, {
+      // Fetch from Vehicle Allocation Coupons (same as the table data)
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?${params}`, {
         headers: {
           'Authorization': `Bearer ${token}`,
           'Content-Type': 'application/json'
@@ -8719,8 +9247,50 @@ export default function AdminDashboard() {
       });
       
       if (!res.ok) throw new Error("Failed to fetch data");
-      const data = await res.json();
-      const allRecords = data.data;
+      const response = await res.json();
+      
+      // Transform Vehicle Allocation Coupons to Sales Transaction format (same as fetchSalesTransactions)
+      const allRecords = response.vehicleAllocationCoupons.map((coupon: any) => ({
+        _id: coupon._id,
+        invoiceNo: coupon.couponId,
+        customerName: coupon.fullName,
+        customerPhone: coupon.contactNo,
+        customerAddress: coupon.address,
+        vehicleModel: coupon.vehicleType,
+        engineNumber: coupon.engineNo || '',
+        chassisNumber: coupon.chassisNo || '',
+        salesDate: coupon.dateOfPurchase,
+        vehicleIssueTime: coupon.vehicleIssueTime || '',
+        branch: coupon.branch || '',
+        sellingPrice: coupon.totalAmount || 0,
+        downPayment: coupon.downPayment || 0,
+        balanceAmount: coupon.balance || 0,
+        paymentMethod: coupon.paymentType || '',
+        paymentStatus: coupon.balance > 0 ? 'Partial' : 'Paid',
+        leasingCompany: coupon.leasingCompany || '',
+        officerName: coupon.officerName || '',
+        officerContactNo: coupon.officerContactNo || '',
+        commissionPercentage: coupon.commissionPercentage || 0,
+        discountApplied: coupon.discountApplied || false,
+        discountAmount: coupon.discountAmount || 0,
+        finalAmount: (coupon.totalAmount || 0) - (coupon.discountAmount || 0),
+        regFee: coupon.regFee || 0,
+        docCharge: coupon.docCharge || 0,
+        insuranceCo: coupon.insuranceCo || '',
+        bikeColor: coupon.bikeColor || '',
+        bikeCategory: coupon.bikeCategory || '',
+        bikeBrand: coupon.bikeBrand || '',
+        bikeModel: coupon.bikeModel || '',
+        bikeCondition: coupon.bikeCondition || '',
+        yearOfManufacture: coupon.yearOfManufacture || '',
+        fuelType: coupon.fuelType || '',
+        transmission: coupon.transmission || '',
+        engineCapacity: coupon.engineCapacity || '',
+        registrationNo: coupon.registrationNo || '',
+        status: coupon.status || '',
+        notes: coupon.notes || '',
+        relatedCouponId: coupon.couponId
+      }));
       
       const printWindow = window.open('', '_blank');
       if (!printWindow) return;
@@ -8737,169 +9307,337 @@ export default function AdminDashboard() {
             <style>
               * { box-sizing: border-box; }
               body { 
-                font-family: Arial, sans-serif; 
+                font-family: 'Times New Roman', serif; 
                 margin: 0; 
-                padding: 20px; 
-                line-height: 1.4;
+                padding: 15px; 
+                line-height: 1.3;
+                font-size: 12px;
+                color: #000;
               }
               .header { 
-                text-align: center !important; 
-                margin-bottom: 30px; 
-                border-bottom: 2px solid #333; 
-                padding-bottom: 15px;
-                width: 100%;
+                text-align: center; 
+                margin-bottom: 20px; 
+                border-bottom: 2px solid #000; 
+                padding-bottom: 10px;
+              }
+              .main-title { 
+                font-size: 16px; 
+                font-weight: bold; 
+                margin: 0 0 5px 0;
+                text-transform: uppercase;
               }
               .company-name { 
-                font-size: 28px; 
+                font-size: 14px; 
                 font-weight: bold; 
-                color: #333; 
-                margin: 0 0 10px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
-              }
-              .report-title { 
-                font-size: 20px; 
-                color: #666; 
-                margin: 10px 0 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
+                margin: 5px 0;
               }
               .report-info { 
-                font-size: 14px; 
-                color: #666; 
-                margin: 5px 0;
-                text-align: center !important;
-                width: 100%;
-                display: block;
-              }
-              .stats { 
+                font-size: 11px; 
+                margin: 8px 0;
                 display: flex; 
-                justify-content: space-around; 
-                margin: 20px 0; 
-                padding: 15px; 
-                background: #f5f5f5; 
-                border-radius: 5px;
-                width: 100%;
+                justify-content: space-between;
+                flex-wrap: wrap;
+              }
+              .info-item {
+                margin: 2px 0;
+                font-weight: bold;
+              }
+              .stats-section { 
+                margin: 15px 0; 
+                border: 1px solid #000;
+                padding: 10px;
+              }
+              .stats-title {
+                font-weight: bold;
+                margin-bottom: 8px;
+                font-size: 13px;
+                text-decoration: underline;
+              }
+              .stats-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 10px;
+                margin: 10px 0;
               }
               .stat-item { 
                 text-align: center;
-                flex: 1;
-                margin: 0 10px;
+                border: 1px solid #000;
+                padding: 8px;
               }
               .stat-value { 
-                font-size: 18px; 
+                font-size: 14px; 
                 font-weight: bold; 
-                color: #333;
-                margin-bottom: 5px;
+                color: #000;
+                margin-bottom: 3px;
               }
               .stat-label { 
-                font-size: 12px; 
+                font-size: 10px; 
+                color: #000;
+              }
+              .transaction-item {
+                border: 1px solid #000;
+                margin: 15px 0;
+                padding: 10px;
+              }
+              .transaction-header {
+                display: flex;
+                justify-content: space-between;
+                align-items: center;
+                margin-bottom: 10px;
+                padding-bottom: 5px;
+                border-bottom: 1px solid #000;
+              }
+              .transaction-id {
+                font-size: 13px;
+                font-weight: bold;
+                color: #000;
+              }
+              .transaction-date {
+                font-size: 11px;
                 color: #666;
               }
-              table { 
-                width: 100%; 
-                border-collapse: collapse; 
-                margin-top: 20px; 
-                font-size: 10px; 
+              .details-section {
+                margin: 10px 0;
+                border: 1px solid #000;
+                padding: 8px;
               }
-              th, td { 
+              .details-grid {
+                display: grid;
+                grid-template-columns: 1fr 1fr;
+                gap: 10px;
+                margin: 10px 0;
+              }
+              .detail-section {
+                background: #f8f9fa;
+                padding: 8px;
                 border: 1px solid #ddd; 
-                padding: 6px; 
-                text-align: left; 
               }
-              th { 
-                background-color: #f2f2f2; 
+              .detail-section h4 {
+                margin: 0 0 6px 0;
+                color: #000;
+                font-size: 11px;
                 font-weight: bold; 
               }
-              .date { text-align: center; }
-              .amount { text-align: right; }
+              .detail-item {
+                display: flex;
+                justify-content: space-between;
+                margin: 2px 0;
+                font-size: 10px;
+              }
+              .detail-label {
+                color: #000;
+                font-weight: bold;
+                min-width: 80px;
+              }
+              .detail-value {
+                font-weight: normal;
+              }
+              .payment-section {
+                background: #fff3cd;
+                padding: 8px;
+                border: 1px solid #000;
+                margin-top: 8px;
+              }
+              .payment-grid {
+                display: grid;
+                grid-template-columns: repeat(4, 1fr);
+                gap: 8px;
+              }
+              .leasing-section {
+                background: #dbeafe;
+                padding: 8px;
+                border: 1px solid #000;
+                margin-top: 8px;
+              }
               .footer { 
-                margin-top: 30px; 
+                margin-top: 20px; 
                 text-align: center; 
-                font-size: 12px; 
-                color: #666; 
+                font-size: 10px; 
+                color: #000;
+                border-top: 1px solid #000;
+                padding-top: 10px;
               }
               @media print {
-                body { margin: 0; }
-                .no-print { display: none; }
-                table { page-break-inside: auto; }
-                tr { page-break-inside: avoid; page-break-after: auto; }
+                body { margin: 0; padding: 10px; }
+                .header { page-break-inside: avoid; }
+                .transaction-item { page-break-inside: avoid; }
               }
             </style>
           </head>
           <body>
             <div class="header">
+              <div class="main-title">Sales Transactions Report</div>
               <div class="company-name">AKR & SONS (PVT) LTD</div>
-              <div class="report-title">Complete Sales Transactions Report with Leasing Details${searchTerm}</div>
-              <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
-              <div class="report-info">Report Type: Complete Sales Transactions with Full Details</div>
+              <div class="report-info">
+                <span class="info-item">Generated on: ${currentDate} at ${currentTime}</span>
+                <span class="info-item">Total Records: ${allRecords.length}</span>
+                <span class="info-item">Report Type: Complete Sales Transactions</span>
+              </div>
             </div>
             
+            <div class="stats-section">
+              <div class="stats-title">SUMMARY STATISTICS</div>
+              <div class="stats-grid">
+                <div class="stat-item">
+                  <div class="stat-value">${allRecords.length}</div>
+                  <div class="stat-label">Total Transactions</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value">Rs.${allRecords.reduce((sum: number, record: any) => sum + (record.sellingPrice || 0), 0).toLocaleString()}</div>
+                  <div class="stat-label">Total Sales Value</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value">Rs.${allRecords.reduce((sum: number, record: any) => sum + (record.downPayment || 0), 0).toLocaleString()}</div>
+                  <div class="stat-label">Total Down Payments</div>
+                </div>
+                <div class="stat-item">
+                  <div class="stat-value">Rs.${allRecords.reduce((sum: number, record: any) => sum + (record.balanceAmount || 0), 0).toLocaleString()}</div>
+                  <div class="stat-label">Total Balance</div>
+                </div>
+              </div>
+            </div>
 
+            <div style="font-weight: bold; margin: 20px 0 10px 0; font-size: 13px; text-decoration: underline;">DETAILED TRANSACTIONS</div>
             
-            <table>
-              <thead>
-                <tr>
-                  <th>No</th>
-                  <th>Coupon ID</th>
-                  <th>Customer Name</th>
-                  <th>Customer Phone</th>
-                  <th>Vehicle Model</th>
-                  <th>Color</th>
-                  <th>Category</th>
-                  <th>Engine No</th>
-                  <th>Chassis No</th>
-                  <th>Insurance</th>
-                  <th>Purchase Date</th>
-                  <th>Branch</th>
-                  <th>Total Amount</th>
-                  <th>Discount</th>
-                  <th>Down Payment</th>
-                  <th>Balance</th>
-                  <th>Payment Method</th>
-                  <th>Reg Fee</th>
-                  <th>Doc Charge</th>
-                  <th>Leasing Company</th>
-                  <th>Officer Name</th>
-                  <th>Officer Contact</th>
-                  <th>Commission %</th>
-                </tr>
-              </thead>
-              <tbody>
                 ${allRecords.map((record: any, index: number) => `
-                  <tr>
-                    <td>${index + 1}</td>
-                    <td>${record.invoiceNo || ''}</td>
-                    <td>${record.customerName || ''}</td>
-                    <td>${record.customerPhone || ''}</td>
-                    <td>${record.vehicleModel || ''}</td>
-                    <td>${record.bikeColor || '-'}</td>
-                    <td>${record.bikeCategory || '-'}</td>
-                    <td>${record.engineNumber || ''}</td>
-                    <td>${record.chassisNumber || ''}</td>
-                    <td>${record.insuranceCo || '-'}</td>
-                    <td class="date">${record.salesDate ? new Date(record.salesDate).toLocaleDateString('en-GB') : ''}</td>
-                    <td>${record.branch || ''}</td>
-                    <td class="amount">LKR ${record.sellingPrice?.toLocaleString() || '0'}</td>
-                    <td class="amount">LKR ${record.discountAmount?.toLocaleString() || '0'}</td>
-                    <td class="amount">LKR ${record.downPayment?.toLocaleString() || '0'}</td>
-                    <td class="amount">LKR ${record.balanceAmount?.toLocaleString() || '0'}</td>
-                    <td>${record.paymentMethod || ''}</td>
-                    <td class="amount">LKR ${record.regFee?.toLocaleString() || '0'}</td>
-                    <td class="amount">LKR ${record.docCharge?.toLocaleString() || '0'}</td>
-                    <td>${record.leasingCompany || '-'}</td>
-                    <td>${record.officerName || '-'}</td>
-                    <td>${record.officerContactNo || '-'}</td>
-                    <td>${record.commissionPercentage || 0}%</td>
-                  </tr>
+              <div class="transaction-item">
+                <div class="transaction-header">
+                  <div>
+                    <div class="transaction-id">Record #${index + 1} - ${record.invoiceNo || 'N/A'}</div>
+                    <div class="transaction-date">Date: ${record.salesDate ? new Date(record.salesDate).toLocaleDateString('en-GB') : 'N/A'} | Time: ${record.vehicleIssueTime || 'N/A'}</div>
+                  </div>
+                  <div style="text-align: right;">
+                    <div style="font-size: 14px; font-weight: bold;">Rs.${record.sellingPrice?.toLocaleString() || '0'}</div>
+                    <div style="font-size: 11px; color: #000;">${record.paymentMethod || 'N/A'}</div>
+                  </div>
+                </div>
+
+                <div class="details-section">
+                  <div class="details-grid">
+                    <div class="detail-section">
+                      <h4>CUSTOMER DETAILS</h4>
+                      <div class="detail-item">
+                        <span class="detail-label">Name:</span>
+                        <span class="detail-value">${record.customerName || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Phone:</span>
+                        <span class="detail-value">${record.customerPhone || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Address:</span>
+                        <span class="detail-value">${record.customerAddress || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Branch:</span>
+                        <span class="detail-value">${record.branch || 'N/A'}</span>
+                      </div>
+                    </div>
+                    
+                    <div class="detail-section">
+                      <h4>VEHICLE DETAILS</h4>
+                      <div class="detail-item">
+                        <span class="detail-label">Model:</span>
+                        <span class="detail-value">${record.vehicleModel || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Engine No:</span>
+                        <span class="detail-value">${record.engineNumber || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Chassis No:</span>
+                        <span class="detail-value">${record.chassisNumber || 'N/A'}</span>
+                      </div>
+                      <div class="detail-item">
+                        <span class="detail-label">Insurance:</span>
+                        <span class="detail-value">Rs.${record.insuranceCo?.toLocaleString() || '0'}</span>
+                      </div>
+                      ${record.bikeColor && record.bikeColor !== 'N/A' ? `
+                      <div class="detail-item">
+                        <span class="detail-label">Color:</span>
+                        <span class="detail-value">${record.bikeColor}</span>
+                      </div>
+                      ` : ''}
+                      ${record.bikeCategory && record.bikeCategory !== 'N/A' ? `
+                      <div class="detail-item">
+                        <span class="detail-label">Category:</span>
+                        <span class="detail-value">${record.bikeCategory}</span>
+                      </div>
+                      ` : ''}
+                    </div>
+                  </div>
+                </div>
+
+                <div class="payment-section">
+                  <h4 style="margin-bottom: 6px; font-size: 11px; font-weight: bold;">PAYMENT DETAILS</h4>
+                  <div class="payment-grid">
+                    <div class="detail-item">
+                      <span class="detail-label">Total:</span>
+                      <span class="detail-value">Rs.${record.sellingPrice?.toLocaleString() || '0'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Down Payment:</span>
+                      <span class="detail-value">Rs.${record.downPayment?.toLocaleString() || '0'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Balance:</span>
+                      <span class="detail-value">Rs.${record.balanceAmount?.toLocaleString() || '0'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Method:</span>
+                      <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
+                    </div>
+                    ${record.regFee > 0 ? `
+                    <div class="detail-item">
+                      <span class="detail-label">Reg Fee:</span>
+                      <span class="detail-value">Rs.${record.regFee?.toLocaleString() || '0'}</span>
+                    </div>
+                    ` : ''}
+                    ${record.docCharge > 0 ? `
+                    <div class="detail-item">
+                      <span class="detail-label">Doc Charge:</span>
+                      <span class="detail-value">Rs.${record.docCharge?.toLocaleString() || '0'}</span>
+                    </div>
+                    ` : ''}
+                    ${record.discountApplied ? `
+                    <div class="detail-item">
+                      <span class="detail-label">Discount:</span>
+                      <span class="detail-value">Rs.${record.discountAmount?.toLocaleString() || '0'}</span>
+                    </div>
+                    ` : ''}
+                  </div>
+                </div>
+
+                ${record.leasingCompany && record.leasingCompany.trim() !== '' ? `
+                <div class="leasing-section">
+                  <h4 style="margin-bottom: 6px; font-size: 11px; font-weight: bold;">LEASING COMPANY DETAILS</h4>
+                  <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
+                    <div class="detail-item">
+                      <span class="detail-label">Company:</span>
+                      <span class="detail-value">${record.leasingCompany}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Officer:</span>
+                      <span class="detail-value">${record.officerName || 'N/A'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Contact:</span>
+                      <span class="detail-value">${record.officerContactNo || 'N/A'}</span>
+                    </div>
+                    <div class="detail-item">
+                      <span class="detail-label">Commission:</span>
+                      <span class="detail-value">${record.commissionPercentage || 0}%</span>
+                    </div>
+                  </div>
+                </div>
+                ` : ''}
+              </div>
                 `).join('')}
-              </tbody>
-            </table>
             
             <div class="footer">
-              <p>Total Records: ${allRecords.length} | Complete Report</p>
+              <div>Contact: akrfuture@gmail.com</div>
+              <div>Phone: 0232231222, 0773111266</div>
+              <div>Address: Silavathurai road, Murunkan, Mannar</div>
             </div>
             
             <script>
@@ -9119,206 +9857,262 @@ export default function AdminDashboard() {
           <style>
             * { box-sizing: border-box; }
             body { 
-              font-family: Arial, sans-serif; 
+              font-family: 'Times New Roman', serif; 
               margin: 0; 
-              padding: 20px; 
-              line-height: 1.4;
+              padding: 15px; 
+              line-height: 1.3;
+              font-size: 12px;
+              color: #000;
             }
             .header { 
-              text-align: center !important; 
-              margin-bottom: 30px; 
-              border-bottom: 2px solid #333; 
-              padding-bottom: 15px;
-              width: 100%;
+              text-align: center; 
+              margin-bottom: 20px; 
+              border-bottom: 2px solid #000; 
+              padding-bottom: 10px;
+            }
+            .main-title { 
+              font-size: 16px; 
+              font-weight: bold; 
+              margin: 0 0 5px 0;
+              text-transform: uppercase;
             }
             .company-name { 
-              font-size: 28px; 
+              font-size: 14px; 
               font-weight: bold; 
-              color: #333; 
-              margin: 0 0 10px 0;
-              text-align: center !important;
-              width: 100%;
-              display: block;
-            }
-            .report-title { 
-              font-size: 20px; 
-              color: #666; 
-              margin: 10px 0 5px 0;
-              text-align: center !important;
-              width: 100%;
-              display: block;
+              margin: 5px 0;
             }
             .report-info { 
-              font-size: 14px; 
-              color: #666; 
-              margin: 5px 0;
-              text-align: center !important;
-              width: 100%;
-              display: block;
+              font-size: 11px; 
+              margin: 8px 0;
+              display: flex;
+              justify-content: space-between;
+              flex-wrap: wrap;
             }
-            .customer-info {
-              background: #f5f5f5;
-              padding: 15px;
-              border-radius: 5px;
-              margin: 20px 0;
+            .info-item {
+              margin: 2px 0;
+              font-weight: bold;
             }
-            .customer-info h3 {
-              margin: 0 0 10px 0;
-              color: #333;
+            .customer-info-section { 
+              margin: 15px 0; 
+              border: 1px solid #000;
+              padding: 10px;
+            }
+            .section-title {
+              font-weight: bold;
+              margin-bottom: 8px;
+              font-size: 13px;
+              text-decoration: underline;
             }
             .customer-info-grid {
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 10px;
+              gap: 8px;
+              margin: 10px 0;
             }
             .info-item {
               display: flex;
               justify-content: space-between;
+              margin: 3px 0;
+              padding: 2px 0;
+              border-bottom: 1px solid #ddd;
             }
             .info-label {
               font-weight: bold;
-              color: #666;
+              min-width: 120px;
+              margin-right: 10px;
+            }
+            .info-value {
+              flex: 1;
+              font-weight: normal;
             }
             .purchase-item {
-              border: 1px solid #ddd;
+              border: 1px solid #000;
               margin: 15px 0;
-              padding: 15px;
-              border-radius: 5px;
+              padding: 10px;
             }
             .purchase-header {
               display: flex;
               justify-content: space-between;
               align-items: center;
-              margin-bottom: 15px;
-              padding-bottom: 10px;
-              border-bottom: 1px solid #eee;
+              margin-bottom: 10px;
+              padding-bottom: 5px;
+              border-bottom: 1px solid #000;
             }
             .purchase-title {
-              font-size: 18px;
+              font-size: 13px;
               font-weight: bold;
-              color: #333;
+              color: #000;
             }
             .purchase-amount {
-              font-size: 20px;
+              font-size: 14px;
               font-weight: bold;
-              color: #28a745;
+              color: #000;
             }
             .purchase-status {
-              background: #007bff;
+              background: #000;
               color: white;
-              padding: 4px 8px;
-              border-radius: 3px;
-              font-size: 12px;
+              padding: 2px 6px;
+              border-radius: 2px;
+              font-size: 10px;
+            }
+            .details-section { 
+              margin: 10px 0; 
+              border: 1px solid #000;
+              padding: 8px;
             }
             .details-grid {
               display: grid;
               grid-template-columns: 1fr 1fr;
-              gap: 15px;
-              margin: 15px 0;
+              gap: 10px;
+              margin: 10px 0;
             }
             .detail-section {
               background: #f8f9fa;
-              padding: 10px;
-              border-radius: 3px;
+              padding: 8px;
+              border: 1px solid #ddd;
             }
             .detail-section h4 {
-              margin: 0 0 8px 0;
-              color: #495057;
-              font-size: 14px;
+              margin: 0 0 6px 0;
+              color: #000;
+              font-size: 11px;
+              font-weight: bold;
             }
             .detail-item {
               display: flex;
               justify-content: space-between;
-              margin: 3px 0;
-              font-size: 12px;
+              margin: 2px 0;
+              font-size: 10px;
             }
             .detail-label {
-              color: #6c757d;
+              color: #000;
+              font-weight: bold;
+              min-width: 80px;
             }
             .detail-value {
-              font-weight: 500;
+              font-weight: normal;
             }
             .installment-details {
               background: #fff3cd;
-              padding: 10px;
-              border-radius: 3px;
-              margin-top: 10px;
+              padding: 8px;
+              border: 1px solid #000;
+              margin-top: 8px;
             }
             .installment-grid {
               display: grid;
               grid-template-columns: 1fr 1fr 1fr;
-              gap: 10px;
+              gap: 8px;
+            }
+            .installment-item {
+              border: 1px solid #ddd;
+              padding: 5px;
+              text-align: center; 
+            }
+            .installment-amount {
+              font-weight: bold;
+              font-size: 11px;
+            }
+            .installment-date {
+              font-size: 9px;
+              color: #666; 
+              margin: 2px 0;
+            }
+            .installment-status {
+              font-size: 9px;
+              padding: 1px 4px;
+              border-radius: 2px;
+              margin-top: 2px;
+            }
+            .status-paid {
+              background: #10b981;
+              color: white;
+            }
+            .status-unpaid {
+              background: #ef4444;
+              color: white;
+            }
+            .leasing-section {
+              background: #dbeafe;
+              padding: 8px;
+              border: 1px solid #000;
+              margin-top: 8px;
             }
             .footer { 
-              margin-top: 30px; 
+              margin-top: 20px; 
               text-align: center; 
-              font-size: 12px; 
-              color: #666; 
+              font-size: 10px; 
+              color: #000;
+              border-top: 1px solid #000;
+              padding-top: 10px;
             }
             @media print {
-              body { margin: 0; }
-              .no-print { display: none; }
+              body { margin: 0; padding: 10px; }
+              .header { page-break-inside: avoid; }
+              .purchase-item { page-break-inside: avoid; }
             }
           </style>
         </head>
         <body>
           <div class="header">
+            <div class="main-title">Customer Purchase History Report</div>
             <div class="company-name">AKR & SONS (PVT) LTD</div>
-            <div class="report-title">Customer Purchase History Report</div>
-            <div class="report-info">Generated on: ${currentDate} at ${currentTime}</div>
-            <div class="report-info">Customer: ${customer.fullName}</div>
+            <div class="report-info">
+              <span class="info-item">Generated on: ${currentDate} at ${currentTime}</span>
+              <span class="info-item">Customer: ${customer.fullName}</span>
+              <span class="info-item">Total Records: ${historyData.length}</span>
+            </div>
           </div>
           
-          <div class="customer-info">
-            <h3>Customer Information</h3>
+          <div class="customer-info-section">
+            <div class="section-title">CUSTOMER INFORMATION</div>
             <div class="customer-info-grid">
               <div class="info-item">
                 <span class="info-label">Full Name:</span>
-                <span>${customer.fullName}</span>
+                <span class="info-value">${customer.fullName}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">NIC/Driving License:</span>
-                <span>${customer.nicDrivingLicense || 'N/A'}</span>
+                <span class="info-value">${customer.nicDrivingLicense || 'N/A'}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Phone Number:</span>
-                <span>${customer.phoneNo || 'N/A'}</span>
+                <span class="info-value">${customer.phoneNo || 'N/A'}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Address:</span>
-                <span>${customer.address || 'N/A'}</span>
+                <span class="info-value">${customer.address || 'N/A'}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Occupation:</span>
-                <span>${customer.occupation || 'N/A'}</span>
+                <span class="info-value">${customer.occupation || 'N/A'}</span>
               </div>
               <div class="info-item">
                 <span class="info-label">Date of Purchase:</span>
-                <span>${customer.dateOfPurchase ? new Date(customer.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}</span>
+                <span class="info-value">${customer.dateOfPurchase ? new Date(customer.dateOfPurchase).toLocaleDateString('en-GB') : 'N/A'}</span>
               </div>
             </div>
           </div>
 
-          <h3>Purchase History (${historyData.length} records)</h3>
+          <div class="section-title" style="margin: 20px 0 10px 0;">PURCHASE HISTORY (${historyData.length} records)</div>
           
           ${historyData.map((coupon, index) => `
             <div class="purchase-item">
               <div class="purchase-header">
                 <div>
-                  <div class="purchase-title">${coupon.couponId}</div>
-                  <div style="color: #666; font-size: 14px;">${coupon.vehicleType}</div>
-                  <div style="color: #999; font-size: 12px;">Purchase Date: ${new Date(coupon.dateOfPurchase).toLocaleDateString('en-GB')}</div>
+                  <div class="purchase-title">Record #${index + 1} - ${coupon.couponId}</div>
+                  <div style="color: #000; font-size: 11px; font-weight: bold;">${coupon.vehicleType}</div>
+                  <div style="color: #666; font-size: 10px;">Purchase Date: ${new Date(coupon.dateOfPurchase).toLocaleDateString('en-GB')}</div>
                 </div>
                 <div style="text-align: right;">
-                  <div class="purchase-amount">LKR ${coupon.totalAmount?.toLocaleString()}</div>
-                  <div style="color: #666; font-size: 14px;">${coupon.paymentMethod}</div>
+                  <div class="purchase-amount">Rs.${coupon.totalAmount?.toLocaleString()}</div>
+                  <div style="color: #000; font-size: 11px; font-weight: bold;">${coupon.paymentMethod}</div>
                   <div class="purchase-status">${coupon.status}</div>
                 </div>
               </div>
               
+              <div class="details-section">
               <div class="details-grid">
                 <div class="detail-section">
-                  <h4>Customer Details</h4>
+                    <h4>CUSTOMER DETAILS</h4>
                   <div class="detail-item">
                     <span class="detail-label">Full Name:</span>
                     <span class="detail-value">${coupon.fullName}</span>
@@ -9338,7 +10132,7 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div class="detail-section">
-                  <h4>Vehicle Details</h4>
+                    <h4>VEHICLE DETAILS</h4>
                   <div class="detail-item">
                     <span class="detail-label">Vehicle Type:</span>
                     <span class="detail-value">${coupon.vehicleType}</span>
@@ -9350,52 +10144,53 @@ export default function AdminDashboard() {
                                      <div class="detail-item">
                      <span class="detail-label">Chassis No:</span>
                      <span class="detail-value">${coupon.chassisNo}</span>
+                    </div>
                    </div>
                 </div>
               </div>
               
-              <div class="detail-section">
-                <h4>Payment Details</h4>
-                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 10px;">
+              <div class="details-section">
+                <h4 style="margin-bottom: 8px; font-size: 11px; font-weight: bold;">PAYMENT DETAILS</h4>
+                <div style="display: grid; grid-template-columns: 1fr 1fr 1fr 1fr; gap: 8px;">
                   <div class="detail-item">
                     <span class="detail-label">Base Price:</span>
-                    <span class="detail-value">LKR ${coupon.basePrice?.toLocaleString() || '0'}</span>
+                    <span class="detail-value">Rs.${coupon.basePrice?.toLocaleString() || '0'}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Reg Fee:</span>
-                    <span class="detail-value">LKR ${coupon.regFee?.toLocaleString() || '0'}</span>
+                    <span class="detail-value">Rs.${coupon.regFee?.toLocaleString() || '0'}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Doc Charge:</span>
-                    <span class="detail-value">LKR ${coupon.docCharge?.toLocaleString() || '0'}</span>
+                    <span class="detail-value">Rs.${coupon.docCharge?.toLocaleString() || '0'}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Insurance:</span>
-                    <span class="detail-value">LKR ${coupon.insuranceCo?.toLocaleString() || '0'}</span>
+                    <span class="detail-value">Rs.${coupon.insuranceCo?.toLocaleString() || '0'}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Total Amount:</span>
-                    <span class="detail-value">LKR ${coupon.totalAmount?.toLocaleString()}</span>
+                    <span class="detail-value">Rs.${coupon.totalAmount?.toLocaleString()}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Down Payment:</span>
-                    <span class="detail-value">LKR ${coupon.downPayment?.toLocaleString()}</span>
+                    <span class="detail-value">Rs.${coupon.downPayment?.toLocaleString()}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Discount:</span>
-                    <span class="detail-value">LKR ${coupon.discountAmount?.toLocaleString() || '0'}</span>
+                    <span class="detail-value">Rs.${coupon.discountAmount?.toLocaleString() || '0'}</span>
                   </div>
                   <div class="detail-item">
                     <span class="detail-label">Balance:</span>
-                    <span class="detail-value">LKR ${coupon.balance?.toLocaleString()}</span>
+                    <span class="detail-value">Rs.${coupon.balance?.toLocaleString()}</span>
                   </div>
                 </div>
               </div>
               
                              ${coupon.paymentMethod === 'Leasing via AKR' ? `
-                 <div style="background: #dbeafe; padding: 10px; border-radius: 3px; margin-top: 10px;">
-                   <h4 style="margin: 0 0 8px 0; color: #1d4ed8; font-size: 14px;">Leasing Company Details</h4>
-                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px;">
+                 <div class="leasing-section">
+                   <h4 style="margin: 0 0 6px 0; color: #000; font-size: 11px; font-weight: bold;">LEASING COMPANY DETAILS</h4>
+                   <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 8px;">
                      <div class="detail-item">
                        <span class="detail-label">Company:</span>
                        <span class="detail-value">${coupon.leasingCompany || 'AKR Easy Credit'}</span>
@@ -9418,28 +10213,24 @@ export default function AdminDashboard() {
 
                ${coupon.paymentMethod === 'Leasing via AKR' && coupon.balance > 0 ? `
                  <div class="installment-details">
-                   <h4>Installment Details</h4>
+                   <h4 style="margin-bottom: 6px; font-size: 11px; font-weight: bold;">INSTALLMENT PAYMENT SCHEDULE</h4>
                    <div class="installment-grid">
-                     <div>
-                       <div class="detail-item">
-                         <span class="detail-label">1st Installment:</span>
-                         <span class="detail-value">LKR ${(() => {
+                     <div class="installment-item">
+                       <div class="installment-amount">1st Installment</div>
+                       <div class="installment-amount">Rs.${(() => {
                            const amount = coupon.firstInstallmentAmount || 
                                         coupon.firstInstallment?.amount || 
                                         (coupon.balance / 3);
                            return amount ? amount.toLocaleString() : 'N/A';
-                         })()}</span>
-                       </div>
-                       <div style="font-size: 11px; color: #666;">
+                       })()}</div>
+                       <div class="installment-date">
                          ${(() => {
                            const date = coupon.firstInstallmentDate || 
                                       coupon.firstInstallment?.date;
                            return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
                          })()}
                        </div>
-                       <div style="font-size: 10px; margin-top: 2px;">
-                         <span style="background: ${(() => {
-                           // Check multiple sources for payment status
+                       <div class="installment-status ${(() => {
                            const isPaid = coupon.firstInstallmentPaid || 
                                         coupon.firstInstallment?.paid || 
                                         coupon.firstInstallmentPaidStatus ||
@@ -9449,10 +10240,9 @@ export default function AdminDashboard() {
                                         String(coupon.firstInstallmentAmount || '').includes('✓') ||
                                         coupon.firstInstallment?.paidAmount > 0 ||
                                         coupon.firstInstallment?.status === 'Paid';
-                           return isPaid ? '#10b981' : '#ef4444';
-                         })()}; color: white; padding: 2px 6px; border-radius: 3px;">
+                         return isPaid ? 'status-paid' : 'status-unpaid';
+                       })()}">
                            ${(() => {
-                             // Check multiple sources for payment status
                              const isPaid = coupon.firstInstallmentPaid || 
                                           coupon.firstInstallment?.paid || 
                                           coupon.firstInstallmentPaidStatus ||
@@ -9462,31 +10252,26 @@ export default function AdminDashboard() {
                                           String(coupon.firstInstallmentAmount || '').includes('✓') ||
                                           coupon.firstInstallment?.paidAmount > 0 ||
                                           coupon.firstInstallment?.status === 'Paid';
-                             return isPaid ? '✓ Paid' : '❌ Unpaid';
+                           return isPaid ? '✓ PAID' : '○ PENDING';
                            })()}
-                         </span>
                        </div>
                      </div>
-                     <div>
-                       <div class="detail-item">
-                         <span class="detail-label">2nd Installment:</span>
-                         <span class="detail-value">LKR ${(() => {
+                     <div class="installment-item">
+                       <div class="installment-amount">2nd Installment</div>
+                       <div class="installment-amount">Rs.${(() => {
                            const amount = coupon.secondInstallmentAmount || 
                                         coupon.secondInstallment?.amount || 
                                         (coupon.balance / 3);
                            return amount ? amount.toLocaleString() : 'N/A';
-                         })()}</span>
-                       </div>
-                       <div style="font-size: 11px; color: #666;">
+                       })()}</div>
+                       <div class="installment-date">
                          ${(() => {
                            const date = coupon.secondInstallmentDate || 
                                       coupon.secondInstallment?.date;
                            return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
                          })()}
                        </div>
-                       <div style="font-size: 10px; margin-top: 2px;">
-                         <span style="background: ${(() => {
-                           // Check multiple sources for payment status
+                       <div class="installment-status ${(() => {
                            const isPaid = coupon.secondInstallmentPaid || 
                                         coupon.secondInstallment?.paid || 
                                         coupon.secondInstallmentPaidStatus ||
@@ -9496,10 +10281,9 @@ export default function AdminDashboard() {
                                         String(coupon.secondInstallmentAmount || '').includes('✓') ||
                                         coupon.secondInstallment?.paidAmount > 0 ||
                                         coupon.secondInstallment?.status === 'Paid';
-                           return isPaid ? '#10b981' : '#ef4444';
-                         })()}; color: white; padding: 2px 6px; border-radius: 3px;">
+                         return isPaid ? 'status-paid' : 'status-unpaid';
+                       })()}">
                            ${(() => {
-                             // Check multiple sources for payment status
                              const isPaid = coupon.secondInstallmentPaid || 
                                           coupon.secondInstallment?.paid || 
                                           coupon.secondInstallmentPaidStatus ||
@@ -9509,31 +10293,26 @@ export default function AdminDashboard() {
                                           String(coupon.secondInstallmentAmount || '').includes('✓') ||
                                           coupon.secondInstallment?.paidAmount > 0 ||
                                           coupon.secondInstallment?.status === 'Paid';
-                             return isPaid ? '✓ Paid' : '❌ Unpaid';
+                           return isPaid ? '✓ PAID' : '○ PENDING';
                            })()}
-                         </span>
                        </div>
                      </div>
-                     <div>
-                       <div class="detail-item">
-                         <span class="detail-label">3rd Installment:</span>
-                         <span class="detail-value">LKR ${(() => {
+                     <div class="installment-item">
+                       <div class="installment-amount">3rd Installment</div>
+                       <div class="installment-amount">Rs.${(() => {
                            const amount = coupon.thirdInstallmentAmount || 
                                         coupon.thirdInstallment?.amount || 
                                         (coupon.balance / 3);
                            return amount ? amount.toLocaleString() : 'N/A';
-                         })()}</span>
-                       </div>
-                       <div style="font-size: 11px; color: #666;">
+                       })()}</div>
+                       <div class="installment-date">
                          ${(() => {
                            const date = coupon.thirdInstallmentDate || 
                                       coupon.thirdInstallment?.date;
                            return date ? new Date(date).toLocaleDateString('en-GB') : 'N/A';
                          })()}
                        </div>
-                       <div style="font-size: 10px; margin-top: 2px;">
-                         <span style="background: ${(() => {
-                           // Check multiple sources for payment status
+                       <div class="installment-status ${(() => {
                            const isPaid = coupon.thirdInstallmentPaid || 
                                         coupon.thirdInstallment?.paid || 
                                         coupon.thirdInstallmentPaidStatus ||
@@ -9543,10 +10322,9 @@ export default function AdminDashboard() {
                                         String(coupon.thirdInstallmentAmount || '').includes('✓') ||
                                         coupon.thirdInstallment?.paidAmount > 0 ||
                                         coupon.thirdInstallment?.status === 'Paid';
-                           return isPaid ? '#10b981' : '#ef4444';
-                         })()}; color: white; padding: 2px 6px; border-radius: 3px;">
+                         return isPaid ? 'status-paid' : 'status-unpaid';
+                       })()}">
                            ${(() => {
-                             // Check multiple sources for payment status
                              const isPaid = coupon.thirdInstallmentPaid || 
                                           coupon.thirdInstallment?.paid || 
                                           coupon.thirdInstallmentPaidStatus ||
@@ -9556,9 +10334,8 @@ export default function AdminDashboard() {
                                           String(coupon.thirdInstallmentAmount || '').includes('✓') ||
                                           coupon.thirdInstallment?.paidAmount > 0 ||
                                           coupon.thirdInstallment?.status === 'Paid';
-                             return isPaid ? '✓ Paid' : '❌ Unpaid';
+                           return isPaid ? '✓ PAID' : '○ PENDING';
                            })()}
-                         </span>
                        </div>
                      </div>
                    </div>
@@ -10952,27 +11729,27 @@ export default function AdminDashboard() {
               {/* Statistics Cards */}
               <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{bikeInventory.filter(bike => new Date(bike.date) >= new Date(new Date().setDate(new Date().getDate() - 30))).length}</div>
+                  <div className="text-2xl font-bold text-green-600">{bikeInventoryStats.newBikesLast30Days || 0}</div>
                   <div className="text-sm text-gray-600">New Bikes (Last 30 Days)</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{bikeInventory.filter(bike => new Date(bike.date) >= new Date(new Date().setDate(new Date().getDate() - 7))).length}</div>
+                  <div className="text-2xl font-bold text-blue-600">{bikeInventoryStats.newBikesLast7Days || 0}</div>
                   <div className="text-sm text-gray-600">New Bikes (Last 7 Days)</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{bikeInventory.filter(bike => new Date(bike.date).toDateString() === new Date().toDateString()).length}</div>
+                  <div className="text-2xl font-bold text-purple-600">{bikeInventoryStats.newBikesToday || 0}</div>
                   <div className="text-sm text-gray-600">New Bikes (Today)</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{bikeInventory.filter(bike => bike.status === 'in').length}</div>
+                  <div className="text-2xl font-bold text-green-600">{bikeInventoryStats.bikesIn || 0}</div>
                   <div className="text-sm text-gray-600">Bikes IN (Available)</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{bikeInventory.filter(bike => bike.status === 'out').length}</div>
+                  <div className="text-2xl font-bold text-red-600">{bikeInventoryStats.bikesOut || 0}</div>
                   <div className="text-sm text-gray-600">Bikes OUT (Sold/Allocated)</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{bikeInventory.length}</div>
+                  <div className="text-2xl font-bold text-orange-600">{bikeInventoryStats.totalBikes || 0}</div>
                   <div className="text-sm text-gray-600">Total Bikes in Inventory</div>
                 </Card>
               </div>
@@ -11012,6 +11789,31 @@ export default function AdminDashboard() {
                   </select>
                 </div>
                 <div className="flex gap-2">
+                  <Button 
+                    type="default" 
+                    onClick={async () => {
+                      try {
+                        await Promise.all([
+                          fetchBikeInventory(1, bikeInventorySearch),
+                          fetchBikeInventoryStats(),
+                          fetchDetailedStockInfo()
+                        ]);
+                        message.success('Bike inventory refreshed successfully');
+                      } catch (error) {
+                        message.error('Failed to refresh bike inventory');
+                      }
+                    }}
+                    loading={bikeInventoryLoading}
+                  >
+                    Refresh
+                  </Button>
+                  <Button 
+                    type="default" 
+                    onClick={handleSyncBikeStatus}
+                    style={{ backgroundColor: '#f0f9ff', borderColor: '#0ea5e9', color: '#0ea5e9' }}
+                  >
+                    Sync & Refresh
+                  </Button>
                   <Button type="primary" onClick={() => {
                     setEditingBikeInventory(null);
                     setBikeInventoryForm({
@@ -11031,55 +11833,6 @@ export default function AdminDashboard() {
                   }}>
                     Add Record
                   </Button>
-                  <Button 
-                    type="default" 
-                    onClick={async () => {
-                      try {
-                        console.log('Refreshing bike inventory - clearing filters...');
-                        // Clear filters to show all bikes including newly added ones
-                        setBikeInventorySearch('');
-                        setBikeInventoryDateFilter('');
-                        setBikeInventoryStatusFilter('');
-                        
-                        // Reset to first page
-                        setBikeInventoryPagination(prev => ({ ...prev, current: 1 }));
-                        
-                        console.log('Fetching fresh bike inventory data...');
-                        // Fetch fresh data
-                        await fetchBikeInventory(1, '');
-                        console.log('Fetching bike inventory stats...');
-                        await fetchBikeInventoryStats();
-                        console.log('Fetching detailed stock info...');
-                        await fetchDetailedStockInfo();
-                        console.log('Bike inventory refresh completed successfully');
-                        message.success('Bike inventory refreshed successfully. All filters cleared to show latest data.');
-                      } catch (error) {
-                        console.error('Error refreshing bike inventory:', error);
-                        message.error('Failed to refresh bike inventory');
-                      }
-                    }}
-                    icon={<ReloadOutlined />}
-                  >
-                    Refresh All
-                  </Button>
-                  <Button 
-                    type="default" 
-                    onClick={async () => {
-                      try {
-                        // Keep current filters but refresh data
-                        await fetchBikeInventory(bikeInventoryPagination.current, bikeInventorySearch);
-                        await fetchBikeInventoryStats();
-                        await fetchDetailedStockInfo();
-                        message.success('Bike inventory refreshed with current filters.');
-                      } catch (error) {
-                        console.error('Error refreshing bike inventory:', error);
-                        message.error('Failed to refresh bike inventory');
-                      }
-                    }}
-                    icon={<ReloadOutlined />}
-                  >
-                    Refresh
-                  </Button>
                   <Button type="default" onClick={exportBikeInventoryToPDF}>
                     Export PDF
                   </Button>
@@ -11088,6 +11841,7 @@ export default function AdminDashboard() {
 
               <div className="overflow-x-auto">
                 <Table
+                  key={bikeInventorySyncKey}
                   dataSource={filteredBikeInventory}
                   loading={bikeInventoryLoading}
                   columns={bikeInventoryColumns}
@@ -11254,7 +12008,7 @@ export default function AdminDashboard() {
                     }}>
                       Cancel
                     </Button>
-                    <Button type="primary" htmlType="submit">
+                    <Button type="primary" htmlType="submit" loading={bikeInventorySubmitting}>
                       {editingBikeInventory ? 'Update' : 'Add'} Bike
                     </Button>
                   </div>
@@ -11949,6 +12703,9 @@ export default function AdminDashboard() {
                         <div className="flex gap-2 justify-center">
                           <Button size="small" type="primary" onClick={() => handleViewSalesTransaction(record)}>
                             View
+                          </Button>
+                          <Button size="small" type="default" onClick={() => exportIndividualSalesTransactionToPDF(record)}>
+                            Export PDF
                           </Button>
                         </div>
                       )
