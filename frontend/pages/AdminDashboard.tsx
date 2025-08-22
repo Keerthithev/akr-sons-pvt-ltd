@@ -14435,15 +14435,53 @@ export default function AdminDashboard() {
                       key: 'arrears',
                       align: 'center' as const,
                       render: (_, record: any) => {
-                        // Calculate arrears: Down Payment - Amount Collected
+                        // Calculate arrears based on payment method
                         const downPayment = record.downPayment || 0;
                         const amountCollected = record.depositAmount || 0;
-                        const arrears = downPayment - amountCollected;
+                        const totalAmount = record.totalAmount || 0;
+                        const regFee = record.regFee || 0;
+                        const docCharge = record.docCharge || 0;
+                        const discountAmount = record.discountAmount || 0;
+                        const insuranceAmount = 16500; // Default insurance amount since it's not stored separately
+                        const paymentMethod = record.paymentMethod || 'Full Payment';
+                        
+                        // Debug: Log the actual values being used
+                        console.log(`Arrears calculation for ${record.couponId}:`, {
+                          paymentMethod,
+                          downPayment,
+                          regFee,
+                          docCharge,
+                          insuranceAmount,
+                          discountAmount,
+                          totalAmount,
+                          amountCollected
+                        });
+                        
+                        let arrears = 0;
+                        let requiredAmount = 0;
+                        
+                                                if (paymentMethod === 'Full Payment') {
+                          // For Full Payment: bike amount + reg fee + insurance fee + doc charge (no discount subtraction)
+                          const bikeAmount = totalAmount - regFee - docCharge; // Extract bike amount from total
+                          requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
+                          arrears = requiredAmount - amountCollected;
+                          console.log(`Full Payment calculation: ${bikeAmount} + ${regFee} + ${insuranceAmount} + ${docCharge} = ${requiredAmount}`);
+                        } else if (paymentMethod === 'Leasing via AKR') {
+                          // For Lease via AKR: downpayment + reg fee + doc charge + insurance (no discount subtraction)
+                          requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
+                          arrears = requiredAmount - amountCollected;
+                          console.log(`Leasing via AKR calculation: ${downPayment} + ${regFee} + ${docCharge} + ${insuranceAmount} = ${requiredAmount}`);
+                        } else {
+                          // For Lease via Other: downpayment + reg fee only (no insurance, no doc charge)
+                          requiredAmount = downPayment + regFee;
+                          arrears = requiredAmount - amountCollected;
+                          console.log(`Lease via Other calculation: ${downPayment} + ${regFee} = ${requiredAmount}`);
+                        }
                         
                         if (arrears <= 0) {
                           return (
                             <span style={{ color: '#8c8c8c', fontWeight: 'bold' }}>
-                              Down Payment Collected
+                              Payment Collected
                             </span>
                           );
                         }
@@ -14498,10 +14536,32 @@ export default function AdminDashboard() {
                             Edit
                           </Button>
                           {record.paymentType === 'Cash' && (() => {
-                            // Calculate arrears
+                            // Calculate arrears based on payment method
                             const downPayment = record.downPayment || 0;
                             const amountCollected = record.depositAmount || 0;
-                            const arrears = downPayment - amountCollected;
+                            const totalAmount = record.totalAmount || 0;
+                            const regFee = record.regFee || 0;
+                            const docCharge = record.docCharge || 0;
+                            const discountAmount = record.discountAmount || 0;
+                            const insuranceAmount = 16500; // Default insurance amount since it's not stored separately
+                            const paymentMethod = record.paymentMethod || 'Full Payment';
+                            
+                            let arrears = 0;
+                            
+                            if (paymentMethod === 'Full Payment') {
+                              // For Full Payment: bike amount + reg fee + insurance fee + doc charge (no discount subtraction)
+                              const bikeAmount = totalAmount - regFee - docCharge; // Extract bike amount from total
+                              const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
+                              arrears = requiredAmount - amountCollected;
+                            } else if (paymentMethod === 'Leasing via AKR') {
+                              // For Lease via AKR: downpayment + reg fee + doc charge + insurance (no discount subtraction)
+                              const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
+                              arrears = requiredAmount - amountCollected;
+                            } else {
+                              // For Lease via Other: downpayment + reg fee only (no insurance, no doc charge)
+                              const requiredAmount = downPayment + regFee;
+                              arrears = requiredAmount - amountCollected;
+                            }
                             
                             if (arrears <= 0) {
                               // Fully collected - show grey "Collected" button
@@ -14535,9 +14595,9 @@ export default function AdminDashboard() {
                                   onClick={() => handleDepositClick(record)}
                                   loading={depositLoading === record.couponId}
                                   disabled={depositLoading === record.couponId}
-                                  title={`Collect down payment: LKR ${arrears.toLocaleString()}`}
+                                  title={`Collect payment: LKR ${arrears.toLocaleString()}`}
                                 >
-                                  {depositLoading === record.couponId ? 'Processing...' : 'Collect Down Payment'}
+                                                                      {depositLoading === record.couponId ? 'Processing...' : 'Collect Payment'}
                                 </Button>
                               );
                             }

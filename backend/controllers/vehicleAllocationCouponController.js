@@ -683,7 +683,31 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
     for (const coupon of couponsWithDepositInfo) {
       const downPayment = coupon.downPayment || 0;
       const depositAmount = coupon.depositAmount || 0;
-      const arrears = Math.max(0, downPayment - depositAmount);
+      const totalAmount = coupon.totalAmount || 0;
+      const regFee = coupon.regFee || 0;
+      const docCharge = coupon.docCharge || 0;
+      const discountAmount = coupon.discountAmount || 0;
+      const paymentMethod = coupon.paymentMethod || 'Full Payment';
+      
+      let arrears = 0;
+      
+      // For now, let's use a default insurance amount since it's not stored separately
+      const insuranceAmount = 16500; // Default insurance amount
+      
+      if (paymentMethod === 'Full Payment') {
+        // For Full Payment: bike amount + reg fee + insurance fee + doc charge (no discount subtraction)
+        const bikeAmount = totalAmount - regFee - docCharge; // Extract bike amount from total
+        const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+      } else if (paymentMethod === 'Leasing via AKR') {
+        // For Lease via AKR: downpayment + reg fee + doc charge + insurance (no discount subtraction)
+        const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+      } else {
+        // For Lease via Other: downpayment + reg fee only (no insurance, no doc charge)
+        const requiredAmount = downPayment + regFee;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+      }
       
       if (arrears > 0) {
         totalArrears += arrears;
@@ -704,9 +728,34 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
     for (const coupon of couponsWithDepositInfo) {
       const downPayment = coupon.downPayment || 0;
       const depositAmount = coupon.depositAmount || 0;
-      const arrears = Math.max(0, downPayment - depositAmount);
+      const totalAmount = coupon.totalAmount || 0;
+      const regFee = coupon.regFee || 0;
+      const docCharge = coupon.docCharge || 0;
+      const discountAmount = coupon.discountAmount || 0;
+      const paymentMethod = coupon.paymentMethod || 'Full Payment';
       
-      console.log(`${coupon.couponId}: Down Payment=${downPayment}, Collected=${depositAmount}, Arrears=${arrears}`);
+      let arrears = 0;
+      let calculationDetails = '';
+      
+      // For now, let's use a default insurance amount since it's not stored separately
+      const insuranceAmount = 16500; // Default insurance amount
+      
+      if (paymentMethod === 'Full Payment') {
+        const bikeAmount = totalAmount - regFee - docCharge;
+        const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+        calculationDetails = `Required (${requiredAmount} = Bike ${bikeAmount} + Reg ${regFee} + Insurance ${insuranceAmount} + Doc ${docCharge}) - Collected (${depositAmount})`;
+      } else if (paymentMethod === 'Leasing via AKR') {
+        const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+        calculationDetails = `Required (${requiredAmount} = Down ${downPayment} + Reg ${regFee} + Doc ${docCharge} + Insurance ${insuranceAmount}) - Collected (${depositAmount})`;
+      } else {
+        const requiredAmount = downPayment + regFee;
+        arrears = Math.max(0, requiredAmount - depositAmount);
+        calculationDetails = `Required (${requiredAmount} = Down ${downPayment} + Reg ${regFee}) - Collected (${depositAmount})`;
+      }
+      
+      console.log(`${coupon.couponId} [${paymentMethod}]: ${calculationDetails} = Arrears ${arrears}`);
       
       if (arrears > 0) {
         console.log(`  *** HAS ARREARS: ${coupon.couponId} ***`);
