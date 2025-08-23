@@ -742,7 +742,8 @@ export default function AdminDashboard() {
     balance: '',
     advancePayment: '', // New field for advance payment
     downPayment: '',
-    regFee: '',
+    regFeeApplied: true, // Default to true for registration fee
+    regFee: '10160', // Default registration fee amount
     docCharge: '',
     insuranceCo: '',
     firstInstallmentAmount: '',
@@ -3601,6 +3602,15 @@ export default function AdminDashboard() {
           // Don't auto-fill discount amount when checkbox is checked
         }
         
+        // Handle registration fee checkbox
+        if (name === 'regFeeApplied') {
+          if (checked) {
+            updated.regFee = '10160'; // Set default registration fee amount
+          } else {
+            updated.regFee = '0'; // Clear registration fee when unchecked
+          }
+        }
+        
         return updated;
       });
     } else {
@@ -3877,14 +3887,16 @@ export default function AdminDashboard() {
           const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount - discountAmount;
           updated.totalAmount = calculatedTotalAmount.toString();
           
-          // Down payment = advance payment + reg fee only (automatically calculated)
-          const calculatedDownPayment = advancePayment + regFee;
+          // Down payment = advance payment - (doc charge + insurance) (reg fee already included)
+          const calculatedDownPayment = advancePayment - (docCharge + insuranceCo);
           updated.downPayment = calculatedDownPayment.toString();
           
           // Debug logging
           console.log('AKR Leasing Number Change Calculation:', {
             advancePayment,
             regFee,
+            insuranceCo,
+            docCharge,
             calculatedDownPayment,
             paymentMethod: updated.paymentMethod
           });
@@ -3911,8 +3923,8 @@ export default function AdminDashboard() {
           const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
           updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
           
-          // Down payment = advance payment + reg fee only (automatically calculated)
-          const calculatedDownPayment = advancePayment + regFee;
+          // Down payment = advance payment - (doc charge + insurance) (reg fee already included)
+          const calculatedDownPayment = advancePayment - (docCharge + insuranceCo);
           updated.downPayment = calculatedDownPayment.toString();
           
           // Balance = total amount - down payment
@@ -4534,17 +4546,16 @@ export default function AdminDashboard() {
     let requiredAmount = 0;
     
     if (paymentMethod === 'Full Payment') {
-      // For Full Payment: bike amount + reg fee - discount
-      const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-      requiredAmount = bikeAmount + regFee - discountAmount;
+      // For Full Payment: use total amount as arrears (since advance payment is 0)
+      requiredAmount = totalAmount;
       arrears = requiredAmount - amountCollected;
     } else if (paymentMethod === 'Leasing via AKR') {
-      // For Lease via AKR: advance payment + reg fee
-      requiredAmount = advancePayment + regFee;
+      // For Lease via AKR: advance payment amount (arrears)
+      requiredAmount = advancePayment;
       arrears = requiredAmount - amountCollected;
     } else {
-      // For Lease via Other: advance amount + reg fee
-      requiredAmount = advancePayment + regFee;
+      // For Lease via Other: advance payment amount (arrears)
+      requiredAmount = advancePayment;
       arrears = requiredAmount - amountCollected;
     }
     
@@ -4768,12 +4779,11 @@ export default function AdminDashboard() {
       
       let requiredAmount = 0;
       if (paymentMethod === 'Full Payment') {
-        const bikeAmount = totalAmount - regFee;
-        requiredAmount = bikeAmount + regFee - discountAmount;
+        requiredAmount = totalAmount;
       } else if (paymentMethod === 'Leasing via AKR') {
-        requiredAmount = advancePayment + regFee;
+        requiredAmount = advancePayment;
       } else {
-        requiredAmount = advancePayment + regFee;
+        requiredAmount = advancePayment;
       }
       
       const remainingArrears = Math.max(0, requiredAmount - previouslyCollected);
@@ -13512,35 +13522,7 @@ export default function AdminDashboard() {
                 </Card>
               </div>
 
-              {/* Sticky Bar for Released and Unreleased */}
-              <div className="bg-white rounded-xl shadow p-4 mb-6">
-                <div className="flex flex-wrap gap-4 items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setAkrEasyCreditFilter('released')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        akrEasyCreditFilter === 'released' 
-                          ? 'bg-green-100 text-green-700 border-2 border-green-500' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-600'
-                      }`}
-                    >
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="font-medium">Released ({akrEasyCreditStats.completedLeases})</span>
-                    </button>
-                    <button 
-                      onClick={() => setAkrEasyCreditFilter('unreleased')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        akrEasyCreditFilter === 'unreleased' 
-                          ? 'bg-orange-100 text-orange-700 border-2 border-orange-500' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-orange-50 hover:text-orange-600'
-                      }`}
-                    >
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <span className="font-medium">Unreleased ({akrEasyCreditStats.pendingLeases})</span>
-                    </button>
-                  </div>
-                </div>
-              </div>
+
 
               {/* Search and Actions */}
               <div className="bg-white rounded-xl shadow p-6 mb-6">
@@ -13571,21 +13553,7 @@ export default function AdminDashboard() {
               {/* Leases Table */}
               <div className="bg-white rounded-xl shadow overflow-hidden">
                 <Table
-                  dataSource={akrEasyCreditData.filter((record: any) => {
-                    if (akrEasyCreditFilter === 'released') {
-                      // Show released transactions
-                      if (record.paymentMethod === 'Full Payment') {
-                        return record.chequeReleased; // Released if cheque is released
-                      }
-                      return record.status === 'Completed'; // For leasing, use original status
-                    } else {
-                      // Show unreleased transactions (default)
-                      if (record.paymentMethod === 'Full Payment') {
-                        return !record.chequeReleased; // Unreleased if cheque is not released
-                      }
-                      return record.status === 'Pending'; // For leasing, use original status
-                    }
-                  })}
+                  dataSource={akrEasyCreditData}
                   loading={akrEasyCreditLoading}
                   columns={[
                     {
@@ -13627,6 +13595,14 @@ export default function AdminDashboard() {
                           const regFee = record.regFee || 0;
                           const advancePayment = Math.max(0, downPayment - regFee);
                           return advancePayment > 0 ? `LKR ${advancePayment.toLocaleString()}` : '-';
+                        } else if (record.paymentMethod === 'Leasing via AKR' || record.paymentMethod === 'Leasing via Other Company') {
+                          // For leasing: Advance Payment = Down Payment + (Doc Charge + Insurance)
+                          // Since Down Payment = Advance Payment - (Doc Charge + Insurance)
+                          const downPayment = parseFloat(record.downPayment) || 0;
+                          const docCharge = parseFloat(record.docCharge) || 0;
+                          const insurance = parseFloat(record.insuranceCo) || 0;
+                          const advancePayment = downPayment + docCharge + insurance;
+                          return advancePayment > 0 ? `LKR ${advancePayment.toLocaleString()}` : '-';
                         }
                         return amount ? `LKR ${amount.toLocaleString()}` : '-';
                       }
@@ -13637,19 +13613,19 @@ export default function AdminDashboard() {
                       key: 'downPayment',
                       align: 'center' as const,
                       render: (amount: number, record: any) => {
-                        if (record.paymentMethod === 'Full Payment' && amount) {
-                          const regFee = record.regFee || 0;
-                          const advancePayment = Math.max(0, amount - regFee);
-                          return (
-                            <div className="text-center">
-                              <div className="font-medium">LKR {amount.toLocaleString()}</div>
+                        // Show down payment amount with registration fee breakdown (current Arrears display)
+                        const regFee = record.regFee || 0;
+                        const advanceAmount = amount - regFee;
+                        return (
+                          <div className="text-center">
+                            <div className="font-medium">LKR {amount.toLocaleString()}</div>
+                            {regFee > 0 && (
                               <div className="text-xs text-gray-500">
-                                (Reg Fee: LKR {regFee.toLocaleString()})
+                                ({advanceAmount.toLocaleString()} + {regFee.toLocaleString()})
                               </div>
-                            </div>
-                          );
-                        }
-                        return amount ? `LKR ${amount.toLocaleString()}` : '-';
+                            )}
+                          </div>
+                        );
                       }
                     },
                     {
@@ -16050,36 +16026,47 @@ export default function AdminDashboard() {
                                                 const advancePayment = record.advancePayment || 0;
                         
                         if (paymentMethod === 'Full Payment') {
-                          // For Full Payment: bike amount + reg fee - discount
-                          const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-                          requiredAmount = bikeAmount + regFee - discountAmount;
-                          arrears = requiredAmount - amountCollected;
-                          console.log(`Full Payment calculation: ${bikeAmount} + ${regFee} - ${discountAmount} = ${requiredAmount}`);
+                          // For Full Payment: use total amount as arrears (since advance payment is 0)
+                          arrears = totalAmount - amountCollected;
                         } else if (paymentMethod === 'Leasing via AKR') {
-                          // For Lease via AKR: advance payment + reg fee
-                          requiredAmount = advancePayment + regFee;
-                          arrears = requiredAmount - amountCollected;
-                          console.log(`Leasing via AKR calculation: ${advancePayment} + ${regFee} = ${requiredAmount}`);
+                          // For Lease via AKR: advance payment amount (arrears)
+                          arrears = advancePayment - amountCollected;
                         } else {
-                          // For Lease via Other: advance amount + reg fee
-                          requiredAmount = advancePayment + regFee;
-                          arrears = requiredAmount - amountCollected;
-                          console.log(`Lease via Other calculation: ${advancePayment} + ${regFee} = ${requiredAmount}`);
+                          // For Lease via Other: advance payment amount (arrears)
+                          arrears = advancePayment - amountCollected;
                         }
+                        
+                        // Debug logging for Arrears column
+                        console.log(`Arrears column calculation for ${record.couponId}:`, {
+                          paymentMethod,
+                          advancePayment,
+                          amountCollected,
+                          arrears,
+                          isCollected: arrears <= 0
+                        });
                         
                         if (arrears <= 0) {
                           return (
-                            <span style={{ color: '#8c8c8c', fontWeight: 'bold' }}>
-                              Payment Collected
+                            <span style={{ color: '#52c41a', fontWeight: 'bold' }}>
+                              Collected
                             </span>
                           );
                         }
                         
-                        return (
-                          <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
-                            LKR {arrears.toLocaleString()}
-                          </span>
-                        );
+                        // Show amount based on payment method
+                        if (paymentMethod === 'Full Payment') {
+                          return (
+                            <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                              LKR {totalAmount.toLocaleString()}
+                            </span>
+                          );
+                        } else {
+                          return (
+                            <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                              LKR {advancePayment.toLocaleString()}
+                            </span>
+                          );
+                        }
                       }
                     },
                     {
@@ -16139,19 +16126,24 @@ export default function AdminDashboard() {
                             let arrears = 0;
                             
                             if (paymentMethod === 'Full Payment') {
-                              // For Full Payment: bike amount + reg fee - discount
-                              const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-                              const requiredAmount = bikeAmount + regFee - discountAmount;
-                              arrears = requiredAmount - amountCollected;
+                              // For Full Payment: use total amount as arrears (since advance payment is 0)
+                              arrears = totalAmount - amountCollected;
                             } else if (paymentMethod === 'Leasing via AKR') {
-                              // For Lease via AKR: advance payment + reg fee
-                              const requiredAmount = advancePayment + regFee;
-                              arrears = requiredAmount - amountCollected;
+                              // For Lease via AKR: advance payment amount (arrears)
+                              arrears = advancePayment - amountCollected;
                             } else {
-                              // For Lease via Other: advance amount + reg fee
-                              const requiredAmount = advancePayment + regFee;
-                              arrears = requiredAmount - amountCollected;
+                              // For Lease via Other: advance payment amount (arrears)
+                              arrears = advancePayment - amountCollected;
                             }
+                            
+                            // Debug logging
+                            console.log(`Arrears calculation for ${record.couponId}:`, {
+                              paymentMethod,
+                              advancePayment,
+                              amountCollected,
+                              arrears,
+                              isCollected: arrears <= 0
+                            });
                             
                             if (arrears <= 0) {
                               // Fully collected - show grey "Collected" button
@@ -16509,8 +16501,8 @@ export default function AdminDashboard() {
                       <p><strong>Payment Calculation Rules:</strong></p>
                       <ul className="list-disc list-inside space-y-1">
                         <li><strong>Full Payment:</strong> Total = Bike Price + Registration Fee - Discount (Down Payment & Balance set in AKR Easy Credit tab)</li>
-                        <li><strong>Lease via AKR:</strong> Down Payment = Advance Payment + Registration Fee + Insurance + Doc Charge</li>
-                        <li><strong>Lease via Other Company:</strong> Down Payment = Advance Payment + Registration Fee + Insurance + Doc Charge</li>
+                        <li><strong>Lease via AKR:</strong> Down Payment = Advance Payment - (Document Charge + Insurance)</li>
+                        <li><strong>Lease via Other Company:</strong> Down Payment = Advance Payment - (Document Charge + Insurance)</li>
                       </ul>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -16549,7 +16541,16 @@ export default function AdminDashboard() {
                       </div>
                     )}
                       <div>
-                        <label className="block text-sm font-medium mb-1">Reg. Fee</label>
+                        <div className="flex items-center mb-2">
+                          <input
+                            type="checkbox"
+                            name="regFeeApplied"
+                            checked={vehicleAllocationCouponForm.regFeeApplied}
+                            onChange={handleVehicleAllocationCouponFormChange}
+                            className="mr-2"
+                          />
+                          <label className="text-sm font-medium">Apply Registration Fee (LKR 10,160)</label>
+                        </div>
                         <input
                           type="number"
                           name="regFee"
@@ -16558,6 +16559,8 @@ export default function AdminDashboard() {
                           className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                           step="0.01"
                           min="0"
+                          placeholder="Enter registration fee amount"
+                          disabled={!vehicleAllocationCouponForm.regFeeApplied}
                         />
                       </div>
                       <div>
@@ -17009,19 +17012,14 @@ export default function AdminDashboard() {
                     <input
                       type="number"
                       value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
                         const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
+                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
                         const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
                         
                         if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          return bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          return advancePayment + regFee;
+                          return totalAmount;
                         } else {
-                          return advancePayment + regFee;
+                          return advancePayment;
                         }
                       })()}
                       className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
@@ -17047,10 +17045,8 @@ export default function AdminDashboard() {
                     <input
                       type="number"
                       value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
                         const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
+                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
                         const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
                         const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
                         const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
@@ -17058,12 +17054,9 @@ export default function AdminDashboard() {
                         
                         let requiredAmount = 0;
                         if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          requiredAmount = bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          requiredAmount = advancePayment + regFee;
+                          requiredAmount = totalAmount;
                         } else {
-                          requiredAmount = advancePayment + regFee;
+                          requiredAmount = advancePayment;
                         }
                         
                         return Math.max(0, requiredAmount - totalCollected);
@@ -17077,10 +17070,8 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
                         const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
+                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
                         const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
                         const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
                         const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
@@ -17088,12 +17079,9 @@ export default function AdminDashboard() {
                         
                         let requiredAmount = 0;
                         if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          requiredAmount = bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          requiredAmount = advancePayment + regFee;
+                          requiredAmount = totalAmount;
                         } else {
-                          requiredAmount = advancePayment + regFee;
+                          requiredAmount = advancePayment;
                         }
                         
                         const remaining = requiredAmount - totalCollected;
@@ -20507,16 +20495,7 @@ export default function AdminDashboard() {
                       placeholder="Enter down payment amount for Cheque 1"
                     />
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Advance Payment (Auto-calculated)</label>
-                    <input
-                      type="number"
-                      name="advancePayment"
-                      value={akrEasyCreditForm.advancePayment}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
+
                   <div>
                     <label className="block text-sm font-medium mb-1">Balance (Cheque 2 - Auto-calculated)</label>
                     <input
@@ -20646,36 +20625,11 @@ export default function AdminDashboard() {
                   </div>
                 </>
               )}
-              <div>
-                <label className="block text-sm font-medium mb-1">Registration Fee</label>
-                <input
-                  type="number"
-                  name="regFee"
-                  value={akrEasyCreditForm.regFee}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                  readOnly
-                />
-              </div>
+
             </div>
           </div>
 
-          {/* Status */}
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4 text-green-800">Status</h3>
-            <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                name="status"
-                value={akrEasyCreditForm.status}
-                onChange={(e) => setAkrEasyCreditForm(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
+
         </div>
       </Modal>
     </div>
