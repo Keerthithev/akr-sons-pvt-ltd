@@ -3596,10 +3596,11 @@ export default function AdminDashboard() {
         
         // Handle discount checkbox
         if (name === 'discountApplied') {
-          if (!checked) {
+          if (checked) {
+            updated.discountAmount = '15000'; // Set default discount amount
+          } else {
             updated.discountAmount = '0';
           }
-          // Don't auto-fill discount amount when checkbox is checked
         }
         
         // Handle registration fee checkbox
@@ -3663,8 +3664,8 @@ export default function AdminDashboard() {
           
           if (updated.paymentMethod === 'Full Payment') {
             // For Full Payment: 
-            // Total = bike price + reg fee + doc charge + insurance - discount
-            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+            // Total = bike price only
+            const calculatedTotalAmount = basePrice;
             updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
             // Down payment = advance payment + reg fee (automatically calculated)
@@ -3679,8 +3680,8 @@ export default function AdminDashboard() {
               paymentMethod: updated.paymentMethod
             });
             
-            // Balance = total amount - down payment
-            const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+            // Balance = total amount - advance payment - discount
+            const balance = Math.max(0, calculatedTotalAmount - advancePayment - discountAmount);
             updated.balance = balance.toString();
             
             // Clear installment amounts (no installments for full payment)
@@ -3689,9 +3690,8 @@ export default function AdminDashboard() {
             updated.thirdInstallmentAmount = '0';
           } else if (updated.paymentMethod === 'Leasing via AKR') {
             // For Leasing via AKR: 
-            // Total = bike price + reg fee + doc charge + insurance + interest - discount
-            const interestAmount = parseFloat(updated.interestAmount) || 0;
-            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount - discountAmount;
+            // Total = bike price only
+            const calculatedTotalAmount = basePrice;
             updated.totalAmount = calculatedTotalAmount.toString();
             
             // Down payment = advance payment + reg fee only (automatically calculated)
@@ -3706,8 +3706,8 @@ export default function AdminDashboard() {
               paymentMethod: updated.paymentMethod
             });
             
-            // Balance = total amount - down payment
-            const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+            // Balance = total amount - advance payment - discount
+            const balance = Math.max(0, calculatedTotalAmount - advancePayment - discountAmount);
             updated.balance = balance.toString();
             
             // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
@@ -3724,8 +3724,8 @@ export default function AdminDashboard() {
             }
           } else if (updated.paymentMethod === 'Leasing via Other Company') {
             // For Leasing via Other Company: 
-            // Total = bike price + reg fee + doc charge + insurance - discount
-            const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+            // Total = bike price only
+            const calculatedTotalAmount = basePrice;
             updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
             // Down payment = advance payment + reg fee only (automatically calculated)
@@ -3740,8 +3740,8 @@ export default function AdminDashboard() {
               paymentMethod: updated.paymentMethod
             });
             
-            // Balance = total amount - down payment
-            const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+            // Balance = total amount - advance payment - discount
+            const balance = Math.max(0, calculatedTotalAmount - advancePayment - discountAmount);
             updated.balance = balance.toString();
             
             // Clear installment amounts (no installments for other company)
@@ -3867,14 +3867,15 @@ export default function AdminDashboard() {
         
                   if (updated.paymentMethod === 'Full Payment') {
             // For Full Payment: 
-            // Total = bike price + reg fee - discount (no advance payment needed)
-            const calculatedTotalAmount = basePrice + regFee - discountAmount;
+            // Total = bike price only (no reg fee, no advance payment needed)
+            const calculatedTotalAmount = basePrice;
             updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
             // For full payment, down payment and balance will be set in AKR Easy Credit tab
             // Don't calculate here - set to 0 initially
             updated.downPayment = '0';
-            updated.balance = calculatedTotalAmount.toString();
+            // Balance = total amount - (down payment + discount) = total amount - (0 + discount) = total amount - discount
+            updated.balance = Math.max(0, calculatedTotalAmount - discountAmount).toString();
             
             // Clear installment amounts (no installments for full payment)
             updated.firstInstallmentAmount = '0';
@@ -3882,9 +3883,8 @@ export default function AdminDashboard() {
             updated.thirdInstallmentAmount = '0';
           } else if (updated.paymentMethod === 'Leasing via AKR') {
           // For Leasing via AKR: 
-          // Total = bike price + reg fee + doc charge + insurance + interest - discount
-          const interestAmount = parseFloat(updated.interestAmount) || 0;
-          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount - discountAmount;
+          // Total = bike price only (no reg fee)
+          const calculatedTotalAmount = basePrice;
           updated.totalAmount = calculatedTotalAmount.toString();
           
           // Down payment = advance payment - (doc charge + insurance) (reg fee already included)
@@ -3901,8 +3901,8 @@ export default function AdminDashboard() {
             paymentMethod: updated.paymentMethod
           });
           
-          // Balance = total amount - down payment
-          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+          // Balance = total amount - (down payment + discount)
+          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount);
           updated.balance = balance.toString();
           
           // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
@@ -3919,16 +3919,16 @@ export default function AdminDashboard() {
           }
         } else if (updated.paymentMethod === 'Leasing via Other Company') {
           // For Leasing via Other Company: 
-          // Total = bike price + reg fee + doc charge + insurance - discount
-          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+          // Total = bike price only (no reg fee)
+          const calculatedTotalAmount = basePrice;
           updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
           
           // Down payment = advance payment - (doc charge + insurance) (reg fee already included)
           const calculatedDownPayment = advancePayment - (docCharge + insuranceCo);
           updated.downPayment = calculatedDownPayment.toString();
           
-          // Balance = total amount - down payment
-          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+          // Balance = total amount - (down payment + discount)
+          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount);
           updated.balance = balance.toString();
           
           // Clear installment amounts (no installments for other company)
@@ -5005,10 +5005,6 @@ export default function AdminDashboard() {
               <div class="stat-item">
                 <div class="stat-value">${vehicleAllocationCouponsStats.totalArrears?.toLocaleString() || '0'}</div>
                 <div class="stat-label">Total Arrears</div>
-              </div>
-              <div class="stat-item">
-                <div class="stat-value">${vehicleAllocationCouponsStats.averageArrears?.toLocaleString() || '0'}</div>
-                <div class="stat-label">Average Arrears</div>
               </div>
             </div>
 
@@ -15897,7 +15893,7 @@ export default function AdminDashboard() {
           {akrTab === 'vehicleAllocationCoupons' && (
             <div className="col-span-full">
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{vehicleAllocationCouponsStats.couponsWithArrears || '0'}</div>
                   <div className="text-sm text-gray-600">Coupons with Arrears</div>
@@ -15905,10 +15901,6 @@ export default function AdminDashboard() {
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-red-600">{vehicleAllocationCouponsStats.totalArrears?.toLocaleString() || '0'}</div>
                   <div className="text-sm text-gray-600">Total Arrears</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{vehicleAllocationCouponsStats.averageArrears?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Average Arrears</div>
                 </Card>
               </div>
 

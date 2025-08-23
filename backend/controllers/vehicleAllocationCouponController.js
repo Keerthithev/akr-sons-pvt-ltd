@@ -695,18 +695,16 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
       const insuranceAmount = 16500; // Default insurance amount
       
       if (paymentMethod === 'Full Payment') {
-        // For Full Payment: bike amount + reg fee + insurance fee + doc charge (no discount subtraction)
-        const bikeAmount = totalAmount - regFee - docCharge; // Extract bike amount from total
-        const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
-        arrears = Math.max(0, requiredAmount - depositAmount);
+        // For Full Payment: total amount - amount collected
+        arrears = Math.max(0, totalAmount - depositAmount);
       } else if (paymentMethod === 'Leasing via AKR') {
-        // For Lease via AKR: downpayment + reg fee + doc charge + insurance (no discount subtraction)
-        const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
-        arrears = Math.max(0, requiredAmount - depositAmount);
+        // For Lease via AKR: advance payment - amount collected
+        const advancePayment = coupon.advancePayment || 0;
+        arrears = Math.max(0, advancePayment - depositAmount);
       } else {
-        // For Lease via Other: downpayment + reg fee only (no insurance, no doc charge)
-        const requiredAmount = downPayment + regFee;
-        arrears = Math.max(0, requiredAmount - depositAmount);
+        // For Lease via Other: advance payment - amount collected
+        const advancePayment = coupon.advancePayment || 0;
+        arrears = Math.max(0, advancePayment - depositAmount);
       }
       
       if (arrears > 0) {
@@ -717,8 +715,7 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
     
     const arrearsStats = {
       totalArrears: Math.round(totalArrears * 100) / 100, // Round to 2 decimal places
-      couponsWithArrears,
-      averageArrears: couponsWithArrears > 0 ? Math.round((totalArrears / couponsWithArrears) * 100) / 100 : 0
+      couponsWithArrears
     };
 
     // Debug: Show detailed calculation for each coupon using enriched data
@@ -741,18 +738,16 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
       const insuranceAmount = 16500; // Default insurance amount
       
       if (paymentMethod === 'Full Payment') {
-        const bikeAmount = totalAmount - regFee - docCharge;
-        const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
-        arrears = Math.max(0, requiredAmount - depositAmount);
-        calculationDetails = `Required (${requiredAmount} = Bike ${bikeAmount} + Reg ${regFee} + Insurance ${insuranceAmount} + Doc ${docCharge}) - Collected (${depositAmount})`;
+        arrears = Math.max(0, totalAmount - depositAmount);
+        calculationDetails = `Total Amount (${totalAmount}) - Collected (${depositAmount})`;
       } else if (paymentMethod === 'Leasing via AKR') {
-        const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
-        arrears = Math.max(0, requiredAmount - depositAmount);
-        calculationDetails = `Required (${requiredAmount} = Down ${downPayment} + Reg ${regFee} + Doc ${docCharge} + Insurance ${insuranceAmount}) - Collected (${depositAmount})`;
+        const advancePayment = coupon.advancePayment || 0;
+        arrears = Math.max(0, advancePayment - depositAmount);
+        calculationDetails = `Advance Payment (${advancePayment}) - Collected (${depositAmount})`;
       } else {
-        const requiredAmount = downPayment + regFee;
-        arrears = Math.max(0, requiredAmount - depositAmount);
-        calculationDetails = `Required (${requiredAmount} = Down ${downPayment} + Reg ${regFee}) - Collected (${depositAmount})`;
+        const advancePayment = coupon.advancePayment || 0;
+        arrears = Math.max(0, advancePayment - depositAmount);
+        calculationDetails = `Advance Payment (${advancePayment}) - Collected (${depositAmount})`;
       }
       
       console.log(`${coupon.couponId} [${paymentMethod}]: ${calculationDetails} = Arrears ${arrears}`);
@@ -780,7 +775,6 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
     console.log('=== FINAL ARREARS STATISTICS ===');
     console.log('Total Arrears:', arrearsStats.totalArrears);
     console.log('Coupons with Arrears:', arrearsStats.couponsWithArrears);
-    console.log('Average Arrears:', arrearsStats.averageArrears);
     console.log('=== END ARREARS STATISTICS ===');
 
     // Get total collected amount
@@ -854,7 +848,6 @@ exports.getVehicleAllocationCouponStats = async (req, res, next) => {
         totalDownPayment: totalDownPayment[0]?.total || 0,
         totalArrears: arrearsStats.totalArrears || 0,
         couponsWithArrears: arrearsStats.couponsWithArrears || 0,
-        averageArrears: arrearsStats.averageArrears || 0,
         totalCollected: totalCollected[0]?.totalCollected || 0,
         cashPayments,
         bankDraftPayments,
