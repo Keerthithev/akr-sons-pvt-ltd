@@ -90,6 +90,10 @@ const vehicleAllocationCouponSchema = new mongoose.Schema({
   },
   
   // Payment Details
+  advancePayment: { 
+    type: Number, 
+    default: 0 
+  },
   downPayment: { 
     type: Number, 
     required: true 

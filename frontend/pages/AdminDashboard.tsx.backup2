@@ -535,7 +535,8 @@ export default function AdminDashboard() {
   const [preBookings, setPreBookings] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
-  const [akrTab, setAkrTab] = useState<'vehicles' | 'prebookings' | 'customers' | 'overview' | 'settings' | 'accountData' | 'bankDeposits' | 'bikeInventory' | 'salesTransactions' | 'installmentPlans' | 'suppliers' | 'serviceWarranty' | 'additionalInfo' | 'vehicleAllocationCoupons' | 'nextDueInstallments' | 'recentActivity' | 'commissionerLetter' | 'chequeReleaseReminders' | 'akrEasyCredit'>('overview');
+  const [akrTab, setAkrTab] = useState<'vehicles' | 'prebookings' | 'customers' | 'overview' | 'settings' | 'accountData' | 'bankDeposits' | 'bikeInventory' | 'salesTransactions' | 'installmentPlans' | 'suppliers' | 'serviceWarranty' | 'additionalInfo' | 'vehicleAllocationCoupons' | 'nextDueInstallments' | 'recentActivity' | 'commissionerLetter' | 'chequeReleaseReminders' | 'akrEasyCredit' | 'other'>('overview');
+  const [creditTab, setCreditTab] = useState<'completed' | 'arrears'>('completed');
   const [installmentPlans, setInstallmentPlans] = useState([]);
   const [installmentStats, setInstallmentStats] = useState({});
   const [installmentSearch, setInstallmentSearch] = useState('');
@@ -674,8 +675,6 @@ export default function AdminDashboard() {
   const [bankDepositPdfLoading, setBankDepositPdfLoading] = useState(false);
   const [viewVehicleAllocationCouponModalOpen, setViewVehicleAllocationCouponModalOpen] = useState(false);
   const [viewingVehicleAllocationCoupon, setViewingVehicleAllocationCoupon] = useState<any>(null);
-  const [viewAkrEasyCreditModalOpen, setViewAkrEasyCreditModalOpen] = useState(false);
-  const [viewingAkrEasyCredit, setViewingAkrEasyCredit] = useState<any>(null);
   const [vehicleAllocationCouponDropdownData, setVehicleAllocationCouponDropdownData] = useState<any>({
     nextWorkshopNo: '1',
     vehicles: [],
@@ -942,49 +941,6 @@ export default function AdminDashboard() {
     slipImageUrl: ''
   });
   const [editingBankDeposit, setEditingBankDeposit] = useState<any>(null);
-
-  // AKR Easy Credit / Other State
-  const [akrEasyCreditData, setAkrEasyCreditData] = useState<any[]>([]);
-  const [akrEasyCreditLoading, setAkrEasyCreditLoading] = useState(false);
-  const [akrEasyCreditError, setAkrEasyCreditError] = useState("");
-  const [akrEasyCreditSearch, setAkrEasyCreditSearch] = useState('');
-  const [akrEasyCreditPagination, setAkrEasyCreditPagination] = useState({ current: 1, pageSize: 10, total: 0 });
-  const [akrEasyCreditFilter, setAkrEasyCreditFilter] = useState<'unreleased' | 'released'>('unreleased');
-  const [akrEasyCreditStats, setAkrEasyCreditStats] = useState<any>({
-    totalLeases: 0,
-    completedLeases: 0,
-    pendingLeases: 0,
-    totalAmount: 0,
-    totalBalance: 0,
-    totalDownPayment: 0,
-    arrearsAmount: 0
-  });
-  const [akrEasyCreditModalOpen, setAkrEasyCreditModalOpen] = useState(false);
-  const [editingAkrEasyCredit, setEditingAkrEasyCredit] = useState<any>(null);
-  const [akrEasyCreditForm, setAkrEasyCreditForm] = useState({
-    customerName: '',
-    vehicleType: '',
-    engineNo: '',
-    chassisNo: '',
-    paymentMethod: 'Full Payment',
-    advancePayment: '',
-    downPayment: '',
-    balance: '',
-    regFee: '',
-    docCharge: '',
-    insuranceCo: '',
-    totalAmount: '',
-    firstInstallmentAmount: '',
-    firstInstallmentDate: '',
-    secondInstallmentAmount: '',
-    secondInstallmentDate: '',
-    thirdInstallmentAmount: '',
-    thirdInstallmentDate: '',
-    status: 'Pending',
-    chequeReleased: false,
-    chequeReleaseDate: '',
-    notes: ''
-  });
 
   // Bike Inventory State
   const [bikeInventory, setBikeInventory] = useState<any[]>([]);
@@ -1549,9 +1505,9 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
       
-      // Filter coupons that are "Leasing via AKR" and need installment tracking
-      // Include both pending (balance > 0) and completed (balance = 0) AKR leasing transactions
+      // Filter coupons that have balance and are "Leasing via AKR" only
       const couponsWithBalance = response.vehicleAllocationCoupons.filter((coupon: any) => 
+        coupon.balance > 0 && 
         coupon.paymentMethod === 'Leasing via AKR' &&
         (status === '' || coupon.status === status) &&
         (month === '' || new Date(coupon.dateOfPurchase).getMonth() === parseInt(month))
@@ -1570,7 +1526,7 @@ export default function AdminDashboard() {
         totalAmount: coupon.totalAmount,
         downPayment: coupon.downPayment,
         balanceAmount: coupon.balance,
-        installmentAmount: coupon.balance > 0 ? coupon.balance / 3 : (coupon.totalAmount - coupon.downPayment) / 3, // Use original balance for completed transactions
+        installmentAmount: coupon.balance / 3, // Default to 3 installments
         numberOfInstallments: 3,
         startDate: coupon.dateOfPurchase,
         firstInstallmentDate: coupon.firstInstallment?.date,
@@ -1627,19 +1583,13 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
       
-      // Calculate stats from Vehicle Allocation Coupons for AKR leasing
-      const akrLeasingCoupons = response.vehicleAllocationCoupons.filter((coupon: any) => 
-        coupon.paymentMethod === 'Leasing via AKR'
-      );
+      // Calculate stats from Vehicle Allocation Coupons with balance
+      const couponsWithBalance = response.vehicleAllocationCoupons.filter((coupon: any) => coupon.balance > 0);
       const stats = {
-        totalInstallmentPlans: akrLeasingCoupons.length,
-        totalBalanceAmount: akrLeasingCoupons.reduce((sum: number, coupon: any) => sum + (coupon.balance || 0), 0),
-        totalDownPayment: akrLeasingCoupons.reduce((sum: number, coupon: any) => sum + (coupon.downPayment || 0), 0),
-        totalInstallmentAmount: akrLeasingCoupons.reduce((sum: number, coupon: any) => {
-          // For completed transactions (balance = 0), use the original balance amount for installment calculation
-          const installmentAmount = coupon.balance > 0 ? coupon.balance / 3 : (coupon.totalAmount - coupon.downPayment) / 3;
-          return sum + installmentAmount;
-        }, 0)
+        totalInstallmentPlans: couponsWithBalance.length,
+        totalBalanceAmount: couponsWithBalance.reduce((sum: number, coupon: any) => sum + (coupon.balance || 0), 0),
+        totalDownPayment: couponsWithBalance.reduce((sum: number, coupon: any) => sum + (coupon.downPayment || 0), 0),
+        totalInstallmentAmount: couponsWithBalance.reduce((sum: number, coupon: any) => sum + ((coupon.balance || 0) / 3), 0)
       };
       
       setInstallmentPlansStats(stats);
@@ -2940,10 +2890,6 @@ export default function AdminDashboard() {
       fetchVehicleAllocationCouponsStats();
       fetchVehicleAllocationCouponDropdownData();
     }
-    if (akrTab === 'akrEasyCredit') {
-      fetchAkrEasyCredit();
-      fetchAkrEasyCreditStats();
-    }
     if (akrTab === 'overview') {
       // Load data needed for overview dashboard
       fetchVehicleAllocationCoupons(1, '', '', '', 1000); // Load all records for overview
@@ -2952,26 +2898,17 @@ export default function AdminDashboard() {
       fetchBankDepositsStats(); // Load bank deposits stats for overview
       fetchCustomers(); // Load customers for overview
       fetchPreBookings(); // Load pre-bookings for overview
-      fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders and installments
-      fetchAkrEasyCreditStats(); // Load AKR Easy Credit stats
+      fetchChequeReleaseReminders(); // Load cheque release reminders
       fetchDetailedStockInfo(); // Load detailed stock information for overview
       autoSyncBikeStatus(); // Auto-sync bike status
     }
     if (akrTab === 'chequeReleaseReminders') {
-      fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders calculation
-      fetchAkrEasyCreditStats();
+      fetchChequeReleaseReminders(true); // Load cheque release reminders including released ones
     }
     if (akrTab === 'bikeInventory') {
       fetchDetailedStockInfo(); // Load detailed stock information
     }
   }, [akrTab]);
-
-  // Recalculate AKR Easy Credit stats when data changes
-  useEffect(() => {
-    if (akrEasyCreditData.length > 0) {
-      fetchAkrEasyCreditStats();
-    }
-  }, [akrEasyCreditData]);
 
   // Load overview data on component mount
   useEffect(() => {
@@ -2980,7 +2917,6 @@ export default function AdminDashboard() {
     fetchVehicleAllocationCouponsStats();
     fetchAccountDataStats(); // Load account data stats on initial load
     fetchBankDepositsStats(); // Load bank deposits stats on initial load
-    fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders
   }, []);
 
   // Auto-generate workshop number when modal opens
@@ -3118,116 +3054,6 @@ export default function AdminDashboard() {
       }
     } catch (err: any) {
       console.error("Auto-sync failed:", err.message);
-    }
-  };
-
-  // Fetch AKR Easy Credit data
-  const fetchAkrEasyCredit = async (page = 1, search = '', status = '', paymentMethod = '') => {
-    setAkrEasyCreditLoading(true);
-    try {
-      const token = localStorage.getItem('adminToken');
-      if (!token || !validateToken(token)) {
-        handleAuthError();
-        return;
-      }
-
-      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=${page}&limit=10`;
-      
-      if (search) url += `&search=${encodeURIComponent(search)}`;
-      if (status) url += `&status=${encodeURIComponent(status)}`;
-      if (paymentMethod) url += `&paymentMethod=${encodeURIComponent(paymentMethod)}`;
-
-      const res = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json'
-        }
-      });
-
-      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
-      
-      const data = await res.json();
-      
-      // Filter for AKR Easy Credit, Other Company leases, and Full Payment transactions
-      let filteredData = data.vehicleAllocationCoupons.filter((coupon: any) => 
-        coupon.paymentMethod === 'Leasing via AKR' || 
-        coupon.paymentMethod === 'Leasing via Other Company' ||
-        coupon.paymentMethod === 'Full Payment'
-      );
-      
-      // Apply status filter
-      if (status === 'Released') {
-        filteredData = filteredData.filter((coupon: any) => {
-          if (coupon.paymentMethod === 'Full Payment') {
-            return coupon.chequeReleased; // Released if cheque is released
-          }
-          return coupon.status === 'Completed'; // For leasing, use original status
-        });
-      } else if (status === 'Pending') {
-        filteredData = filteredData.filter((coupon: any) => {
-          if (coupon.paymentMethod === 'Full Payment') {
-            return !coupon.chequeReleased; // Pending if cheque is not released
-          }
-          return coupon.status === 'Pending'; // For leasing, use original status
-        });
-      }
-      
-      setAkrEasyCreditData(filteredData);
-      setAkrEasyCreditPagination({
-        current: data.page || 1,
-        pageSize: data.totalPages ? Math.ceil(data.total / data.totalPages) : 10,
-        total: filteredData.length
-      });
-    } catch (err: any) {
-      console.error("Failed to load AKR Easy Credit data:", err.message);
-      setAkrEasyCreditError(err.message);
-    } finally {
-      setAkrEasyCreditLoading(false);
-    }
-  };
-
-  // Fetch AKR Easy Credit stats
-  const fetchAkrEasyCreditStats = async () => {
-    try {
-      // Calculate stats directly from akrEasyCreditData
-      const akrLeases = akrEasyCreditData.filter((coupon: any) => 
-        coupon.paymentMethod === 'Leasing via AKR' || 
-        coupon.paymentMethod === 'Leasing via Other Company' ||
-        coupon.paymentMethod === 'Full Payment'
-      );
-      
-      const totalLeases = akrLeases.length;
-      
-      // Calculate completed and pending based on payment method
-      const completedLeases = akrLeases.filter((coupon: any) => {
-        if (coupon.paymentMethod === 'Full Payment') {
-          return coupon.chequeReleased; // Released if cheque is released
-        }
-        return coupon.status === 'Completed'; // For leasing, use original status
-      }).length;
-      
-      const pendingLeases = akrLeases.filter((coupon: any) => {
-        if (coupon.paymentMethod === 'Full Payment') {
-          return !coupon.chequeReleased; // Pending if cheque is not released
-        }
-        return coupon.status === 'Pending'; // For leasing, use original status
-      }).length;
-      
-      const totalAmount = akrLeases.reduce((sum: number, coupon: any) => sum + (coupon.totalAmount || 0), 0);
-      const totalBalance = akrLeases.reduce((sum: number, coupon: any) => sum + (coupon.balance || 0), 0);
-      const totalDownPayment = akrLeases.reduce((sum: number, coupon: any) => sum + (coupon.downPayment || 0), 0);
-      
-      setAkrEasyCreditStats({
-        totalLeases,
-        completedLeases,
-        pendingLeases,
-        totalAmount,
-        totalBalance,
-        totalDownPayment,
-        arrearsAmount: totalBalance
-      });
-    } catch (err: any) {
-      console.error("Failed to load AKR Easy Credit stats:", err.message);
     }
   };
 
@@ -3635,12 +3461,8 @@ export default function AdminDashboard() {
           }
         }
         
-        // Auto-calculate balance when vehicle selection, advance payment, reg fee, doc charge, insurance, discount, interest, down payment, or payment method changes
-        if (['vehicleType', 'advancePayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount', 'interestAmount', 'downPayment', 'paymentMethod'].includes(name)) {
-          // Clear advance payment when Full Payment is selected
-          if (name === 'paymentMethod' && value === 'Full Payment') {
-            updated.advancePayment = '';
-          }
+        // Auto-calculate balance when vehicle selection, advance payment, reg fee, doc charge, insurance, discount, interest, or payment method changes
+        if (['vehicleType', 'advancePayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount', 'interestAmount', 'paymentMethod'].includes(name)) {
           // Get the base price from selected vehicle
           const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
           const basePrice = selectedVehicle?.price || 0;
@@ -3684,14 +3506,16 @@ export default function AdminDashboard() {
             const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount - discountAmount;
             updated.totalAmount = calculatedTotalAmount.toString();
             
-            // Down payment = advance payment + reg fee only (automatically calculated)
-            const calculatedDownPayment = advancePayment + regFee;
+            // Down payment = advance payment + reg fee + insurance + doc charge (automatically calculated)
+            const calculatedDownPayment = advancePayment + regFee + insuranceCo + docCharge;
             updated.downPayment = calculatedDownPayment.toString();
             
             // Debug logging
             console.log('AKR Leasing Calculation:', {
               advancePayment,
               regFee,
+              insuranceCo,
+              docCharge,
               calculatedDownPayment,
               paymentMethod: updated.paymentMethod
             });
@@ -3718,14 +3542,16 @@ export default function AdminDashboard() {
             const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
             updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
-            // Down payment = advance payment + reg fee only (automatically calculated)
-            const calculatedDownPayment = advancePayment + regFee;
+            // Down payment = advance payment + reg fee + insurance + doc charge (automatically calculated)
+            const calculatedDownPayment = advancePayment + regFee + insuranceCo + docCharge;
             updated.downPayment = calculatedDownPayment.toString();
             
             // Debug logging
             console.log('Other Company Calculation:', {
               advancePayment,
               regFee,
+              insuranceCo,
+              docCharge,
               calculatedDownPayment,
               paymentMethod: updated.paymentMethod
             });
@@ -3844,7 +3670,7 @@ export default function AdminDashboard() {
         }
         
         // Trigger calculation when these fields change
-      if (['advancePayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount', 'interestAmount', 'downPayment'].includes(name)) {
+      if (['advancePayment', 'regFee', 'docCharge', 'insuranceCo', 'discountAmount', 'interestAmount'].includes(name)) {
         // Get the base price from selected vehicle
         const selectedVehicle = vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === updated.vehicleType);
         const basePrice = selectedVehicle?.price || 0;
@@ -3855,36 +3681,41 @@ export default function AdminDashboard() {
         const insuranceCo = parseFloat(updated.insuranceCo) || 0;
         const discountAmount = parseFloat(updated.discountAmount) || 0;
         
-                  if (updated.paymentMethod === 'Full Payment') {
-            // For Full Payment: 
-            // Total = bike price + reg fee - discount (no advance payment needed)
-            const calculatedTotalAmount = basePrice + regFee - discountAmount;
-            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
-            
-            // For full payment, down payment and balance will be set in AKR Easy Credit tab
-            // Don't calculate here - set to 0 initially
-            updated.downPayment = '0';
-            updated.balance = calculatedTotalAmount.toString();
-            
-            // Clear installment amounts (no installments for full payment)
-            updated.firstInstallmentAmount = '0';
-            updated.secondInstallmentAmount = '0';
-            updated.thirdInstallmentAmount = '0';
-          } else if (updated.paymentMethod === 'Leasing via AKR') {
+        if (updated.paymentMethod === 'Full Payment') {
+          // For Full Payment: 
+          // Total = bike price + reg fee + doc charge + insurance - discount
+          const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+          updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+          
+          // Down payment = advance payment + reg fee (automatically calculated)
+          const calculatedDownPayment = advancePayment + regFee;
+          updated.downPayment = calculatedDownPayment.toString();
+          
+          // Balance = total amount - down payment
+          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment);
+          updated.balance = balance.toString();
+          
+          // Clear installment amounts (no installments for full payment)
+          updated.firstInstallmentAmount = '0';
+          updated.secondInstallmentAmount = '0';
+          updated.thirdInstallmentAmount = '0';
+        } else if (updated.paymentMethod === 'Leasing via AKR') {
           // For Leasing via AKR: 
           // Total = bike price + reg fee + doc charge + insurance + interest - discount
           const interestAmount = parseFloat(updated.interestAmount) || 0;
           const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo + interestAmount - discountAmount;
           updated.totalAmount = calculatedTotalAmount.toString();
           
-          // Down payment = advance payment + reg fee only (automatically calculated)
-          const calculatedDownPayment = advancePayment + regFee;
+          // Down payment = advance payment + reg fee + insurance + doc charge (automatically calculated)
+          const calculatedDownPayment = advancePayment + regFee + insuranceCo + docCharge;
           updated.downPayment = calculatedDownPayment.toString();
           
           // Debug logging
           console.log('AKR Leasing Number Change Calculation:', {
             advancePayment,
             regFee,
+            insuranceCo,
+            docCharge,
             calculatedDownPayment,
             paymentMethod: updated.paymentMethod
           });
@@ -3911,8 +3742,8 @@ export default function AdminDashboard() {
           const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
           updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
           
-          // Down payment = advance payment + reg fee only (automatically calculated)
-          const calculatedDownPayment = advancePayment + regFee;
+          // Down payment = advance payment + reg fee + insurance + doc charge (automatically calculated)
+          const calculatedDownPayment = advancePayment + regFee + insuranceCo + docCharge;
           updated.downPayment = calculatedDownPayment.toString();
           
           // Balance = total amount - down payment
@@ -3930,390 +3761,6 @@ export default function AdminDashboard() {
     });
   };
 
-  // Handle AKR Easy Credit form submission
-  const handleAkrEasyCreditSubmit = async () => {
-    try {
-      if (!editingAkrEasyCredit) {
-        message.error('No record selected for editing');
-        return;
-      }
-
-      const token = localStorage.getItem('adminToken');
-      
-      if (editingAkrEasyCredit.paymentMethod === 'Full Payment') {
-        // Handle cheque release for Full Payment
-        const downPayment = parseFloat(akrEasyCreditForm.downPayment) || 0;
-        const balance = parseFloat(akrEasyCreditForm.balance) || 0;
-        const totalAmount = parseFloat(akrEasyCreditForm.totalAmount) || 0;
-        
-        if (downPayment <= 0) {
-          message.error('Please enter a valid down payment amount');
-          return;
-        }
-        
-        if (downPayment > totalAmount) {
-          message.error('Down payment cannot exceed total amount');
-          return;
-        }
-        
-        // For Full Payment, update only the cheque release status
-        // Don't update down payment and balance amounts
-        const vacUrl = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/${editingAkrEasyCredit._id}`;
-        const vacData = {
-          chequeReleased: true,
-          chequeReleaseDate: new Date().toISOString().split('T')[0]
-        };
-        
-        const vacRes = await fetch(vacUrl, {
-          method: 'PUT',
-          headers: { 
-            'Authorization': `Bearer ${token}`,
-            'Content-Type': 'application/json' 
-          },
-          body: JSON.stringify(vacData)
-        });
-        
-        if (!vacRes.ok) throw new Error("Failed to update cheque release status");
-        
-        // Create account data entries for both cheques
-        const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-        
-        // Cheque 1 - Down Payment
-        if (downPayment > 0) {
-          const advancePayment = parseFloat(akrEasyCreditForm.advancePayment) || 0;
-          const regFee = parseFloat(akrEasyCreditForm.regFee) || 0;
-          const cheque1Data = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Down Payment - ${editingAkrEasyCredit.vehicleType} (Advance: LKR ${advancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            amount: downPayment,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Cheque 1 - Down Payment (Advance: LKR ${advancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            leasing: 'Full Payment'
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(cheque1Data)
-          });
-        }
-        
-        // Cheque 2 - Balance
-        if (balance > 0) {
-          const cheque2Data = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Balance Payment - ${editingAkrEasyCredit.vehicleType}`,
-            amount: balance,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: 'Cheque 2 - Balance',
-            leasing: 'Full Payment'
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(cheque2Data)
-          });
-        }
-        
-        // Create negative bank deposit entries to deduct the released amounts
-        const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
-        
-        // Deduct Cheque 1 (Down Payment) from bank deposits
-        if (downPayment > 0) {
-          const bankDeposit1Data = {
-            date: new Date().toISOString().split('T')[0],
-            depositerName: editingAkrEasyCredit.fullName,
-            accountNumber: '',
-            accountName: 'Cheque Release - Down Payment',
-            purpose: `Cheque Release - Down Payment for ${editingAkrEasyCredit.vehicleType}`,
-            quantity: 1,
-            payment: -downPayment, // Negative amount to deduct
-            slipImage: ''
-          };
-          
-          await fetch(bankDepositUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(bankDeposit1Data)
-          });
-        }
-        
-        // Deduct Cheque 2 (Balance) from bank deposits
-        if (balance > 0) {
-          const bankDeposit2Data = {
-            date: new Date().toISOString().split('T')[0],
-            depositerName: editingAkrEasyCredit.fullName,
-            accountNumber: '',
-            accountName: 'Cheque Release - Balance',
-            purpose: `Cheque Release - Balance for ${editingAkrEasyCredit.vehicleType}`,
-            quantity: 1,
-            payment: -balance, // Negative amount to deduct
-            slipImage: ''
-          };
-          
-          await fetch(bankDepositUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(bankDeposit2Data)
-          });
-        }
-        
-        const advancePayment = parseFloat(akrEasyCreditForm.advancePayment) || 0;
-        const regFee = parseFloat(akrEasyCreditForm.regFee) || 0;
-        message.success(`Both cheques released successfully! 
-          Cheque 1: LKR ${downPayment.toLocaleString()} (Advance: LKR ${advancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()}), 
-          Cheque 2: LKR ${balance.toLocaleString()}
-          Amounts deducted from bank deposits.
-          Note: Vehicle Allocation Coupon data remains unchanged.`);
-        
-      } else {
-        // Handle cheque release for leasing transactions
-        const downPayment = parseFloat(akrEasyCreditForm.downPayment) || 0;
-        const advancePayment = parseFloat(akrEasyCreditForm.advancePayment) || 0;
-        const regFee = parseFloat(akrEasyCreditForm.regFee) || 0;
-        const docCharge = parseFloat(akrEasyCreditForm.docCharge) || 0;
-        const insuranceCo = parseFloat(akrEasyCreditForm.insuranceCo) || 0;
-        const balance = parseFloat(akrEasyCreditForm.balance) || 0;
-        
-        if (editingAkrEasyCredit.paymentMethod === 'Leasing via AKR' && editingAkrEasyCredit.chequeReleased) {
-          // Handle balance release for AKR leasing
-          if (balance <= 0) {
-            message.error('Please enter a valid balance amount to release');
-            return;
-          }
-          
-          // Create account data entry for balance cheque
-          const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-          const chequeData = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Balance Payment - ${editingAkrEasyCredit.vehicleType}`,
-            amount: balance,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Balance Payment Cheque - AKR Leasing`,
-            leasing: editingAkrEasyCredit.paymentMethod
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(chequeData)
-          });
-          
-          // Create negative bank deposit entry
-          const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
-          const bankDepositData = {
-            date: new Date().toISOString().split('T')[0],
-            depositerName: editingAkrEasyCredit.fullName,
-            accountNumber: '',
-            accountName: 'Cheque Release - Balance',
-            purpose: `Cheque Release - Balance for ${editingAkrEasyCredit.vehicleType}`,
-            quantity: 1,
-            payment: -balance, // Negative amount to deduct
-            slipImage: ''
-          };
-          
-          await fetch(bankDepositUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(bankDepositData)
-          });
-          
-          // Update vehicle allocation coupon to reduce balance
-          const vacUrl = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/${editingAkrEasyCredit._id}`;
-          const currentBalance = editingAkrEasyCredit.balance || 0;
-          const newBalance = Math.max(0, currentBalance - balance);
-          const isFullyPaid = newBalance <= 0;
-          
-          const vacData = {
-            balance: newBalance,
-            status: isFullyPaid ? 'Completed' : 'Pending'
-          };
-          
-          const vacRes = await fetch(vacUrl, {
-            method: 'PUT',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(vacData)
-          });
-          
-          if (!vacRes.ok) throw new Error("Failed to update vehicle allocation coupon");
-          
-          message.success(`Balance cheque released successfully! 
-            Amount: LKR ${balance.toLocaleString()}
-            Remaining Balance: LKR ${newBalance.toLocaleString()}
-            Amount deducted from bank deposits.`);
-          
-        } else {
-          // Handle down payment release for leasing transactions
-          if (downPayment <= 0) {
-            message.error('No down payment amount to release');
-            return;
-          }
-          
-          // Update vehicle allocation coupon
-          const vacUrl = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/${editingAkrEasyCredit._id}`;
-          const vacData = {
-            chequeReleased: true,
-            chequeReleaseDate: new Date().toISOString().split('T')[0]
-          };
-          
-          const vacRes = await fetch(vacUrl, {
-            method: 'PUT',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(vacData)
-          });
-          
-          if (!vacRes.ok) throw new Error("Failed to update vehicle allocation coupon");
-          
-          // Create account data entry for down payment cheque
-          const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-          const correctAdvancePayment = editingAkrEasyCredit.paymentMethod === 'Leasing via Other Company' 
-            ? (downPayment - regFee) 
-            : advancePayment;
-          const correctDownPayment = editingAkrEasyCredit.paymentMethod === 'Leasing via Other Company' 
-            ? downPayment  // Use the original down payment amount
-            : (correctAdvancePayment + regFee); // Calculate for other payment methods
-          const chequeData = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Down Payment - ${editingAkrEasyCredit.vehicleType} (Advance: LKR ${correctAdvancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            amount: correctDownPayment,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Down Payment Cheque (Advance: LKR ${correctAdvancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            leasing: editingAkrEasyCredit.paymentMethod
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(chequeData)
-          });
-          
-          // Create negative bank deposit entry
-          const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
-          const bankDepositData = {
-            date: new Date().toISOString().split('T')[0],
-            depositerName: editingAkrEasyCredit.fullName,
-            accountNumber: '',
-            accountName: 'Cheque Release - Down Payment',
-            purpose: `Cheque Release - Down Payment for ${editingAkrEasyCredit.vehicleType}`,
-            quantity: 1,
-            payment: -correctDownPayment, // Negative amount to deduct
-            slipImage: ''
-          };
-          
-          await fetch(bankDepositUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(bankDepositData)
-          });
-          
-          message.success(`Down payment cheque released successfully! 
-            Amount: LKR ${correctDownPayment.toLocaleString()}
-            Breakdown: Advance LKR ${correctAdvancePayment.toLocaleString()}, Reg Fee LKR ${regFee.toLocaleString()}
-            (Additional charges: Document LKR ${docCharge.toLocaleString()}, Insurance LKR ${insuranceCo.toLocaleString()})
-            Amount deducted from bank deposits.`);
-        }
-      }
-      
-      setAkrEasyCreditModalOpen(false);
-      setEditingAkrEasyCredit(null);
-      setAkrEasyCreditForm({
-        customerName: '',
-        vehicleType: '',
-        engineNo: '',
-        chassisNo: '',
-        paymentMethod: 'Full Payment',
-        advancePayment: '',
-        downPayment: '',
-        balance: '',
-        regFee: '',
-        docCharge: '',
-        insuranceCo: '',
-        totalAmount: '',
-        firstInstallmentAmount: '',
-        firstInstallmentDate: '',
-        secondInstallmentAmount: '',
-        secondInstallmentDate: '',
-        thirdInstallmentAmount: '',
-        thirdInstallmentDate: '',
-        status: 'Pending',
-        chequeReleased: false,
-        chequeReleaseDate: '',
-        notes: ''
-      });
-      
-      // Refresh the data
-      fetchAkrEasyCredit();
-      fetchAkrEasyCreditStats();
-      fetchAccountData(); // Refresh account data to show new entries
-      fetchBankDeposits(); // Refresh bank deposits to show deductions
-    } catch (err: any) {
-      message.error("Failed to process request: " + err.message);
-    }
-  };
-
   // Create or update vehicle allocation coupon
   const handleVehicleAllocationCouponSubmit = async () => {
     try {
@@ -4328,8 +3775,7 @@ export default function AdminDashboard() {
       const submitData = {
         ...vehicleAllocationCouponForm,
         // Convert string values to numbers for submission
-        // For Full Payment, advance payment should be 0
-        advancePayment: vehicleAllocationCouponForm.paymentMethod === 'Full Payment' ? 0 : (parseFloat(vehicleAllocationCouponForm.advancePayment) || 0),
+        advancePayment: parseFloat(vehicleAllocationCouponForm.advancePayment) || 0,
         totalAmount: parseFloat(vehicleAllocationCouponForm.totalAmount) || 0,
         balance: parseFloat(vehicleAllocationCouponForm.balance) || 0,
         downPayment: parseFloat(vehicleAllocationCouponForm.downPayment) || 0,
@@ -4521,46 +3967,21 @@ export default function AdminDashboard() {
   const handleDepositClick = (record: any) => {
     setSelectedCouponForDeposit(record);
     
-    // Calculate arrears based on payment method
+    // Calculate remaining down payment to collect
     const downPayment = record.downPayment || 0;
     const amountCollected = record.depositAmount || 0;
-    const totalAmount = record.totalAmount || 0;
-    const regFee = record.regFee || 0;
-    const discountAmount = record.discountAmount || 0;
-    const advancePayment = record.advancePayment || 0;
-    const paymentMethod = record.paymentMethod || 'Full Payment';
-    
-    let arrears = 0;
-    let requiredAmount = 0;
-    
-    if (paymentMethod === 'Full Payment') {
-      // For Full Payment: bike amount + reg fee - discount
-      const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-      requiredAmount = bikeAmount + regFee - discountAmount;
-      arrears = requiredAmount - amountCollected;
-    } else if (paymentMethod === 'Leasing via AKR') {
-      // For Lease via AKR: advance payment + reg fee
-      requiredAmount = advancePayment + regFee;
-      arrears = requiredAmount - amountCollected;
-    } else {
-      // For Lease via Other: advance amount + reg fee
-      requiredAmount = advancePayment + regFee;
-      arrears = requiredAmount - amountCollected;
-    }
-    
-    // Ensure arrears is not negative
-    const maxAmountToCollect = Math.max(0, arrears);
+    const remainingDownPayment = Math.max(0, downPayment - amountCollected);
     
     setDepositForm({
       date: new Date().toISOString().split('T')[0],
       name: record.fullName,
       details: `Down Payment Collection - Vehicle Allocation Coupon ${record.couponId} - ${record.vehicleType}`,
-      amount: maxAmountToCollect.toString(), // Pre-fill with arrears amount
+      amount: remainingDownPayment.toString(), // Pre-fill with remaining down payment
       model: record.vehicleType,
       remarks: `Down payment collected for vehicle allocation coupon ${record.couponId}`,
       depositSlipImage: null,
       depositSlipImageUrl: '',
-      actualAmount: requiredAmount.toString(), // Show required amount as actual amount
+      actualAmount: record.downPayment.toString(), // Show down payment as actual amount
       depositedAmount: ''
     });
     setDepositModalOpen(true);
@@ -4758,28 +4179,13 @@ export default function AdminDashboard() {
         return;
       }
       
-      // Check if collected amount exceeds remaining arrears
-      const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-      const regFee = selectedCouponForDeposit?.regFee || 0;
-      const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
-      const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
-      const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
+      // Check if collected amount exceeds remaining down payment
+      const downPayment = selectedCouponForDeposit?.downPayment || 0;
       const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
+      const remainingDownPayment = Math.max(0, downPayment - previouslyCollected);
       
-      let requiredAmount = 0;
-      if (paymentMethod === 'Full Payment') {
-        const bikeAmount = totalAmount - regFee;
-        requiredAmount = bikeAmount + regFee - discountAmount;
-      } else if (paymentMethod === 'Leasing via AKR') {
-        requiredAmount = advancePayment + regFee;
-      } else {
-        requiredAmount = advancePayment + regFee;
-      }
-      
-      const remainingArrears = Math.max(0, requiredAmount - previouslyCollected);
-      
-      if (actualCollected > remainingArrears) {
-        message.error(`Cannot collect more than remaining arrears (LKR ${remainingArrears.toLocaleString()})`);
+      if (actualCollected > remainingDownPayment) {
+        message.error(`Cannot collect more than remaining down payment (LKR ${remainingDownPayment.toLocaleString()})`);
         return;
       }
 
@@ -4807,13 +4213,13 @@ export default function AdminDashboard() {
 
       if (!response.ok) throw new Error('Failed to record payment collection');
 
-      // Calculate remaining arrears after this collection
-      const newRemainingArrears = remainingArrears - actualCollected;
+      // Calculate remaining down payment after this collection
+      const newRemainingDownPayment = remainingDownPayment - actualCollected;
       
-      if (newRemainingArrears <= 0) {
-        message.success('Arrears collected successfully! All arrears cleared.');
+      if (newRemainingDownPayment <= 0) {
+        message.success('Down payment collected successfully! All down payment cleared.');
       } else {
-        message.success(`Arrears collected successfully! Remaining arrears: LKR ${newRemainingArrears.toLocaleString()}`);
+        message.success(`Down payment collected successfully! Remaining down payment: LKR ${newRemainingDownPayment.toLocaleString()}`);
       }
       setDepositModalOpen(false);
       setSelectedCouponForDeposit(null);
@@ -5484,8 +4890,9 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Failed to fetch data");
       const response = await res.json();
       
-      // Filter coupons that are "Leasing via AKR" and need installment tracking
+      // Filter coupons that have balance and are "Leasing via AKR" only
       const couponsWithBalance = response.vehicleAllocationCoupons.filter((coupon: any) => 
+        coupon.balance > 0 && 
         coupon.paymentMethod === 'Leasing via AKR' &&
         (installmentStatusFilter === '' || coupon.status === installmentStatusFilter) &&
         (installmentMonthFilter === '' || new Date(coupon.dateOfPurchase).getMonth() === parseInt(installmentMonthFilter))
@@ -6351,537 +5758,6 @@ export default function AdminDashboard() {
       
     } catch (error) {
       console.error('Error generating individual sales transaction PDF:', error);
-      message.error('Failed to generate PDF');
-    }
-  };
-
-  // Export individual AKR Easy Credit to PDF
-  const exportIndividualAkrEasyCreditToPDF = (record: any) => {
-    try {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
-
-      const currentDate = new Date().toLocaleDateString('en-GB');
-      const currentTime = new Date().toLocaleTimeString('en-GB');
-      const documentDate = record.dateOfPurchase ? new Date(record.dateOfPurchase).toLocaleDateString('en-GB') : currentDate;
-      
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>AKR Easy Credit Details - ${record.fullName} - ${currentDate}</title>
-
-            <style>
-              * { box-sizing: border-box; }
-              body { 
-                font-family: 'Times New Roman', serif; 
-                margin: 0; 
-                padding: 15px; 
-                line-height: 1.3;
-                font-size: 12px;
-                color: #000;
-              }
-              .header { 
-                text-align: center; 
-                margin-bottom: 20px; 
-                border-bottom: 2px solid #000; 
-                padding-bottom: 10px;
-              }
-              .main-title { 
-                font-size: 18px; 
-                font-weight: bold; 
-                margin: 0 0 5px 0;
-                text-transform: uppercase;
-                color: #1e40af;
-              }
-              .company-name { 
-                font-size: 14px; 
-                font-weight: bold; 
-                margin: 5px 0;
-              }
-              .document-info { 
-                font-size: 11px; 
-                margin: 8px 0;
-                display: flex;
-                justify-content: space-between;
-                flex-wrap: wrap;
-              }
-              .info-item {
-                margin: 2px 0;
-                font-weight: bold;
-              }
-              .details-section { 
-                margin: 15px 0; 
-                border: 1px solid #000;
-                padding: 10px;
-              }
-              .section-title {
-                font-weight: bold;
-                margin-bottom: 8px;
-                font-size: 13px;
-                text-decoration: underline;
-                color: #1e40af;
-              }
-              .detail-row { 
-                display: flex; 
-                margin: 4px 0;
-                border-bottom: 1px solid #ddd;
-                padding-bottom: 2px;
-              }
-              .detail-label { 
-                font-weight: bold; 
-                min-width: 150px;
-                margin-right: 10px;
-              }
-              .detail-value { 
-                flex: 1;
-                font-weight: normal;
-              }
-              .payment-summary {
-                background: #f0f9ff;
-                padding: 10px;
-                border: 2px solid #1e40af;
-                margin: 15px 0;
-              }
-              .amount-highlight {
-                font-weight: bold;
-                color: #1e40af;
-              }
-              .status-badge {
-                display: inline-block;
-                padding: 2px 8px;
-                border-radius: 4px;
-                font-size: 10px;
-                font-weight: bold;
-                text-transform: uppercase;
-              }
-              .status-completed {
-                background: #10b981;
-                color: white;
-              }
-              .status-pending {
-                background: #f59e0b;
-                color: white;
-              }
-              .footer { 
-                margin-top: 20px; 
-                text-align: center; 
-                font-size: 10px; 
-                color: #000;
-                border-top: 1px solid #000;
-                padding-top: 10px;
-              }
-              @media print {
-                body { margin: 0; padding: 10px; }
-                .header { page-break-inside: avoid; }
-                .details-section { page-break-inside: avoid; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <div class="main-title">AKR Easy Credit Details</div>
-              <div class="company-name">AKR & SONS (PVT) LTD</div>
-              <div class="document-info">
-                <span class="info-item">Date: ${currentDate}</span>
-                <span class="info-item">Time: ${currentTime}</span>
-                <span class="info-item">Document: AKR Easy Credit</span>
-              </div>
-            </div>
-
-            <div class="details-section">
-              <div class="section-title">Customer Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Coupon ID:</span>
-                <span class="detail-value">${record.couponId || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Customer Name:</span>
-                <span class="detail-value">${record.fullName || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Vehicle Type:</span>
-                <span class="detail-value">${record.vehicleType || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Payment Method:</span>
-                <span class="detail-value">${record.paymentMethod || 'N/A'}</span>
-              </div>
-            </div>
-
-            <div class="details-section">
-              <div class="section-title">Cheque Release Details</div>
-              
-              <!-- Down Payment Release -->
-              <div class="detail-row">
-                <span class="detail-label">Down Payment Amount:</span>
-                <span class="detail-value amount-highlight">LKR ${record.downPayment ? parseFloat(record.downPayment).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Down Payment Release Status:</span>
-                <span class="detail-value">
-                  <span class="status-badge ${record.chequeReleased ? 'status-completed' : 'status-pending'}">
-                    ${record.chequeReleased ? 'Released' : 'Pending'}
-                  </span>
-                </span>
-              </div>
-              ${record.chequeReleased ? `
-              <div class="detail-row">
-                <span class="detail-label">Down Payment Release Date:</span>
-                <span class="detail-value">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}</span>
-              </div>
-              ` : ''}
-
-              ${record.paymentMethod === 'Leasing via AKR' ? `
-              <!-- Balance Release for AKR Leasing -->
-              <div class="detail-row">
-                <span class="detail-label">Balance Amount:</span>
-                <span class="detail-value amount-highlight">LKR ${(() => {
-                  const totalAmount = parseFloat(record.totalAmount) || 0;
-                  const downPayment = parseFloat(record.downPayment) || 0;
-                  const originalBalance = totalAmount - downPayment;
-                  return originalBalance.toLocaleString();
-                })()}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Balance Release Status:</span>
-                <span class="detail-value">
-                  <span class="status-badge ${record.balance > 0 ? 'status-pending' : 'status-completed'}">
-                    ${record.balance > 0 ? 'Pending' : 'Released'}
-                  </span>
-                </span>
-              </div>
-              ${record.balance === 0 && record.chequeReleased ? `
-              <div class="detail-row">
-                <span class="detail-label">Balance Release Date:</span>
-                <span class="detail-value">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}</span>
-              </div>
-              ` : ''}
-              ` : ''}
-
-              ${record.paymentMethod === 'Full Payment' ? `
-              <!-- Full Payment Release -->
-              <div class="detail-row">
-                <span class="detail-label">Total Amount:</span>
-                <span class="detail-value amount-highlight">LKR ${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Full Payment Release Status:</span>
-                <span class="detail-value">
-                  <span class="status-badge ${record.chequeReleased ? 'status-completed' : 'status-pending'}">
-                    ${record.chequeReleased ? 'Released' : 'Pending'}
-                  </span>
-                </span>
-              </div>
-              ${record.chequeReleased ? `
-              <div class="detail-row">
-                <span class="detail-label">Full Payment Release Date:</span>
-                <span class="detail-value">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}</span>
-              </div>
-              ` : ''}
-              ` : ''}
-            </div>
-
-            ${record.chequeReleased ? `
-            <div class="details-section">
-              <div class="section-title">Cheque Release Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Cheque Released:</span>
-                <span class="detail-value">
-                  <span class="status-badge status-completed">Yes</span>
-                </span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Release Date:</span>
-                <span class="detail-value">${record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}</span>
-              </div>
-            </div>
-            ` : ''}
-
-
-
-            <div class="details-section">
-              <div class="section-title">Additional Information</div>
-              <div class="detail-row">
-                <span class="detail-label">Branch:</span>
-                <span class="detail-value">${record.branch || 'N/A'}</span>
-              </div>
-              <div class="detail-row">
-                <span class="detail-label">Notes:</span>
-                <span class="detail-value">${record.notes || 'N/A'}</span>
-              </div>
-            </div>
-
-            <div class="footer">
-              <div>Generated on: ${currentDate} at ${currentTime}</div>
-              <div>AKR & SONS (PVT) LTD - AKR Easy Credit Management System</div>
-            </div>
-
-          </body>
-        </html>
-      `;
-
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      printWindow.focus();
-      
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-      
-    } catch (error) {
-      console.error('Error generating AKR Easy Credit PDF:', error);
-      message.error('Failed to generate PDF');
-    }
-  };
-
-  // Export AKR Easy Credit tab to PDF
-  const exportAkrEasyCreditToPDF = async () => {
-    try {
-      const printWindow = window.open('', '_blank');
-      if (!printWindow) return;
-
-      const currentDate = new Date().toLocaleDateString('en-GB');
-      const currentTime = new Date().toLocaleTimeString('en-GB');
-      
-      // Filter data based on current filter
-      const filteredData = akrEasyCreditData.filter((record: any) => {
-        if (akrEasyCreditFilter === 'released') {
-          if (record.paymentMethod === 'Full Payment') {
-            return record.chequeReleased;
-          }
-          return record.status === 'Completed';
-        } else {
-          if (record.paymentMethod === 'Full Payment') {
-            return !record.chequeReleased;
-          }
-          return record.status === 'Pending';
-        }
-      });
-
-      const htmlContent = `
-        <!DOCTYPE html>
-        <html>
-          <head>
-            <title>AKR Easy Credit Report - ${currentDate}</title>
-
-            <style>
-              * { box-sizing: border-box; }
-              body { 
-                font-family: 'Times New Roman', serif; 
-                margin: 0; 
-                padding: 15px; 
-                line-height: 1.3;
-                font-size: 12px;
-                color: #000;
-              }
-              .header { 
-                text-align: center; 
-                margin-bottom: 20px; 
-                border-bottom: 2px solid #000; 
-                padding-bottom: 10px;
-              }
-              .main-title { 
-                font-size: 18px; 
-                font-weight: bold; 
-                margin: 0 0 5px 0;
-                text-transform: uppercase;
-                color: #1e40af;
-              }
-              .company-name { 
-                font-size: 14px; 
-                font-weight: bold; 
-                margin: 5px 0;
-              }
-              .report-info { 
-                font-size: 11px; 
-                margin: 8px 0;
-                display: flex;
-                justify-content: space-between;
-                flex-wrap: wrap;
-              }
-              .info-item {
-                margin: 2px 0;
-                font-weight: bold;
-              }
-              .stats-section {
-                margin: 15px 0;
-                padding: 10px;
-                background: #f8fafc;
-                border: 1px solid #000;
-              }
-              .stats-grid {
-                display: grid;
-                grid-template-columns: 1fr 1fr 1fr;
-                gap: 15px;
-                margin: 10px 0;
-              }
-              .stat-item {
-                text-align: center;
-                padding: 8px;
-                border: 1px solid #ddd;
-                background: white;
-              }
-              .stat-number {
-                font-size: 16px;
-                font-weight: bold;
-                color: #1e40af;
-              }
-              .stat-label {
-                font-size: 10px;
-                color: #666;
-                margin-top: 2px;
-              }
-              .table-section {
-                margin: 20px 0;
-              }
-              .table-title {
-                font-weight: bold;
-                margin-bottom: 10px;
-                font-size: 13px;
-                text-decoration: underline;
-                color: #1e40af;
-              }
-              table {
-                width: 100%;
-                border-collapse: collapse;
-                margin: 10px 0;
-              }
-              th, td {
-                border: 1px solid #000;
-                padding: 6px 8px;
-                text-align: left;
-                font-size: 11px;
-              }
-              th {
-                background: #f1f5f9;
-                font-weight: bold;
-                text-align: center;
-              }
-              .status-released {
-                background: #10b981;
-                color: white;
-                padding: 2px 6px;
-                border-radius: 3px;
-                font-size: 9px;
-                font-weight: bold;
-              }
-              .status-pending {
-                background: #f59e0b;
-                color: white;
-                padding: 2px 6px;
-                border-radius: 3px;
-                font-size: 9px;
-                font-weight: bold;
-              }
-              .amount {
-                font-weight: bold;
-                color: #1e40af;
-              }
-              .footer { 
-                margin-top: 20px; 
-                text-align: center; 
-                font-size: 10px; 
-                color: #000;
-                border-top: 1px solid #000;
-                padding-top: 10px;
-              }
-              @media print {
-                body { margin: 0; padding: 10px; }
-                .header { page-break-inside: avoid; }
-                .stats-section { page-break-inside: avoid; }
-              }
-            </style>
-          </head>
-          <body>
-            <div class="header">
-              <div class="main-title">AKR Easy Credit Report</div>
-              <div class="company-name">AKR & SONS (PVT) LTD</div>
-              <div class="report-info">
-                <span class="info-item">Date: ${currentDate}</span>
-                <span class="info-item">Time: ${currentTime}</span>
-                <span class="info-item">Filter: ${akrEasyCreditFilter === 'released' ? 'Released' : 'Unreleased'}</span>
-                <span class="info-item">Total Records: ${filteredData.length}</span>
-              </div>
-            </div>
-
-            <div class="stats-section">
-              <div class="table-title">Statistics Summary</div>
-              <div class="stats-grid">
-                <div class="stat-item">
-                  <div class="stat-number">${akrEasyCreditStats.totalLeases}</div>
-                  <div class="stat-label">Total Transactions</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-number">${akrEasyCreditStats.completedLeases}</div>
-                  <div class="stat-label">Released</div>
-                </div>
-                <div class="stat-item">
-                  <div class="stat-number">${akrEasyCreditStats.pendingLeases}</div>
-                  <div class="stat-label">Unreleased</div>
-                </div>
-              </div>
-            </div>
-
-            <div class="table-section">
-              <div class="table-title">AKR Easy Credit Transactions</div>
-              <table>
-                <thead>
-                  <tr>
-                    <th>Customer</th>
-                    <th>Vehicle</th>
-                    <th>Payment Method</th>
-                    <th>Down Payment</th>
-                    <th>Balance</th>
-                    <th>Release Status</th>
-                    <th>Release Date</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  ${filteredData.map((record: any, index: number) => {
-                    const downPaymentAmount = parseFloat(record.downPayment) || 0;
-                    const totalAmount = parseFloat(record.totalAmount) || 0;
-                    const originalBalance = totalAmount - downPaymentAmount;
-                    const releaseStatus = record.chequeReleased ? 'Released' : 'Pending';
-                    const releaseDate = record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A';
-                    
-                    return `
-                      <tr>
-                        <td>${record.fullName || 'N/A'}</td>
-                        <td>${record.vehicleType || 'N/A'}</td>
-                        <td>${record.paymentMethod || 'N/A'}</td>
-                        <td class="amount">LKR ${downPaymentAmount.toLocaleString()}</td>
-                        <td class="amount">LKR ${originalBalance.toLocaleString()}</td>
-                        <td><span class="status-${record.chequeReleased ? 'released' : 'pending'}">${releaseStatus}</span></td>
-                        <td>${releaseDate}</td>
-                      </tr>
-                    `;
-                  }).join('')}
-                </tbody>
-              </table>
-            </div>
-
-            <div class="footer">
-              <div>Generated on: ${currentDate} at ${currentTime}</div>
-              <div>AKR & SONS (PVT) LTD - AKR Easy Credit Management System</div>
-            </div>
-
-          </body>
-        </html>
-      `;
-
-      printWindow.document.write(htmlContent);
-      printWindow.document.close();
-      printWindow.focus();
-      
-      setTimeout(() => {
-        printWindow.print();
-        printWindow.close();
-      }, 500);
-      
-    } catch (error) {
-      console.error('Error generating AKR Easy Credit tab PDF:', error);
       message.error('Failed to generate PDF');
     }
   };
@@ -8939,7 +7815,7 @@ export default function AdminDashboard() {
   };
 
   // Sidebar
-  const renderSidebar = (
+  const renderSidebar = () => (
     <div style={{ height: '100vh', display: 'flex', flexDirection: 'column' }}>
       {/* Sidebar Header with Toggle Button */}
       <div className={`flex items-center justify-between border-b border-gray-200 ${sidebarCollapsed ? 'p-2' : 'p-4'}`}>
@@ -9011,14 +7887,6 @@ export default function AdminDashboard() {
           </div>
           
           <div 
-            className={`flex items-center justify-center p-3 mb-2 cursor-pointer rounded-lg transition-colors ${akrTab === 'akrEasyCredit' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
-            onClick={() => setAkrTab('akrEasyCredit')}
-            title="AKR Easy Credit / Other"
-          >
-            <CreditCardOutlined style={{ fontSize: 18 }} />
-          </div>
-          
-          <div 
             className={`flex items-center justify-center p-3 mb-2 cursor-pointer rounded-lg transition-colors ${akrTab === 'customers' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
             onClick={() => setAkrTab('customers')}
             title="Customers"
@@ -9081,6 +7949,22 @@ export default function AdminDashboard() {
           >
             <SettingOutlined style={{ fontSize: 18 }} />
           </div>
+          
+          <div 
+            className={`flex items-center justify-center p-3 mb-2 cursor-pointer rounded-lg transition-colors ${akrTab === 'akrEasyCredit' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
+            onClick={() => setAkrTab('akrEasyCredit')}
+            title="AKR Easy Credit"
+          >
+            <CreditCardOutlined style={{ fontSize: 18 }} />
+          </div>
+          
+          <div 
+            className={`flex items-center justify-center p-3 mb-2 cursor-pointer rounded-lg transition-colors ${akrTab === 'other' ? 'bg-blue-100 text-blue-600' : 'hover:bg-gray-100'}`}
+            onClick={() => setAkrTab('other')}
+            title="Other Companies"
+          >
+            <BankOutlined style={{ fontSize: 18 }} />
+          </div>
         </div>
       ) : (
         // Expanded sidebar with full menu
@@ -9141,12 +8025,6 @@ export default function AdminDashboard() {
               label: 'Vehicle Allocation Coupons',
               icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><FileTextOutlined style={{ fontSize: 20 }} /></span>,
               onClick: () => setAkrTab('vehicleAllocationCoupons')
-            },
-            {
-              key: 'akrEasyCredit',
-              label: 'AKR Easy Credit / Other',
-              icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><CreditCardOutlined style={{ fontSize: 20 }} /></span>,
-              onClick: () => setAkrTab('akrEasyCredit')
             },
             {
               key: `customers`,
@@ -9215,7 +8093,35 @@ export default function AdminDashboard() {
               onClick: () => setAkrTab('settings')
             }
           ]
-        }]}
+        },
+        {
+          key: 'akr-easy-credit',
+          label: 'AKR Easy Credit',
+          icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><CreditCardOutlined style={{ fontSize: 20 }} /></span>,
+          children: [
+            {
+              key: 'akrEasyCredit',
+              label: 'AKR Easy Credit',
+              icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><CreditCardOutlined style={{ fontSize: 20 }} /></span>,
+              onClick: () => setAkrTab('akrEasyCredit')
+            }
+          ]
+        },
+        {
+          key: 'other',
+          label: 'Other',
+          icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><BankOutlined style={{ fontSize: 20 }} /></span>,
+          children: [
+            {
+              key: 'other',
+              label: 'Other Companies',
+              icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><BankOutlined style={{ fontSize: 20 }} /></span>,
+              onClick: () => setAkrTab('other')
+            }
+          ]
+        }
+      ]
+    }]}
       />
       )}
       <div style={{ padding: sidebarCollapsed ? 8 : 24 }}>
@@ -11868,7 +10774,7 @@ export default function AdminDashboard() {
       <div className={`fixed inset-0 z-40 bg-black/40 transition-opacity ${sidebarOpen ? 'block' : 'hidden'} md:hidden`} onClick={() => setSidebarOpen(false)} />
       <aside className={`fixed top-0 left-0 h-screen bg-white shadow-lg z-50 transform transition-all duration-300 ${sidebarOpen ? 'translate-x-0' : '-translate-x-full'} md:static md:translate-x-0 md:block ${sidebarCollapsed ? 'w-12' : 'w-64'}`}>
         <button className="md:hidden absolute top-4 left-4 text-2xl z-50" style={{ zIndex: 100 }} onClick={() => setSidebarOpen(false)}>&times;</button>
-        {renderSidebar}
+        {renderSidebar()}
       </aside>
       {/* Main content area */}
       <main className="flex-1 p-2 sm:p-4 md:p-8 overflow-x-auto">
@@ -13493,362 +12399,374 @@ export default function AdminDashboard() {
                 </div>
           )}
 
-          {/* AKR Easy Credit / Other Tab */}
+          {/* AKR Easy Credit Tab */}
           {akrTab === 'akrEasyCredit' && (
             <div className="col-span-full">
-              {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{akrEasyCreditStats.totalLeases}</div>
-                  <div className="text-sm text-gray-600">Total Transactions</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{akrEasyCreditStats.completedLeases}</div>
-                  <div className="text-sm text-gray-600">Released</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{akrEasyCreditStats.pendingLeases}</div>
-                  <div className="text-sm text-gray-600">Unreleased</div>
-                </Card>
-              </div>
-
-              {/* Sticky Bar for Released and Unreleased */}
-              <div className="bg-white rounded-xl shadow p-4 mb-6">
-                <div className="flex flex-wrap gap-4 items-center justify-between">
-                  <div className="flex items-center gap-4">
-                    <button 
-                      onClick={() => setAkrEasyCreditFilter('released')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        akrEasyCreditFilter === 'released' 
-                          ? 'bg-green-100 text-green-700 border-2 border-green-500' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-green-50 hover:text-green-600'
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold mb-4">AKR Easy Credit Management</h2>
+                
+                {/* Sticky Bar with Completed and Arrears Tabs */}
+                <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+                  <div className="flex space-x-4 border-b">
+                    <button
+                      className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                        creditTab === 'completed' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'text-gray-600 hover:text-blue-500'
                       }`}
+                      onClick={() => setCreditTab('completed')}
                     >
-                      <div className="w-3 h-3 bg-green-500 rounded-full"></div>
-                      <span className="font-medium">Released ({akrEasyCreditStats.completedLeases})</span>
+                      Completed
                     </button>
-                    <button 
-                      onClick={() => setAkrEasyCreditFilter('unreleased')}
-                      className={`flex items-center gap-2 px-4 py-2 rounded-lg transition-colors ${
-                        akrEasyCreditFilter === 'unreleased' 
-                          ? 'bg-orange-100 text-orange-700 border-2 border-orange-500' 
-                          : 'bg-gray-100 text-gray-600 hover:bg-orange-50 hover:text-orange-600'
+                    <button
+                      className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                        creditTab === 'arrears' 
+                          ? 'bg-red-500 text-white' 
+                          : 'text-gray-600 hover:text-red-500'
                       }`}
+                      onClick={() => setCreditTab('arrears')}
                     >
-                      <div className="w-3 h-3 bg-orange-500 rounded-full"></div>
-                      <span className="font-medium">Unreleased ({akrEasyCreditStats.pendingLeases})</span>
+                      Arrears
                     </button>
                   </div>
                 </div>
-              </div>
 
-              {/* Search and Actions */}
-              <div className="bg-white rounded-xl shadow p-6 mb-6">
-                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
-                  <div className="flex-1 max-w-md">
-                    <input
-                      type="text"
-                      placeholder="Search leases..."
-                      value={akrEasyCreditSearch}
-                      onChange={(e) => {
-                        setAkrEasyCreditSearch(e.target.value);
-                        fetchAkrEasyCredit(1, e.target.value);
-                      }}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                    />
+                {/* Content based on selected tab */}
+                {creditTab === 'completed' && (
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h3 className="text-xl font-semibold mb-4 text-green-600">Completed Transactions</h3>
+                    <div className="overflow-x-auto">
+                      <Table
+                        dataSource={vehicleAllocationCoupons.filter((coupon: any) => 
+                          coupon.paymentMethod === 'Leasing via AKR' && coupon.status === 'Completed'
+                        )}
+                        columns={[
+                          {
+                            title: 'Coupon ID',
+                            dataIndex: 'couponId',
+                            key: 'couponId',
+                            render: (text: string) => <span className="font-medium">{text}</span>
+                          },
+                          {
+                            title: 'Customer Name',
+                            dataIndex: 'fullName',
+                            key: 'fullName'
+                          },
+                          {
+                            title: 'Vehicle Type',
+                            dataIndex: 'vehicleType',
+                            key: 'vehicleType'
+                          },
+                          {
+                            title: 'Total Amount',
+                            dataIndex: 'totalAmount',
+                            key: 'totalAmount',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Down Payment',
+                            dataIndex: 'downPayment',
+                            key: 'downPayment',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Balance',
+                            dataIndex: 'balance',
+                            key: 'balance',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Installments',
+                            key: 'installments',
+                            render: (_: any, record: any) => {
+                              const first = record.firstInstallment?.amount || 0;
+                              const second = record.secondInstallment?.amount || 0;
+                              const third = record.thirdInstallment?.amount || 0;
+                              return `1st: LKR ${first.toLocaleString()}, 2nd: LKR ${second.toLocaleString()}, 3rd: LKR ${third.toLocaleString()}`;
+                            }
+                          },
+                          {
+                            title: 'Actions',
+                            key: 'actions',
+                            render: (_: any, record: any) => (
+                              <div className="flex gap-2">
+                                <Button size="small" type="primary" onClick={() => handleViewVehicleAllocationCoupon(record)}>
+                                  View Details
+                                </Button>
+                                <Button size="small" type="default" onClick={() => exportIndividualVehicleAllocationCouponToPDF(record)}>
+                                  Export PDF
+                                </Button>
+                              </div>
+                            )
+                          }
+                        ]}
+                        rowKey="_id"
+                        pagination={false}
+                      />
+                    </div>
                   </div>
-                  <div className="flex gap-2">
-                    <Button type="default" onClick={() => fetchAkrEasyCredit()}>
-                      Refresh
-                    </Button>
-                    <Button type="default" onClick={() => exportAkrEasyCreditToPDF()}>
-                      Export PDF
-                    </Button>
+                )}
+
+                {creditTab === 'arrears' && (
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h3 className="text-xl font-semibold mb-4 text-red-600">Arrears - Cheque Release Required</h3>
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-700">
+                        <strong>Note:</strong> For AKR Easy Credit, down payment needs to be released as cheque. 
+                        Full amount is separated into down payment and balance for installment allocation.
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table
+                        dataSource={vehicleAllocationCoupons.filter((coupon: any) => 
+                          coupon.paymentMethod === 'Leasing via AKR' && coupon.status === 'Pending'
+                        )}
+                        columns={[
+                          {
+                            title: 'Coupon ID',
+                            dataIndex: 'couponId',
+                            key: 'couponId',
+                            render: (text: string) => <span className="font-medium">{text}</span>
+                          },
+                          {
+                            title: 'Customer Name',
+                            dataIndex: 'fullName',
+                            key: 'fullName'
+                          },
+                          {
+                            title: 'Vehicle Type',
+                            dataIndex: 'vehicleType',
+                            key: 'vehicleType'
+                          },
+                          {
+                            title: 'Total Amount',
+                            dataIndex: 'totalAmount',
+                            key: 'totalAmount',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Down Payment (Cheque Required)',
+                            dataIndex: 'downPayment',
+                            key: 'downPayment',
+                            render: (amount: number) => (
+                              <span className="text-red-600 font-semibold">
+                                LKR {amount?.toLocaleString() || '0'}
+                              </span>
+                            )
+                          },
+                          {
+                            title: 'Balance (3 Installments)',
+                            dataIndex: 'balance',
+                            key: 'balance',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Actions',
+                            key: 'actions',
+                            render: (_: any, record: any) => (
+                              <div className="flex gap-2">
+                                <Button size="small" type="primary" onClick={() => handleChequeReleaseClick(record)}>
+                                  Release Cheque
+                                </Button>
+                                <Button size="small" type="default" onClick={() => handleViewVehicleAllocationCoupon(record)}>
+                                  View Details
+                                </Button>
+                              </div>
+                            )
+                          }
+                        ]}
+                        rowKey="_id"
+                        pagination={false}
+                      />
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Other Companies Tab */}
+          {akrTab === 'other' && (
+            <div className="col-span-full">
+              <div className="mb-6">
+                <h2 className="text-2xl font-bold mb-4">Other Companies Management</h2>
+                
+                {/* Sticky Bar with Completed and Arrears Tabs */}
+                <div className="bg-white rounded-xl shadow-lg p-4 mb-6">
+                  <div className="flex space-x-4 border-b">
+                    <button
+                      className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                        creditTab === 'completed' 
+                          ? 'bg-blue-500 text-white' 
+                          : 'text-gray-600 hover:text-blue-500'
+                      }`}
+                      onClick={() => setCreditTab('completed')}
+                    >
+                      Completed
+                    </button>
+                    <button
+                      className={`px-4 py-2 font-medium rounded-t-lg transition-colors ${
+                        creditTab === 'arrears' 
+                          ? 'bg-red-500 text-white' 
+                          : 'text-gray-600 hover:text-red-500'
+                      }`}
+                      onClick={() => setCreditTab('arrears')}
+                    >
+                      Arrears
+                    </button>
                   </div>
                 </div>
-              </div>
 
-              {/* Leases Table */}
-              <div className="bg-white rounded-xl shadow overflow-hidden">
-                <Table
-                  dataSource={akrEasyCreditData.filter((record: any) => {
-                    if (akrEasyCreditFilter === 'released') {
-                      // Show released transactions
-                      if (record.paymentMethod === 'Full Payment') {
-                        return record.chequeReleased; // Released if cheque is released
-                      }
-                      return record.status === 'Completed'; // For leasing, use original status
-                    } else {
-                      // Show unreleased transactions (default)
-                      if (record.paymentMethod === 'Full Payment') {
-                        return !record.chequeReleased; // Unreleased if cheque is not released
-                      }
-                      return record.status === 'Pending'; // For leasing, use original status
-                    }
-                  })}
-                  loading={akrEasyCreditLoading}
-                  columns={[
-                    {
-                      title: 'Customer Name',
-                      dataIndex: 'fullName',
-                      key: 'fullName',
-                      render: (name: string) => <span className="font-medium">{name}</span>
-                    },
-                    {
-                      title: 'Vehicle Type',
-                      dataIndex: 'vehicleType',
-                      key: 'vehicleType',
-                      align: 'center' as const
-                    },
-                    {
-                      title: 'Payment Method',
-                      dataIndex: 'paymentMethod',
-                      key: 'paymentMethod',
-                      align: 'center' as const,
-                      render: (method: string) => (
-                        <Tag color={
-                          method === 'Leasing via AKR' ? 'blue' : 
-                          method === 'Leasing via Other Company' ? 'green' : 
-                          method === 'Full Payment' ? 'purple' : 'default'
-                        }>
-                          {method}
-                        </Tag>
-                      )
-                    },
-                    {
-                      title: 'Advance Payment',
-                      dataIndex: 'advancePayment',
-                      key: 'advancePayment',
-                      align: 'center' as const,
-                      render: (amount: number, record: any) => {
-                        if (record.paymentMethod === 'Full Payment') {
-                          // Calculate advance payment for Full Payment: downPayment - regFee
-                          const downPayment = record.downPayment || 0;
-                          const regFee = record.regFee || 0;
-                          const advancePayment = Math.max(0, downPayment - regFee);
-                          return advancePayment > 0 ? `LKR ${advancePayment.toLocaleString()}` : '-';
-                        }
-                        return amount ? `LKR ${amount.toLocaleString()}` : '-';
-                      }
-                    },
-                    {
-                      title: 'Down Payment',
-                      dataIndex: 'downPayment',
-                      key: 'downPayment',
-                      align: 'center' as const,
-                      render: (amount: number, record: any) => {
-                        if (record.paymentMethod === 'Full Payment' && amount) {
-                          const regFee = record.regFee || 0;
-                          const advancePayment = Math.max(0, amount - regFee);
-                          return (
-                            <div className="text-center">
-                              <div className="font-medium">LKR {amount.toLocaleString()}</div>
-                              <div className="text-xs text-gray-500">
-                                (Reg Fee: LKR {regFee.toLocaleString()})
+                {/* Content based on selected tab */}
+                {creditTab === 'completed' && (
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h3 className="text-xl font-semibold mb-4 text-green-600">Completed Transactions</h3>
+                    <div className="overflow-x-auto">
+                      <Table
+                        dataSource={vehicleAllocationCoupons.filter((coupon: any) => 
+                          coupon.paymentMethod === 'Leasing via Other Company' && coupon.status === 'Completed'
+                        )}
+                        columns={[
+                          {
+                            title: 'Coupon ID',
+                            dataIndex: 'couponId',
+                            key: 'couponId',
+                            render: (text: string) => <span className="font-medium">{text}</span>
+                          },
+                          {
+                            title: 'Customer Name',
+                            dataIndex: 'fullName',
+                            key: 'fullName'
+                          },
+                          {
+                            title: 'Vehicle Type',
+                            dataIndex: 'vehicleType',
+                            key: 'vehicleType'
+                          },
+                          {
+                            title: 'Total Amount',
+                            dataIndex: 'totalAmount',
+                            key: 'totalAmount',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Down Payment',
+                            dataIndex: 'downPayment',
+                            key: 'downPayment',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Balance',
+                            dataIndex: 'balance',
+                            key: 'balance',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Leasing Company',
+                            dataIndex: 'leasingCompany',
+                            key: 'leasingCompany'
+                          },
+                          {
+                            title: 'Actions',
+                            key: 'actions',
+                            render: (_: any, record: any) => (
+                              <div className="flex gap-2">
+                                <Button size="small" type="primary" onClick={() => handleViewVehicleAllocationCoupon(record)}>
+                                  View Details
+                                </Button>
+                                <Button size="small" type="default" onClick={() => exportIndividualVehicleAllocationCouponToPDF(record)}>
+                                  Export PDF
+                                </Button>
                               </div>
-                            </div>
-                          );
-                        }
-                        return amount ? `LKR ${amount.toLocaleString()}` : '-';
-                      }
-                    },
-                    {
-                      title: 'Balance',
-                      dataIndex: 'balance',
-                      key: 'balance',
-                      align: 'center' as const,
-                      render: (amount: number) => amount ? `LKR ${amount.toLocaleString()}` : '-'
-                    },
-                    {
-                      title: 'Status',
-                      dataIndex: 'status',
-                      key: 'status',
-                      align: 'center' as const,
-                      render: (status: string, record: any) => {
-                        // For all payment methods, show "Released" if cheque is released, otherwise "Pending"
-                        let displayStatus = 'Pending';
-                        let statusColor = 'orange';
-                        
-                        if (record.paymentMethod === 'Full Payment') {
-                          displayStatus = record.chequeReleased ? 'Released' : 'Pending';
-                          statusColor = record.chequeReleased ? 'green' : 'orange';
-                        } else if (record.paymentMethod === 'Leasing via AKR') {
-                          // For AKR leasing, check if down payment is released
-                          displayStatus = record.chequeReleased ? 'Released' : 'Pending';
-                          statusColor = record.chequeReleased ? 'green' : 'orange';
-                        } else if (record.paymentMethod === 'Leasing via Other Company') {
-                          // For Other Company leasing, check if down payment is released
-                          displayStatus = record.chequeReleased ? 'Released' : 'Pending';
-                          statusColor = record.chequeReleased ? 'green' : 'orange';
-                        }
-                        
-                        return (
-                          <Tag color={statusColor}>
-                            {displayStatus}
-                          </Tag>
-                        );
-                      }
-                    },
-                    {
-                      title: 'Actions',
-                      key: 'actions',
-                      align: 'center' as const,
-                      render: (_, record: any) => (
-                        <div className="flex gap-2 justify-center">
-                          <Button 
-                            size="small" 
-                            type="primary" 
-                            onClick={() => {
-                              // View AKR Easy Credit details in a modal
-                              setViewingAkrEasyCredit(record);
-                              setViewAkrEasyCreditModalOpen(true);
-                            }}
-                          >
-                            View
-                          </Button>
-                          {record.paymentMethod === 'Full Payment' && !record.chequeReleased && (
-                            <Button 
-                              size="small" 
-                              type="primary" 
-                              onClick={() => {
-                                // Release cheque for Full Payment - ask for down payment
-                                setEditingAkrEasyCredit(record);
-                                setAkrEasyCreditForm({
-                                  ...akrEasyCreditForm,
-                                  customerName: record.fullName,
-                                  vehicleType: record.vehicleType,
-                                  paymentMethod: record.paymentMethod,
-                                  totalAmount: record.totalAmount.toString(),
-                                  downPayment: '0',
-                                  balance: record.totalAmount.toString(),
-                                  regFee: record.regFee.toString(),
-                                  status: record.status
-                                });
-                                setAkrEasyCreditModalOpen(true);
-                              }}
-                            >
-                              Release Cheque
-                            </Button>
-                          )}
-                          {record.paymentMethod === 'Full Payment' && record.chequeReleased && (
-                            <div className="text-center">
-                              <div className="text-xs text-gray-500">Released on</div>
-                              <div className="text-sm font-medium text-green-600">
-                                {record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
+                            )
+                          }
+                        ]}
+                        rowKey="_id"
+                        pagination={false}
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {creditTab === 'arrears' && (
+                  <div className="bg-white rounded-xl shadow-lg p-6">
+                    <h3 className="text-xl font-semibold mb-4 text-red-600">Arrears - Cheque Release Required</h3>
+                    <div className="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                      <p className="text-sm text-red-700">
+                        <strong>Note:</strong> For Other Companies, down payment needs to be released as cheque. 
+                        Balance amount is handled by the leasing company.
+                      </p>
+                    </div>
+                    <div className="overflow-x-auto">
+                      <Table
+                        dataSource={vehicleAllocationCoupons.filter((coupon: any) => 
+                          coupon.paymentMethod === 'Leasing via Other Company' && coupon.status === 'Pending'
+                        )}
+                        columns={[
+                          {
+                            title: 'Coupon ID',
+                            dataIndex: 'couponId',
+                            key: 'couponId',
+                            render: (text: string) => <span className="font-medium">{text}</span>
+                          },
+                          {
+                            title: 'Customer Name',
+                            dataIndex: 'fullName',
+                            key: 'fullName'
+                          },
+                          {
+                            title: 'Vehicle Type',
+                            dataIndex: 'vehicleType',
+                            key: 'vehicleType'
+                          },
+                          {
+                            title: 'Total Amount',
+                            dataIndex: 'totalAmount',
+                            key: 'totalAmount',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Down Payment (Cheque Required)',
+                            dataIndex: 'downPayment',
+                            key: 'downPayment',
+                            render: (amount: number) => (
+                              <span className="text-red-600 font-semibold">
+                                LKR {amount?.toLocaleString() || '0'}
+                              </span>
+                            )
+                          },
+                          {
+                            title: 'Balance (Leasing Company)',
+                            dataIndex: 'balance',
+                            key: 'balance',
+                            render: (amount: number) => `LKR ${amount?.toLocaleString() || '0'}`
+                          },
+                          {
+                            title: 'Leasing Company',
+                            dataIndex: 'leasingCompany',
+                            key: 'leasingCompany'
+                          },
+                          {
+                            title: 'Actions',
+                            key: 'actions',
+                            render: (_: any, record: any) => (
+                              <div className="flex gap-2">
+                                <Button size="small" type="primary" onClick={() => handleChequeReleaseClick(record)}>
+                                  Release Cheque
+                                </Button>
+                                <Button size="small" type="default" onClick={() => handleViewVehicleAllocationCoupon(record)}>
+                                  View Details
+                                </Button>
                               </div>
-                            </div>
-                          )}
-                          {record.paymentMethod === 'Leasing via AKR' && !record.chequeReleased && (
-                            <Button 
-                              size="small" 
-                              type="default" 
-                              onClick={() => {
-                                // Release down payment cheque for AKR leasing
-                                setEditingAkrEasyCredit(record);
-                                setAkrEasyCreditForm({
-                                  ...akrEasyCreditForm,
-                                  customerName: record.fullName,
-                                  vehicleType: record.vehicleType,
-                                  paymentMethod: record.paymentMethod,
-                                  totalAmount: record.totalAmount.toString(),
-                                  downPayment: record.downPayment.toString(),
-                                  balance: record.balance.toString(),
-                                  regFee: record.regFee.toString(),
-                                  advancePayment: record.advancePayment.toString(),
-                                  docCharge: record.docCharge.toString(),
-                                  insuranceCo: record.insuranceCo.toString(),
-                                  status: record.status
-                                });
-                                setAkrEasyCreditModalOpen(true);
-                              }}
-                            >
-                              Release Down Payment
-                            </Button>
-                          )}
-                          {record.paymentMethod === 'Leasing via AKR' && record.chequeReleased && record.balance > 0 && (
-                            <Button 
-                              size="small" 
-                              type="primary" 
-                              onClick={() => {
-                                // Release balance cheque for AKR leasing
-                                setEditingAkrEasyCredit(record);
-                                setAkrEasyCreditForm({
-                                  ...akrEasyCreditForm,
-                                  customerName: record.fullName,
-                                  vehicleType: record.vehicleType,
-                                  paymentMethod: record.paymentMethod,
-                                  totalAmount: record.totalAmount.toString(),
-                                  downPayment: '0',
-                                  balance: record.balance.toString(),
-                                  regFee: record.regFee.toString(),
-                                  advancePayment: '0',
-                                  docCharge: record.docCharge.toString(),
-                                  insuranceCo: record.insuranceCo.toString(),
-                                  status: record.status
-                                });
-                                setAkrEasyCreditModalOpen(true);
-                              }}
-                            >
-                              Release Balance
-                            </Button>
-                          )}
-                          {record.paymentMethod === 'Leasing via Other Company' && !record.chequeReleased && (
-                            <Button 
-                              size="small" 
-                              type="default" 
-                              onClick={() => {
-                                // Release down payment cheque for Other Company leasing
-                                setEditingAkrEasyCredit(record);
-                                setAkrEasyCreditForm({
-                                  ...akrEasyCreditForm,
-                                  customerName: record.fullName,
-                                  vehicleType: record.vehicleType,
-                                  paymentMethod: record.paymentMethod,
-                                  totalAmount: record.totalAmount.toString(),
-                                  downPayment: record.downPayment.toString(),
-                                  balance: record.balance.toString(),
-                                  regFee: record.regFee.toString(),
-                                  advancePayment: record.advancePayment.toString(),
-                                  docCharge: record.docCharge.toString(),
-                                  insuranceCo: record.insuranceCo.toString(),
-                                  status: record.status
-                                });
-                                setAkrEasyCreditModalOpen(true);
-                              }}
-                            >
-                              Release Down Payment
-                            </Button>
-                          )}
-                          {record.paymentMethod === 'Leasing via AKR' && record.chequeReleased && record.balance <= 0 && (
-                            <div className="text-center">
-                              <div className="text-xs text-gray-500">Released on</div>
-                              <div className="text-sm font-medium text-green-600">
-                                {record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
-                              </div>
-                            </div>
-                          )}
-                          {record.paymentMethod === 'Leasing via Other Company' && record.chequeReleased && (
-                            <div className="text-center">
-                              <div className="text-xs text-gray-500">Released on</div>
-                              <div className="text-sm font-medium text-green-600">
-                                {record.chequeReleaseDate ? new Date(record.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
-                              </div>
-                            </div>
-                          )}
-                        </div>
-                      )
-                    }
-                  ]}
-                  pagination={{
-                    current: akrEasyCreditPagination?.current || 1,
-                    pageSize: akrEasyCreditPagination?.pageSize || 10,
-                    total: akrEasyCreditPagination?.total || 0,
-                    onChange: (page) => fetchAkrEasyCredit(page, akrEasyCreditSearch),
-                    showSizeChanger: false
-                  }}
-                  rowKey="_id"
-                  scroll={{ x: true }}
-                />
+                            )
+                          }
+                        ]}
+                        rowKey="_id"
+                        pagination={false}
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -16050,21 +14968,20 @@ export default function AdminDashboard() {
                                                 const advancePayment = record.advancePayment || 0;
                         
                         if (paymentMethod === 'Full Payment') {
-                          // For Full Payment: bike amount + reg fee - discount
-                          const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-                          requiredAmount = bikeAmount + regFee - discountAmount;
+                          // For Full Payment: advance payment + reg fee
+                          requiredAmount = advancePayment + regFee;
                           arrears = requiredAmount - amountCollected;
-                          console.log(`Full Payment calculation: ${bikeAmount} + ${regFee} - ${discountAmount} = ${requiredAmount}`);
+                          console.log(`Full Payment calculation: ${advancePayment} + ${regFee} = ${requiredAmount}`);
                         } else if (paymentMethod === 'Leasing via AKR') {
-                          // For Lease via AKR: advance payment + reg fee
-                          requiredAmount = advancePayment + regFee;
+                          // For Lease via AKR: advance payment + reg fee + insurance + doc charge
+                          requiredAmount = advancePayment + regFee + insuranceAmount + docCharge;
                           arrears = requiredAmount - amountCollected;
-                          console.log(`Leasing via AKR calculation: ${advancePayment} + ${regFee} = ${requiredAmount}`);
+                          console.log(`Leasing via AKR calculation: ${advancePayment} + ${regFee} + ${insuranceAmount} + ${docCharge} = ${requiredAmount}`);
                         } else {
-                          // For Lease via Other: advance amount + reg fee
-                          requiredAmount = advancePayment + regFee;
+                          // For Lease via Other: advance payment + reg fee + insurance + doc charge
+                          requiredAmount = advancePayment + regFee + insuranceAmount + docCharge;
                           arrears = requiredAmount - amountCollected;
-                          console.log(`Lease via Other calculation: ${advancePayment} + ${regFee} = ${requiredAmount}`);
+                          console.log(`Lease via Other calculation: ${advancePayment} + ${regFee} + ${insuranceAmount} + ${docCharge} = ${requiredAmount}`);
                         }
                         
                         if (arrears <= 0) {
@@ -16134,22 +15051,21 @@ export default function AdminDashboard() {
                             const discountAmount = record.discountAmount || 0;
                             const insuranceAmount = 16500; // Default insurance amount since it's not stored separately
                             const paymentMethod = record.paymentMethod || 'Full Payment';
-                            const advancePayment = record.advancePayment || 0;
                             
                             let arrears = 0;
                             
                             if (paymentMethod === 'Full Payment') {
-                              // For Full Payment: bike amount + reg fee - discount
-                              const bikeAmount = totalAmount - regFee; // Extract bike amount from total
-                              const requiredAmount = bikeAmount + regFee - discountAmount;
+                              // For Full Payment: bike amount + reg fee + insurance fee + doc charge (no discount subtraction)
+                              const bikeAmount = totalAmount - regFee - docCharge; // Extract bike amount from total
+                              const requiredAmount = bikeAmount + regFee + insuranceAmount + docCharge;
                               arrears = requiredAmount - amountCollected;
                             } else if (paymentMethod === 'Leasing via AKR') {
-                              // For Lease via AKR: advance payment + reg fee
-                              const requiredAmount = advancePayment + regFee;
+                              // For Lease via AKR: downpayment + reg fee + doc charge + insurance (no discount subtraction)
+                              const requiredAmount = downPayment + regFee + docCharge + insuranceAmount;
                               arrears = requiredAmount - amountCollected;
                             } else {
-                              // For Lease via Other: advance amount + reg fee
-                              const requiredAmount = advancePayment + regFee;
+                              // For Lease via Other: downpayment + reg fee only (no insurance, no doc charge)
+                              const requiredAmount = downPayment + regFee;
                               arrears = requiredAmount - amountCollected;
                             }
                             
@@ -16496,43 +15412,32 @@ export default function AdminDashboard() {
                                 {/* Payment Details - Show for all payment methods */}
                   <div className="bg-purple-50 p-4 rounded-lg">
                     <h3 className="text-lg font-semibold mb-4">Payment Details</h3>
-                    {vehicleAllocationCouponForm.paymentMethod === 'Full Payment' && (
-                      <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                        <p className="text-sm text-blue-800">
-                          <strong>Note:</strong> For Full Payment, no advance payment is required. 
-                          The total amount is calculated as Bike Price + Registration Fee - Discount. 
-                          Down payment and balance allocation will be handled in the AKR Easy Credit tab.
-                        </p>
-                      </div>
-                    )}
                     <div className="text-sm text-gray-600 mb-4">
                       <p><strong>Payment Calculation Rules:</strong></p>
                       <ul className="list-disc list-inside space-y-1">
-                        <li><strong>Full Payment:</strong> Total = Bike Price + Registration Fee - Discount (Down Payment & Balance set in AKR Easy Credit tab)</li>
+                        <li><strong>Full Payment:</strong> Down Payment = Advance Payment + Registration Fee</li>
                         <li><strong>Lease via AKR:</strong> Down Payment = Advance Payment + Registration Fee + Insurance + Doc Charge</li>
                         <li><strong>Lease via Other Company:</strong> Down Payment = Advance Payment + Registration Fee + Insurance + Doc Charge</li>
                       </ul>
                     </div>
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    {/* Advance Payment - Show for leasing only */}
-                    {vehicleAllocationCouponForm.paymentMethod !== 'Full Payment' && (
-                      <div>
-                        <label className="block text-sm font-medium mb-1">Advance Payment *</label>
-                        <input
-                          type="number"
-                          name="advancePayment"
-                          value={vehicleAllocationCouponForm.advancePayment}
-                          onChange={handleVehicleAllocationCouponNumberChange}
-                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                          step="0.01"
-                          min="0"
-                          required={vehicleAllocationCouponForm.paymentMethod !== 'Full Payment'}
-                          placeholder="Enter advance payment amount"
-                        />
-                      </div>
-                    )}
+                    {/* Advance Payment - Show for all payment methods */}
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Advance Payment *</label>
+                      <input
+                        type="number"
+                        name="advancePayment"
+                        value={vehicleAllocationCouponForm.advancePayment}
+                        onChange={handleVehicleAllocationCouponNumberChange}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        step="0.01"
+                        min="0"
+                        required
+                        placeholder="Enter advance payment amount"
+                      />
+                    </div>
                     
-                    {/* Down Payment - Only show for leasing, not for Full Payment */}
+                    {/* Show Down Payment for all except Full Payment */}
                     {vehicleAllocationCouponForm.paymentMethod !== 'Full Payment' && (
                       <div>
                         <label className="block text-sm font-medium mb-1">Down Payment (Auto-calculated)</label>
@@ -16650,22 +15555,19 @@ export default function AdminDashboard() {
                           readOnly
                         />
                       </div>
-                      {/* Balance - Only show for leasing, not for Full Payment */}
-                      {vehicleAllocationCouponForm.paymentMethod !== 'Full Payment' && (
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Balance *</label>
-                          <input
-                            type="number"
-                            name="balance"
-                            value={vehicleAllocationCouponForm.balance}
-                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                            step="0.01"
-                            min="0"
-                            required
-                            readOnly
-                          />
-                        </div>
-                      )}
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Balance *</label>
+                        <input
+                          type="number"
+                          name="balance"
+                          value={vehicleAllocationCouponForm.balance}
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                          step="0.01"
+                          min="0"
+                          required
+                          readOnly
+                        />
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -17005,25 +15907,10 @@ export default function AdminDashboard() {
                 <h3 className="text-lg font-semibold mb-4 text-blue-800">Down Payment Information</h3>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div>
-                    <label className="block text-sm font-medium mb-1">Required Amount (Based on Payment Method)</label>
+                    <label className="block text-sm font-medium mb-1">Total Down Payment</label>
                     <input
                       type="number"
-                      value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
-                        const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
-                        const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
-                        
-                        if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          return bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          return advancePayment + regFee;
-                        } else {
-                          return advancePayment + regFee;
-                        }
-                      })()}
+                      value={selectedCouponForDeposit?.downPayment || 0}
                       className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
                       readOnly
                     />
@@ -17043,30 +15930,15 @@ export default function AdminDashboard() {
                     )}
                   </div>
                   <div>
-                    <label className="block text-sm font-medium mb-1">Remaining Arrears</label>
+                    <label className="block text-sm font-medium mb-1">Remaining Down Payment</label>
                     <input
                       type="number"
                       value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
-                        const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
-                        const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
+                        const downPayment = selectedCouponForDeposit?.downPayment || 0;
                         const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
                         const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
                         const totalCollected = previouslyCollected + currentCollection;
-                        
-                        let requiredAmount = 0;
-                        if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          requiredAmount = bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          requiredAmount = advancePayment + regFee;
-                        } else {
-                          requiredAmount = advancePayment + regFee;
-                        }
-                        
-                        return Math.max(0, requiredAmount - totalCollected);
+                        return Math.max(0, downPayment - totalCollected);
                       })()}
                       className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-blue-100 text-blue-800 font-bold"
                       readOnly
@@ -17077,27 +15949,12 @@ export default function AdminDashboard() {
                     <input
                       type="text"
                       value={(() => {
-                        const totalAmount = selectedCouponForDeposit?.totalAmount || 0;
-                        const regFee = selectedCouponForDeposit?.regFee || 0;
-                        const discountAmount = selectedCouponForDeposit?.discountAmount || 0;
-                        const advancePayment = selectedCouponForDeposit?.advancePayment || 0;
-                        const paymentMethod = selectedCouponForDeposit?.paymentMethod || 'Full Payment';
+                        const downPayment = selectedCouponForDeposit?.downPayment || 0;
                         const previouslyCollected = selectedCouponForDeposit?.depositAmount || 0;
                         const currentCollection = parseFloat(depositForm.depositedAmount) || 0;
                         const totalCollected = previouslyCollected + currentCollection;
-                        
-                        let requiredAmount = 0;
-                        if (paymentMethod === 'Full Payment') {
-                          const bikeAmount = totalAmount - regFee;
-                          requiredAmount = bikeAmount + regFee - discountAmount;
-                        } else if (paymentMethod === 'Leasing via AKR') {
-                          requiredAmount = advancePayment + regFee;
-                        } else {
-                          requiredAmount = advancePayment + regFee;
-                        }
-                        
-                        const remaining = requiredAmount - totalCollected;
-                        return remaining <= 0 ? 'Arrears Collected' : 'Partially Collected';
+                        const remaining = downPayment - totalCollected;
+                        return remaining <= 0 ? 'Down Payment Collected' : 'Partially Collected';
                       })()}
                       className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
                       readOnly
@@ -17855,20 +16712,17 @@ export default function AdminDashboard() {
                   <div className="space-y-3 max-h-80 overflow-y-auto">
                     {(() => {
                       // Debug: Log the data we have
-                                              console.log('AKR Easy Credit Data:', akrEasyCreditData);
-                        console.log('Total AKR Easy Credit records:', akrEasyCreditData.length);
+                      console.log('Vehicle Allocation Coupons:', vehicleAllocationCoupons);
+                      console.log('Total coupons:', vehicleAllocationCoupons.length);
                       
                       // Get all coupons with balance and installment dates (ONLY Leasing via AKR)
-                      // Use akrEasyCreditData instead of vehicleAllocationCoupons for better integration
-                      const couponsWithInstallments = akrEasyCreditData.filter((coupon: any) => {
+                      const couponsWithInstallments = vehicleAllocationCoupons.filter((coupon: any) => {
                         const balance = parseFloat(coupon.balance) || 0;
-                        const totalAmount = parseFloat(coupon.totalAmount) || 0;
-                        const downPayment = parseFloat(coupon.downPayment) || 0;
-                        const originalBalance = totalAmount - downPayment;
-                        const hasBalance = balance > 0 || originalBalance > 0;
+                        const remainingBalance = parseFloat(coupon.remainingBalance) || 0;
+                        const hasBalance = balance > 0 || remainingBalance > 0;
                         const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR';
                         
-                        console.log('AKR Easy Credit Coupon:', coupon.couponId, 'Balance:', coupon.balance, 'Original Balance:', originalBalance, 'Payment Method:', coupon.paymentMethod, 'Has Balance:', hasBalance, 'Is AKR Leasing:', isAKRLeasing);
+                        console.log('Coupon:', coupon.couponId, 'Balance:', coupon.balance, 'Remaining Balance:', coupon.remainingBalance, 'Payment Method:', coupon.paymentMethod, 'Has Balance:', hasBalance, 'Is AKR Leasing:', isAKRLeasing);
                         
                         return hasBalance && isAKRLeasing;
                       });
@@ -18014,7 +16868,7 @@ export default function AdminDashboard() {
                               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
                             </svg>
                             <p>No due installments found</p>
-                            <p className="text-xs mt-2">Debug: {akrEasyCreditData.length} total AKR Easy Credit records, {couponsWithInstallments.length} with balance</p>
+                            <p className="text-xs mt-2">Debug: {vehicleAllocationCoupons.length} total coupons, {couponsWithInstallments.length} with balance</p>
                           </div>
                         );
                       }
@@ -18078,17 +16932,11 @@ export default function AdminDashboard() {
                     </h3>
                     <div className="flex items-center gap-2">
                       <div className="text-sm text-gray-500">
-                        {(() => {
-                          const reminders = akrEasyCreditData.filter((coupon: any) => {
-                            if (coupon.paymentMethod === 'Full Payment') {
-                              return !coupon.chequeReleased && parseFloat(coupon.totalAmount) > 0;
-                            } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                              return parseFloat(coupon.balance) > 0;
-                            }
-                            return false;
-                          });
-                          return `${reminders.length} pending`;
-                        })()}
+                        {chequeReleaseRemindersLoading ? (
+                          <Spin size="small" />
+                        ) : (
+                          `${chequeReleaseReminders.length} pending`
+                        )}
                       </div>
                       <Button 
                         type="link" 
@@ -18101,118 +16949,69 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {(() => {
-                      // Calculate cheque release reminders from AKR Easy Credit data
-                      const today = new Date();
-                      const reminders = akrEasyCreditData.filter((coupon: any) => {
-                        // Only show unreleased cheques
-                        if (coupon.paymentMethod === 'Full Payment') {
-                          return !coupon.chequeReleased && parseFloat(coupon.totalAmount) > 0;
-                        } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                          return parseFloat(coupon.balance) > 0;
-                        }
-                        return false; // Exclude Leasing via Other Company
-                      }).map((coupon: any) => {
-                        const downPaymentDate = coupon.dateOfPurchase ? new Date(coupon.dateOfPurchase) : today;
-                        const daysSinceDownPayment = Math.floor((today.getTime() - downPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
-                        
-                        // Calculate expected release date (7 days after down payment)
-                        const expectedReleaseDate = new Date(downPaymentDate);
-                        expectedReleaseDate.setDate(expectedReleaseDate.getDate() + 7);
-                        
-                        const daysUntilRelease = Math.floor((expectedReleaseDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                        const isOverdue = daysUntilRelease < 0;
-                        const daysOverdue = Math.abs(daysUntilRelease);
-                        
-                        let chequeAmount = 0;
-                        let chequeType = '';
-                        
-                        if (coupon.paymentMethod === 'Full Payment') {
-                          chequeAmount = parseFloat(coupon.totalAmount) || 0;
-                          chequeType = 'Full Payment (2 Cheques)';
-                        } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                          chequeAmount = parseFloat(coupon.balance) || 0;
-                          chequeType = 'Balance Payment';
-                        }
-                        
-                        return {
-                          ...coupon,
-                          isOverdue,
-                          daysSinceDownPayment,
-                          daysUntilRelease,
-                          daysOverdue,
-                          chequeAmount,
-                          chequeType,
-                          expectedReleaseDate
-                        };
-                      }).sort((a, b) => {
-                        // Sort by urgency: overdue first, then by days until release
-                        if (a.isOverdue && !b.isOverdue) return -1;
-                        if (!a.isOverdue && b.isOverdue) return 1;
-                        return a.daysUntilRelease - b.daysUntilRelease;
-                      });
-                      
-                      if (reminders.length === 0) {
-                        return (
-                          <div className="text-center py-8 text-gray-500">
-                            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p>No cheque release reminders</p>
-                            <p className="text-xs mt-2">All cheques are up to date</p>
-                          </div>
-                        );
-                      }
-                      
-                      return reminders.slice(0, 8).map((reminder: any) => {
-                        const isOverdue = reminder.isOverdue;
-                        const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
-                        const daysUntilRelease = reminder.daysUntilRelease || 0;
-                        
-                        return (
-                          <div key={reminder._id} className={`p-3 rounded-lg border-l-4 ${
-                            isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
-                          }`}>
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="font-semibold text-gray-900">{reminder.fullName}</div>
-                                <div className="text-sm text-gray-600">{reminder.vehicleType}</div>
-                                <div className="text-sm text-gray-500">
-                                  Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
-                                  {reminder.chequeType}: LKR {reminder.chequeAmount.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className={`font-bold ${
-                                  isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
-                                }`}>
-                                  {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {isOverdue ? 
-                                    `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
-                                    daysUntilRelease === 0 ? 'Due today' : 
-                                    daysUntilRelease === 1 ? 'Due tomorrow' : 
-                                    `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
-                                  }
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Expected: {reminder.expectedReleaseDate.toLocaleDateString()}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  To: David Peries
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
-                      });
-                    })()}
+                    {chequeReleaseRemindersLoading ? (
+                      <div className="text-center py-8">
+                        <Spin />
+                        <p className="text-gray-500 mt-2">Loading reminders...</p>
+                      </div>
+                    ) : chequeReleaseReminders.length === 0 ? (
+                      <div className="text-center py-8 text-gray-500">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p>No cheque release reminders</p>
+                        <p className="text-xs mt-2">All cheques are up to date</p>
+                      </div>
+                                         ) : (
+                       chequeReleaseReminders.slice(0, 8).map((reminder: any) => {
+                         const isOverdue = reminder.isOverdue;
+                         const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                         const daysUntilRelease = reminder.daysUntilRelease || 0;
+                         
+                         return (
+                           <div key={reminder._id} className={`p-3 rounded-lg border-l-4 ${
+                             isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                           }`}>
+                             <div className="flex justify-between items-start">
+                               <div className="flex-1">
+                                 <div className="font-semibold text-gray-900">{reminder.fullName}</div>
+                                 <div className="text-sm text-gray-600">{reminder.vehicleType}</div>
+                                 <div className="text-sm text-gray-500">
+                                   Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
+                                 </div>
+                                 <div className="text-xs text-gray-400 mt-1">
+                                   Down Payment: LKR {parseFloat(reminder.downPayment).toLocaleString()}
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
+                                 </div>
+                               </div>
+                               <div className="text-right">
+                                 <div className={`font-bold ${
+                                   isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
+                                 }`}>
+                                   {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                 </div>
+                                 <div className="text-xs text-gray-500">
+                                   {isOverdue ? 
+                                     `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                     daysUntilRelease === 0 ? 'Due today' : 
+                                     daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                     `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                   }
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   Release: {new Date(reminder.chequeReleaseDate).toLocaleDateString()}
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   To: David Peries
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                         );
+                       })
+                     )}
                   </div>
                 </div>
 
@@ -18383,11 +17182,13 @@ export default function AdminDashboard() {
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="space-y-4">
                   {(() => {
-                    // Get all AKR leasing coupons with installment dates (including completed ones)
+                    // Get all coupons with balance and installment dates (ONLY Leasing via AKR)
                     const couponsWithInstallments = vehicleAllocationCoupons.filter((coupon: any) => {
+                      const balance = parseFloat(coupon.balance) || 0;
+                      const remainingBalance = parseFloat(coupon.remainingBalance) || 0;
+                      const hasBalance = balance > 0 || remainingBalance > 0;
                       const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR';
-                      // Include both pending (balance > 0) and completed (balance = 0) AKR leasing transactions
-                      return isAKRLeasing;
+                      return hasBalance && isAKRLeasing;
                     });
 
                     // Find the next due installment for each coupon
@@ -18402,18 +17203,10 @@ export default function AdminDashboard() {
                       const secondDate = coupon.secondInstallmentDate || coupon.secondInstallment?.date;
                       const thirdDate = coupon.thirdInstallmentDate || coupon.thirdInstallment?.date;
 
-                      // Calculate installment amounts based on balance status
-                      const balance = parseFloat(coupon.balance) || 0;
-                      const totalAmount = parseFloat(coupon.totalAmount) || 0;
-                      const downPayment = parseFloat(coupon.downPayment) || 0;
-                      
-                      // For completed transactions (balance = 0), use original balance for installment calculation
-                      const installmentBaseAmount = balance > 0 ? balance : (totalAmount - downPayment);
-                      const installmentAmount = installmentBaseAmount / 3;
-                      
-                      const firstAmount = parseFloat(coupon.firstInstallmentAmount || coupon.firstInstallment?.amount || installmentAmount);
-                      const secondAmount = parseFloat(coupon.secondInstallmentAmount || coupon.secondInstallment?.amount || installmentAmount);
-                      const thirdAmount = parseFloat(coupon.thirdInstallmentAmount || coupon.thirdInstallment?.amount || installmentAmount);
+                      // Check for different possible amount field names
+                      const firstAmount = parseFloat(coupon.firstInstallmentAmount || coupon.firstInstallment?.amount || 0);
+                      const secondAmount = parseFloat(coupon.secondInstallmentAmount || coupon.secondInstallment?.amount || 0);
+                      const thirdAmount = parseFloat(coupon.thirdInstallmentAmount || coupon.thirdInstallment?.amount || 0);
 
                       // Check for payment status in the nested installment objects
                       const firstInstallmentPaid = coupon.firstInstallment?.paid || coupon.firstInstallment?.status === 'Paid' || coupon.firstInstallment?.paidAmount > 0 || false;
@@ -18555,15 +17348,11 @@ export default function AdminDashboard() {
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div className="text-sm text-gray-500">
-                    {(() => {
-                      const unreleasedCheques = akrEasyCreditData.filter((coupon: any) => {
-                        // Only show transactions where balance needs cheque release
-                        const isFullPayment = coupon.paymentMethod === 'Full Payment' && !coupon.chequeReleased && coupon.totalAmount > 0;
-                        const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR' && coupon.balance > 0;
-                        return isFullPayment || isAKRLeasing;
-                      });
-                      return `Total: ${unreleasedCheques.length} reminders`;
-                    })()}
+                    {chequeReleaseRemindersLoading ? (
+                      <Spin size="small" />
+                    ) : (
+                      `Total: ${chequeReleaseReminders.length} reminders`
+                    )}
                   </div>
                   <Button 
                     type="primary" 
@@ -18575,117 +17364,169 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="space-y-4">
-                  {(() => {
-                    // Get unreleased cheques from AKR Easy Credit data
-                    const unreleasedCheques = akrEasyCreditData.filter((coupon: any) => {
-                      // Only show transactions where balance needs cheque release
-                      const isFullPayment = coupon.paymentMethod === 'Full Payment' && !coupon.chequeReleased && coupon.totalAmount > 0;
-                      const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR' && coupon.balance > 0;
-                      
-                      return isFullPayment || isAKRLeasing;
-                    });
-
-                    if (unreleasedCheques.length === 0) {
-                      return (
-                        <div className="text-center py-12 text-gray-500">
-                          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
-                          <p>All cheques are up to date</p>
-                        </div>
-                      );
-                    }
-
-                    return unreleasedCheques.map((coupon: any) => {
-                      const today = new Date();
-                      const purchaseDate = new Date(coupon.dateOfPurchase);
-                      const daysSincePurchase = Math.floor((today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
-                      
-                      // Calculate cheque amount based on payment method
-                      let chequeAmount = 0;
-                      let chequeType = '';
-                      
-                      if (coupon.paymentMethod === 'Full Payment') {
-                        chequeAmount = coupon.totalAmount;
-                        chequeType = 'Full Payment (2 Cheques)';
-                      } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                        // For AKR leasing, show balance amount (not down payment)
-                        chequeAmount = coupon.balance;
-                        chequeType = 'Balance Payment';
-                      }
-                      
-                      // Determine status based on days since purchase
-                      const isOverdue = daysSincePurchase > 7; // Consider overdue after 7 days
-                      const isDueSoon = daysSincePurchase > 3; // Due soon after 3 days
-                      
-                      return (
-                        <div key={coupon._id} className={`p-6 rounded-lg border-l-4 ${
-                          isOverdue ? 'border-red-500 bg-red-50' : isDueSoon ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
-                        }`}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
-                                <div className="font-semibold text-lg text-gray-900">{coupon.fullName}</div>
-                                <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-                                  isOverdue ? 'bg-red-100 text-red-800' : isDueSoon ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
-                                }`}>
-                                  {isOverdue ? 'OVERDUE' : isDueSoon ? 'DUE SOON' : 'UPCOMING'}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <div className="text-sm text-gray-600">Vehicle</div>
-                                  <div className="font-medium">{coupon.vehicleType}</div>
+                  {chequeReleaseRemindersLoading ? (
+                    <div className="text-center py-12">
+                      <Spin size="large" />
+                      <p className="text-gray-500 mt-4">Loading cheque release reminders...</p>
+                    </div>
+                  ) : chequeReleaseReminders.length === 0 ? (
+                    <div className="text-center py-12 text-gray-500">
+                      <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
+                      <p>All cheques are up to date</p>
+                    </div>
+                  ) : (
+                    <>
+                      {/* Pending Reminders */}
+                      {chequeReleaseReminders.filter((r: any) => r.status === 'pending').map((reminder: any) => {
+                        const isOverdue = reminder.isOverdue;
+                        const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                        const daysUntilRelease = reminder.daysUntilRelease || 0;
+                        
+                        return (
+                          <div key={reminder._id} className={`p-6 rounded-lg border-l-4 ${
+                            isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                          }`}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
+                                  <div className="font-semibold text-lg text-gray-900">{reminder.fullName}</div>
+                                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
+                                    isOverdue ? 'bg-red-100 text-red-800' : daysUntilRelease <= 1 ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                  </span>
                                 </div>
-                                <div>
-                                  <div className="text-sm text-gray-600">Coupon ID</div>
-                                  <div className="font-medium">{coupon.couponId}</div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <div className="text-sm text-gray-600">Vehicle</div>
+                                    <div className="font-medium">{reminder.vehicleType}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Coupon ID</div>
+                                    <div className="font-medium">{reminder.couponId}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Contact</div>
+                                    <div className="font-medium">{reminder.contactNo || 'N/A'}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Down Payment</div>
+                                    <div className="font-medium text-lg">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
+                                  </div>
                                 </div>
-                                <div>
-                                  <div className="text-sm text-gray-600">Contact</div>
-                                  <div className="font-medium">{coupon.contactNo || 'N/A'}</div>
-                                </div>
-                                <div>
-                                  <div className="text-sm text-gray-600">Payment Method</div>
-                                  <div className="font-medium">{coupon.paymentMethod}</div>
-                                </div>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <div>
-                                  <div className="text-gray-600">Days since purchase</div>
-                                  <div className="font-medium">{daysSincePurchase} day{daysSincePurchase !== 1 ? 's' : ''}</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-600">Purchase date</div>
-                                  <div className="font-medium">{purchaseDate.toLocaleDateString()}</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-600">Status</div>
-                                  <div className="font-medium">
-                                    {isOverdue ? 
-                                      `${daysSincePurchase - 7} day${(daysSincePurchase - 7) !== 1 ? 's' : ''} overdue` : 
-                                      isDueSoon ? 'Due soon' : 
-                                      'Upcoming'
-                                    }
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                  <div>
+                                    <div className="text-gray-600">Days since payment</div>
+                                    <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-600">Cheque release date</div>
+                                    <div className="font-medium">{new Date(reminder.chequeReleaseDate).toLocaleDateString()}</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-600">Status</div>
+                                    <div className="font-medium">
+                                      {isOverdue ? 
+                                        `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                        daysUntilRelease === 0 ? 'Due today' : 
+                                        daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                        `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                      }
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                                                          <div className="text-right ml-4">
+                              <div className="text-right ml-4">
                                 <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
                                 <div className="text-xs text-gray-500 mb-3">
-                                  {chequeType}: LKR {chequeAmount.toLocaleString()}
+                                  Cheque amount: LKR {parseFloat(reminder.downPayment).toLocaleString()}
                                 </div>
-                                <div className="text-xs text-blue-600 font-medium">
-                                  Go to AKR Easy Credit tab to release
+                                <Button 
+                                  type="primary" 
+                                  size="small"
+                                  onClick={() => handleChequeReleaseClick(reminder)}
+                                  className="bg-green-600 hover:bg-green-700"
+                                  loading={chequeReleaseLoading === reminder.couponId}
+                                  disabled={chequeReleaseLoading === reminder.couponId}
+                                >
+                                  {chequeReleaseLoading === reminder.couponId ? 'Processing...' : 'Mark as Done'}
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        );
+                      })}
+
+                      {/* Released Reminders */}
+                      {chequeReleaseReminders.filter((r: any) => r.status === 'released').length > 0 && (
+                        <div className="mt-8">
+                          <h3 className="text-lg font-semibold text-gray-800 mb-4 border-b pb-2">Released Cheques</h3>
+                          {chequeReleaseReminders.filter((r: any) => r.status === 'released').map((reminder: any) => {
+                            const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                            const daysSinceReleased = reminder.daysSinceReleased || 0;
+                            
+                            return (
+                              <div key={reminder._id} className="p-6 rounded-lg border-l-4 border-green-500 bg-green-50 mb-4">
+                                <div className="flex justify-between items-start">
+                                  <div className="flex-1">
+                                    <div className="flex items-center gap-3 mb-3">
+                                      <div className="font-semibold text-lg text-gray-900">{reminder.fullName}</div>
+                                      <span className="inline-flex px-3 py-1 text-sm font-semibold rounded-full bg-green-100 text-green-800">
+                                        RELEASED
+                                      </span>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                      <div>
+                                        <div className="text-sm text-gray-600">Vehicle</div>
+                                        <div className="font-medium">{reminder.vehicleType}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Coupon ID</div>
+                                        <div className="font-medium">{reminder.couponId}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Contact</div>
+                                        <div className="font-medium">{reminder.contactNo || 'N/A'}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-sm text-gray-600">Down Payment</div>
+                                        <div className="font-medium text-lg">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
+                                      </div>
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                      <div>
+                                        <div className="text-gray-600">Days since payment</div>
+                                        <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
+                                      </div>
+                                      <div>
+                                        <div className="text-gray-600">Released date</div>
+                                        <div className="font-medium">
+                                          {reminder.chequeReleasedDate ? new Date(reminder.chequeReleasedDate).toLocaleDateString() : 'Not set'}
+                                        </div>
+                                      </div>
+                                      <div>
+                                        <div className="text-gray-600">Days since release</div>
+                                        <div className="font-medium">{daysSinceReleased} day{daysSinceReleased !== 1 ? 's' : ''}</div>
+                                      </div>
+                                    </div>
+                                  </div>
+                                  <div className="text-right ml-4">
+                                    <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
+                                    <div className="text-xs text-gray-500">
+                                      Cheque amount: LKR {parseFloat(reminder.downPayment).toLocaleString()}
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                          </div>
+                            );
+                          })}
                         </div>
-                      );
-                    });
-                  })()}
+                      )}
+                    </>
+                  )}
                 </div>
               </div>
             </div>
@@ -20118,164 +18959,6 @@ export default function AdminDashboard() {
         )}
       </Modal>
 
-      {/* View AKR Easy Credit Modal */}
-      <Modal
-        title={
-          <div>
-            <div className="text-lg font-semibold">AKR Easy Credit Details</div>
-            <div className="text-sm text-blue-600 mt-1">
-              Customer: {viewingAkrEasyCredit?.fullName || 'N/A'}
-            </div>
-          </div>
-        }
-        open={viewAkrEasyCreditModalOpen}
-        onCancel={() => {
-          setViewAkrEasyCreditModalOpen(false);
-          setViewingAkrEasyCredit(null);
-        }}
-        footer={[
-          <Button key="export" type="primary" onClick={() => exportIndividualAkrEasyCreditToPDF(viewingAkrEasyCredit)}>
-            Export PDF
-          </Button>,
-          <Button key="close" onClick={() => {
-            setViewAkrEasyCreditModalOpen(false);
-            setViewingAkrEasyCredit(null);
-          }}>
-            Close
-          </Button>
-        ]}
-        width={1000}
-        style={{ top: 20 }}
-      >
-        {viewingAkrEasyCredit && (
-          <div className="space-y-6">
-            {/* Basic Customer Info */}
-            <div className="bg-gray-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-4 text-gray-800">Customer Information</h3>
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">Coupon ID</label>
-                  <div className="text-lg font-semibold">{viewingAkrEasyCredit.couponId || 'N/A'}</div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">Customer Name</label>
-                  <div className="text-lg font-semibold">{viewingAkrEasyCredit.fullName || 'N/A'}</div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">Vehicle Type</label>
-                  <div className="text-base">{viewingAkrEasyCredit.vehicleType || 'N/A'}</div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-gray-600">Payment Method</label>
-                  <div className="text-base">{viewingAkrEasyCredit.paymentMethod || 'N/A'}</div>
-                </div>
-              </div>
-            </div>
-
-            {/* Cheque Release Details */}
-            <div className="bg-blue-50 p-4 rounded-lg">
-              <h3 className="text-lg font-semibold mb-4 text-blue-800">Cheque Release Details</h3>
-              
-              {/* Down Payment Release */}
-              <div className="mb-4 p-3 bg-white rounded border">
-                <h4 className="font-semibold text-blue-700 mb-2">Down Payment Release</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Down Payment Amount</label>
-                    <div className="text-lg font-semibold text-blue-600">
-                      LKR {viewingAkrEasyCredit.downPayment ? parseFloat(viewingAkrEasyCredit.downPayment).toLocaleString() : '0'}
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-600">Release Status</label>
-                    <div className="text-base">
-                      <Tag color={viewingAkrEasyCredit.chequeReleased ? 'green' : 'orange'}>
-                        {viewingAkrEasyCredit.chequeReleased ? 'Released' : 'Pending'}
-                      </Tag>
-                    </div>
-                  </div>
-                  {viewingAkrEasyCredit.chequeReleased && (
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Release Date</label>
-                      <div className="text-base text-green-600 font-semibold">
-                        {viewingAkrEasyCredit.chequeReleaseDate ? new Date(viewingAkrEasyCredit.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-
-              {/* Balance Release (for AKR Leasing) */}
-              {viewingAkrEasyCredit.paymentMethod === 'Leasing via AKR' && (
-                <div className="p-3 bg-white rounded border">
-                  <h4 className="font-semibold text-green-700 mb-2">Balance Release</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Balance Amount</label>
-                      <div className="text-lg font-semibold text-green-600">
-                        LKR {(() => {
-                          const totalAmount = parseFloat(viewingAkrEasyCredit.totalAmount) || 0;
-                          const downPayment = parseFloat(viewingAkrEasyCredit.downPayment) || 0;
-                          const originalBalance = totalAmount - downPayment;
-                          return originalBalance.toLocaleString();
-                        })()}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Release Status</label>
-                      <div className="text-base">
-                        <Tag color={viewingAkrEasyCredit.balance > 0 ? 'orange' : 'green'}>
-                          {viewingAkrEasyCredit.balance > 0 ? 'Pending' : 'Released'}
-                        </Tag>
-                      </div>
-                    </div>
-                    {viewingAkrEasyCredit.balance === 0 && viewingAkrEasyCredit.chequeReleased && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600">Balance Release Date</label>
-                        <div className="text-base text-green-600 font-semibold">
-                          {viewingAkrEasyCredit.chequeReleaseDate ? new Date(viewingAkrEasyCredit.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-
-              {/* Full Payment Release (for Full Payment) */}
-              {viewingAkrEasyCredit.paymentMethod === 'Full Payment' && (
-                <div className="p-3 bg-white rounded border">
-                  <h4 className="font-semibold text-purple-700 mb-2">Full Payment Release</h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Total Amount</label>
-                      <div className="text-lg font-semibold text-purple-600">
-                        LKR {viewingAkrEasyCredit.totalAmount ? parseFloat(viewingAkrEasyCredit.totalAmount).toLocaleString() : '0'}
-                      </div>
-                    </div>
-                    <div>
-                      <label className="block text-sm font-medium text-gray-600">Release Status</label>
-                      <div className="text-base">
-                        <Tag color={viewingAkrEasyCredit.chequeReleased ? 'green' : 'orange'}>
-                          {viewingAkrEasyCredit.chequeReleased ? 'Released' : 'Pending'}
-                        </Tag>
-                      </div>
-                    </div>
-                    {viewingAkrEasyCredit.chequeReleased && (
-                      <div>
-                        <label className="block text-sm font-medium text-gray-600">Release Date</label>
-                        <div className="text-base text-green-600 font-semibold">
-                          {viewingAkrEasyCredit.chequeReleaseDate ? new Date(viewingAkrEasyCredit.chequeReleaseDate).toLocaleDateString('en-GB') : 'N/A'}
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              )}
-            </div>
-          </div>
-        )}
-      </Modal>
-
       {/* View Bike Inventory Modal */}
       <Modal
         title={
@@ -20385,298 +19068,6 @@ export default function AdminDashboard() {
             </div>
           </div>
         )}
-      </Modal>
-
-      {/* AKR Easy Credit Edit Modal */}
-      <Modal
-                      title={
-                <div>
-                  <div className="text-lg font-semibold">
-                    {editingAkrEasyCredit?.paymentMethod === 'Full Payment' ? 'Release Cheque - Full Payment' : 
-                     editingAkrEasyCredit?.paymentMethod === 'Leasing via AKR' && editingAkrEasyCredit?.chequeReleased ? 'Release Balance - AKR Leasing' :
-                     'Release Down Payment - Leasing'}
-                  </div>
-                  <div className="text-sm text-blue-600 mt-1">
-                    {editingAkrEasyCredit?.paymentMethod === 'Full Payment' ? 'Set Down Payment & Release Both Cheques at Once' : 
-                     editingAkrEasyCredit?.paymentMethod === 'Leasing via AKR' && editingAkrEasyCredit?.chequeReleased ? 'Release Balance Amount (Manual Input)' :
-                     'Release Down Payment Cheque'}
-                  </div>
-                </div>
-              }
-        open={akrEasyCreditModalOpen}
-        onCancel={() => {
-          setAkrEasyCreditModalOpen(false);
-          setEditingAkrEasyCredit(null);
-        }}
-        footer={[
-          <Button key="cancel" onClick={() => {
-            setAkrEasyCreditModalOpen(false);
-            setEditingAkrEasyCredit(null);
-          }}>
-            Cancel
-          </Button>,
-                          <Button key="submit" type="primary" onClick={handleAkrEasyCreditSubmit}>
-                  {editingAkrEasyCredit?.paymentMethod === 'Full Payment' ? 'Release Both Cheques' : 
-                   editingAkrEasyCredit?.paymentMethod === 'Leasing via AKR' && editingAkrEasyCredit?.chequeReleased ? 'Release Balance' :
-                   'Release Down Payment'}
-                </Button>
-        ]}
-        width={600}
-        style={{ top: 20 }}
-      >
-        <div className="space-y-6">
-          {/* Customer Information */}
-          <div className="bg-gray-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4 text-gray-800">Customer Information</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Customer Name</label>
-                <input
-                  type="text"
-                  name="customerName"
-                  value={akrEasyCreditForm.customerName}
-                  onChange={(e) => setAkrEasyCreditForm(prev => ({ ...prev, customerName: e.target.value }))}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                  readOnly
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Vehicle Type</label>
-                <input
-                  type="text"
-                  name="vehicleType"
-                  value={akrEasyCreditForm.vehicleType}
-                  onChange={(e) => setAkrEasyCreditForm(prev => ({ ...prev, vehicleType: e.target.value }))}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                  readOnly
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Payment Details */}
-          <div className="bg-blue-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4 text-blue-800">Payment Details</h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-              <div>
-                <label className="block text-sm font-medium mb-1">Payment Method</label>
-                <input
-                  type="text"
-                  name="paymentMethod"
-                  value={akrEasyCreditForm.paymentMethod}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                  readOnly
-                />
-              </div>
-              <div>
-                <label className="block text-sm font-medium mb-1">Total Amount</label>
-                <input
-                  type="number"
-                  name="totalAmount"
-                  value={akrEasyCreditForm.totalAmount}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                  readOnly
-                />
-              </div>
-              {editingAkrEasyCredit?.paymentMethod === 'Full Payment' && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Down Payment (Cheque 1) *</label>
-                    <input
-                      type="number"
-                      name="downPayment"
-                      value={akrEasyCreditForm.downPayment}
-                      onChange={(e) => {
-                        const downPayment = parseFloat(e.target.value) || 0;
-                        const totalAmount = parseFloat(akrEasyCreditForm.totalAmount) || 0;
-                        const regFee = parseFloat(akrEasyCreditForm.regFee) || 0;
-                        const balance = Math.max(0, totalAmount - downPayment);
-                        const advancePayment = Math.max(0, downPayment - regFee);
-                        setAkrEasyCreditForm(prev => ({
-                          ...prev,
-                          downPayment: e.target.value,
-                          balance: balance.toString(),
-                          advancePayment: advancePayment.toString()
-                        }));
-                      }}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                      step="0.01"
-                      min="0"
-                      max={akrEasyCreditForm.totalAmount}
-                      required
-                      placeholder="Enter down payment amount for Cheque 1"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Advance Payment (Auto-calculated)</label>
-                    <input
-                      type="number"
-                      name="advancePayment"
-                      value={akrEasyCreditForm.advancePayment}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Balance (Cheque 2 - Auto-calculated)</label>
-                    <input
-                      type="number"
-                      name="balance"
-                      value={akrEasyCreditForm.balance}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-3">
-                      <p className="text-sm text-yellow-800">
-                        <strong>Cheque Information:</strong><br/>
-                        • Cheque 1: Down Payment - LKR {parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()}<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Advance Payment: LKR {parseFloat(akrEasyCreditForm.advancePayment || '0').toLocaleString()}<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Registration Fee: LKR {parseFloat(akrEasyCreditForm.regFee || '0').toLocaleString()}<br/>
-                        • Cheque 2: Balance - LKR {parseFloat(akrEasyCreditForm.balance || '0').toLocaleString()}<br/>
-                        • Total: LKR {parseFloat(akrEasyCreditForm.totalAmount || '0').toLocaleString()}
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-              {editingAkrEasyCredit?.paymentMethod !== 'Full Payment' && !editingAkrEasyCredit?.chequeReleased && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Down Payment (Read-only)</label>
-                    <input
-                      type="number"
-                      name="downPayment"
-                      value={akrEasyCreditForm.downPayment}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Advance Payment</label>
-                    <input
-                      type="number"
-                      name="advancePayment"
-                      value={editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                        ? (parseFloat(akrEasyCreditForm.downPayment || '0') - parseFloat(akrEasyCreditForm.regFee || '0')).toString()
-                        : akrEasyCreditForm.advancePayment
-                      }
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Balance</label>
-                    <input
-                      type="number"
-                      name="balance"
-                      value={akrEasyCreditForm.balance}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                      readOnly
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="bg-green-50 border border-green-200 rounded-lg p-3">
-                      <p className="text-sm text-green-800">
-                        <strong>Down Payment Breakdown:</strong><br/>
-                        • Correct Down Payment: LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()
-                          : (parseFloat(akrEasyCreditForm.advancePayment || '0') + parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                        }<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Advance Payment: LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? (parseFloat(akrEasyCreditForm.downPayment || '0') - parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                          : parseFloat(akrEasyCreditForm.advancePayment || '0').toLocaleString()
-                        }<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Registration Fee: LKR {parseFloat(akrEasyCreditForm.regFee || '0').toLocaleString()}<br/>
-                        <br/>
-                        <strong>Additional Charges (Not in Down Payment):</strong><br/>
-                        {parseFloat(akrEasyCreditForm.docCharge || '0') > 0 && (
-                          <>
-                            &nbsp;&nbsp;&nbsp;&nbsp;└─ Document Charge: LKR {parseFloat(akrEasyCreditForm.docCharge || '0').toLocaleString()}<br/>
-                          </>
-                        )}
-                        {parseFloat(akrEasyCreditForm.insuranceCo || '0') > 0 && (
-                          <>
-                            &nbsp;&nbsp;&nbsp;&nbsp;└─ Insurance: LKR {parseFloat(akrEasyCreditForm.insuranceCo || '0').toLocaleString()}<br/>
-                          </>
-                        )}
-                        <br/>
-                        <strong>Cheque to be Released:</strong> LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()
-                          : (parseFloat(akrEasyCreditForm.advancePayment || '0') + parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                        }
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-              {editingAkrEasyCredit?.paymentMethod === 'Leasing via AKR' && editingAkrEasyCredit?.chequeReleased && (
-                <>
-                  <div>
-                    <label className="block text-sm font-medium mb-1">Remaining Balance *</label>
-                    <input
-                      type="number"
-                      name="balance"
-                      value={akrEasyCreditForm.balance}
-                      onChange={(e) => {
-                        const balance = parseFloat(e.target.value) || 0;
-                        setAkrEasyCreditForm(prev => ({
-                          ...prev,
-                          balance: e.target.value
-                        }));
-                      }}
-                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-                      step="0.01"
-                      min="0"
-                      max={akrEasyCreditForm.balance}
-                      required
-                      placeholder="Enter amount to release from balance"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <div className="bg-blue-50 border border-blue-200 rounded-lg p-3">
-                      <p className="text-sm text-blue-800">
-                        <strong>Balance Release Information:</strong><br/>
-                        • Total Balance: LKR {parseFloat(akrEasyCreditForm.balance || '0').toLocaleString()}<br/>
-                        • Enter the amount you want to release from the balance<br/>
-                        • This will create a separate cheque entry for the balance amount
-                      </p>
-                    </div>
-                  </div>
-                </>
-              )}
-              <div>
-                <label className="block text-sm font-medium mb-1">Registration Fee</label>
-                <input
-                  type="number"
-                  name="regFee"
-                  value={akrEasyCreditForm.regFee}
-                  className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                  readOnly
-                />
-              </div>
-            </div>
-          </div>
-
-          {/* Status */}
-          <div className="bg-green-50 p-4 rounded-lg">
-            <h3 className="text-lg font-semibold mb-4 text-green-800">Status</h3>
-            <div>
-              <label className="block text-sm font-medium mb-1">Status</label>
-              <select
-                name="status"
-                value={akrEasyCreditForm.status}
-                onChange={(e) => setAkrEasyCreditForm(prev => ({ ...prev, status: e.target.value }))}
-                className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
-              >
-                <option value="Pending">Pending</option>
-                <option value="Completed">Completed</option>
-                <option value="Cancelled">Cancelled</option>
-              </select>
-            </div>
-          </div>
-        </div>
       </Modal>
     </div>
   );
