@@ -151,9 +151,23 @@ exports.getBankDepositStats = async (req, res) => {
   try {
     const stats = await BankDeposit.aggregate([
       {
+        $addFields: {
+          // Always determine transaction type based on payment amount (override existing values)
+          effectiveTransactionType: {
+            $cond: {
+              if: { $gte: ['$payment', 0] },
+              then: 'income',
+              else: 'outcome'
+            }
+          }
+        }
+      },
+      {
         $group: {
           _id: null,
-          totalPayment: { $sum: '$payment' },
+          totalBalance: { 
+            $sum: '$payment' // Sum all payments (positive and negative)
+          },
           totalQuantity: { $sum: '$quantity' },
           count: { $sum: 1 }
         }
@@ -185,7 +199,7 @@ exports.getBankDepositStats = async (req, res) => {
       }
     ]);
 
-    const result = stats[0] || { totalPayment: 0, totalQuantity: 0, count: 0 };
+    const result = stats[0] || { totalBalance: 0, totalQuantity: 0, count: 0 };
 
     // Convert breakdown to object format
     const breakdown = {
@@ -201,7 +215,7 @@ exports.getBankDepositStats = async (req, res) => {
     res.json({
       success: true,
       data: {
-        totalPayment: result.totalPayment,
+        totalBalance: result.totalBalance,
         totalQuantity: result.totalQuantity,
         count: result.count,
         quantityBreakdown: breakdown

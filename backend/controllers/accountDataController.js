@@ -167,59 +167,36 @@ exports.getAccountDataStats = async (req, res) => {
       {
         $group: {
           _id: null,
-          totalAmount: { 
-            $sum: {
-              $cond: [
-                { $gt: ['$amount', 0] }, // Only positive amounts (all collections)
-                '$amount',
-                0
-              ]
-            }
-          },
           totalCollected: {
             $sum: {
               $cond: [
-                { $gt: ['$amount', 0] }, // Only positive amounts (collections)
+                { $and: [
+                  { $gt: ['$amount', 0] }, // Positive amounts only
+                  { $ne: ['$depositedToBank', true] } // Not deposited to bank
+                ]},
                 '$amount',
                 0
               ]
             }
           },
-          totalCredit: { $sum: '$credit' },
-          totalCost: { $sum: '$cost' },
-          totalBalance: { $sum: '$balance' },
-          count: { $sum: 1 },
-          depositedCount: {
+          totalDeposited: {
             $sum: {
               $cond: [
-                { $eq: ['$depositedToBank', true] },
-                1,
-                0
-              ]
-            }
-          },
-          depositedAmount: {
-            $sum: {
-              $cond: [
-                { $eq: ['$depositedToBank', true] },
+                { $eq: ['$depositedToBank', true] }, // Deposited to bank
                 '$amount',
                 0
               ]
             }
-          }
+          },
+          count: { $sum: 1 }
         }
       }
     ]);
 
     const result = stats[0] || {
-      totalAmount: 0,
       totalCollected: 0,
-      totalCredit: 0,
-      totalCost: 0,
-      totalBalance: 0,
-      count: 0,
-      depositedCount: 0,
-      depositedAmount: 0
+      totalDeposited: 0,
+      count: 0
     };
 
     res.json(result);

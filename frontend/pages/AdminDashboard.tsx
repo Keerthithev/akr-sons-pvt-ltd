@@ -760,10 +760,10 @@ export default function AdminDashboard() {
     vehicleIssueTime: '',
     status: 'Pending',
     notes: '',
-    discountApplied: false,
-    discountAmount: '',
-    leaseAmount: '',
-    interestAmount: '' // New field for interest amount
+            discountApplied: false,
+        discountAmount: '',
+                leaseAmount: '',
+        interestAmount: '' // New field for interest amount
   });
 
   // Commissioner Letter state
@@ -940,7 +940,10 @@ export default function AdminDashboard() {
     quantity: 0,
     payment: 0,
     slipImage: null,
-    slipImageUrl: ''
+    slipImageUrl: '',
+    transactionType: 'income',
+    category: '',
+    description: ''
   });
   const [editingBankDeposit, setEditingBankDeposit] = useState<any>(null);
 
@@ -3709,18 +3712,18 @@ export default function AdminDashboard() {
             // Balance = total amount - advance payment - discount
             const balance = Math.max(0, calculatedTotalAmount - advancePayment - discountAmount);
             updated.balance = balance.toString();
-            
+          
             // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
             if (balance > 0) {
-              const installmentAmount = balance / 3;
-              updated.firstInstallmentAmount = installmentAmount.toFixed(2);
-              updated.secondInstallmentAmount = installmentAmount.toFixed(2);
-              updated.thirdInstallmentAmount = installmentAmount.toFixed(2);
-            } else {
+            const installmentAmount = balance / 3;
+            updated.firstInstallmentAmount = installmentAmount.toFixed(2);
+            updated.secondInstallmentAmount = installmentAmount.toFixed(2);
+            updated.thirdInstallmentAmount = installmentAmount.toFixed(2);
+          } else {
               // Clear installment amounts if no balance
-              updated.firstInstallmentAmount = '0';
-              updated.secondInstallmentAmount = '0';
-              updated.thirdInstallmentAmount = '0';
+            updated.firstInstallmentAmount = '0';
+            updated.secondInstallmentAmount = '0';
+            updated.thirdInstallmentAmount = '0';
             }
           } else if (updated.paymentMethod === 'Leasing via Other Company') {
             // For Leasing via Other Company: 
@@ -3865,26 +3868,27 @@ export default function AdminDashboard() {
         const insuranceCo = parseFloat(updated.insuranceCo) || 0;
         const discountAmount = parseFloat(updated.discountAmount) || 0;
         
-                  if (updated.paymentMethod === 'Full Payment') {
+        if (updated.paymentMethod === 'Full Payment') {
             // For Full Payment: 
-            // Total = bike price only (no reg fee, no advance payment needed)
-            const calculatedTotalAmount = basePrice;
-            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+            // Total = bike price + reg fee - discount
+            const calculatedTotalAmount = basePrice + regFee - discountAmount;
+          updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
             // For full payment, down payment and balance will be set in AKR Easy Credit tab
             // Don't calculate here - set to 0 initially
             updated.downPayment = '0';
-            // Balance = total amount - (down payment + discount) = total amount - (0 + discount) = total amount - discount
-            updated.balance = Math.max(0, calculatedTotalAmount - discountAmount).toString();
+            // Balance = total amount (already includes reg fee and discount)
+            updated.balance = Math.max(0, calculatedTotalAmount).toString();
             
             // Clear installment amounts (no installments for full payment)
-            updated.firstInstallmentAmount = '0';
-            updated.secondInstallmentAmount = '0';
-            updated.thirdInstallmentAmount = '0';
+          updated.firstInstallmentAmount = '0';
+          updated.secondInstallmentAmount = '0';
+          updated.thirdInstallmentAmount = '0';
           } else if (updated.paymentMethod === 'Leasing via AKR') {
           // For Leasing via AKR: 
-          // Total = bike price only (no reg fee)
-          const calculatedTotalAmount = basePrice;
+          // Total = bike price + interest amount
+          const interestAmount = parseFloat(updated.interestAmount) || 0;
+          const calculatedTotalAmount = basePrice + interestAmount;
           updated.totalAmount = calculatedTotalAmount.toString();
           
           // Down payment = advance payment - (doc charge + insurance) (reg fee already included)
@@ -3897,12 +3901,13 @@ export default function AdminDashboard() {
             regFee,
             insuranceCo,
             docCharge,
+            interestAmount,
             calculatedDownPayment,
             paymentMethod: updated.paymentMethod
           });
           
-          // Balance = total amount - (down payment + discount)
-          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount);
+          // Balance = total amount - (down payment + discount) + reg fee + interest amount
+          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount + regFee);
           updated.balance = balance.toString();
           
           // Auto-calculate installment amounts for "Leasing via AKR" if balance > 0
@@ -3927,8 +3932,8 @@ export default function AdminDashboard() {
           const calculatedDownPayment = advancePayment - (docCharge + insuranceCo);
           updated.downPayment = calculatedDownPayment.toString();
           
-          // Balance = total amount - (down payment + discount)
-          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount);
+          // Balance = total amount - (down payment + discount) + reg fee
+          const balance = Math.max(0, calculatedTotalAmount - calculatedDownPayment - discountAmount + regFee);
           updated.balance = balance.toString();
           
           // Clear installment amounts (no installments for other company)
@@ -3941,6 +3946,8 @@ export default function AdminDashboard() {
       return updated;
     });
   };
+
+
 
   // Handle AKR Easy Credit form submission
   const handleAkrEasyCreditSubmit = async () => {
@@ -3986,69 +3993,6 @@ export default function AdminDashboard() {
         });
         
         if (!vacRes.ok) throw new Error("Failed to update cheque release status");
-        
-        // Create account data entries for both cheques
-        const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-        
-        // Cheque 1 - Down Payment
-        if (downPayment > 0) {
-          const advancePayment = parseFloat(akrEasyCreditForm.advancePayment) || 0;
-          const regFee = parseFloat(akrEasyCreditForm.regFee) || 0;
-          const cheque1Data = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Down Payment - ${editingAkrEasyCredit.vehicleType} (Advance: LKR ${advancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            amount: downPayment,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Cheque 1 - Down Payment (Advance: LKR ${advancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            leasing: 'Full Payment'
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(cheque1Data)
-          });
-        }
-        
-        // Cheque 2 - Balance
-        if (balance > 0) {
-          const cheque2Data = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Balance Payment - ${editingAkrEasyCredit.vehicleType}`,
-            amount: balance,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: 'Cheque 2 - Balance',
-            leasing: 'Full Payment'
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(cheque2Data)
-          });
-        }
         
         // Create negative bank deposit entries to deduct the released amounts
         const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
@@ -4123,33 +4067,7 @@ export default function AdminDashboard() {
             return;
           }
           
-          // Create account data entry for balance cheque
-          const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-          const chequeData = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Balance Payment - ${editingAkrEasyCredit.vehicleType}`,
-            amount: balance,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Balance Payment Cheque - AKR Leasing`,
-            leasing: editingAkrEasyCredit.paymentMethod
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(chequeData)
-          });
+
           
           // Create negative bank deposit entry
           const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
@@ -4207,7 +4125,35 @@ export default function AdminDashboard() {
             return;
           }
           
-          // Update vehicle allocation coupon
+          // Calculate correct down payment and advance payment for leasing
+          const correctDownPayment = downPayment;
+          const correctAdvancePayment = advancePayment;
+          
+          // Create negative bank deposit entry FIRST
+          const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
+          const bankDepositData = {
+            date: new Date().toISOString().split('T')[0],
+            depositerName: editingAkrEasyCredit.fullName,
+            accountNumber: '',
+            accountName: 'Cheque Release - Down Payment',
+            purpose: `Cheque Release - Down Payment for ${editingAkrEasyCredit.vehicleType}`,
+            quantity: 1,
+            payment: -correctDownPayment, // Negative amount to deduct
+            slipImage: ''
+          };
+          
+          const bankDepositRes = await fetch(bankDepositUrl, {
+            method: 'POST',
+            headers: { 
+              'Authorization': `Bearer ${token}`,
+              'Content-Type': 'application/json' 
+            },
+            body: JSON.stringify(bankDepositData)
+          });
+          
+          if (!bankDepositRes.ok) throw new Error("Failed to create bank deposit entry");
+          
+          // Update vehicle allocation coupon status AFTER successful bank deposit
           const vacUrl = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons/${editingAkrEasyCredit._id}`;
           const vacData = {
             chequeReleased: true,
@@ -4224,62 +4170,6 @@ export default function AdminDashboard() {
           });
           
           if (!vacRes.ok) throw new Error("Failed to update vehicle allocation coupon");
-          
-          // Create account data entry for down payment cheque
-          const accountDataUrl = `${import.meta.env.VITE_API_URL}/api/account-data`;
-          const correctAdvancePayment = editingAkrEasyCredit.paymentMethod === 'Leasing via Other Company' 
-            ? (downPayment - regFee) 
-            : advancePayment;
-          const correctDownPayment = editingAkrEasyCredit.paymentMethod === 'Leasing via Other Company' 
-            ? downPayment  // Use the original down payment amount
-            : (correctAdvancePayment + regFee); // Calculate for other payment methods
-          const chequeData = {
-            date: new Date().toISOString().split('T')[0],
-            name: editingAkrEasyCredit.fullName,
-            details: `Down Payment - ${editingAkrEasyCredit.vehicleType} (Advance: LKR ${correctAdvancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            amount: correctDownPayment,
-            model: editingAkrEasyCredit.vehicleType,
-            color: '',
-            credit: 0,
-            cost: 0,
-            balance: 0,
-            chequeReceivedDate: new Date().toISOString().split('T')[0],
-            chequeReleaseDate: new Date().toISOString().split('T')[0],
-            paymentMode: 'Cheque',
-            remarks: `Down Payment Cheque (Advance: LKR ${correctAdvancePayment.toLocaleString()}, Reg Fee: LKR ${regFee.toLocaleString()})`,
-            leasing: editingAkrEasyCredit.paymentMethod
-          };
-          
-          await fetch(accountDataUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(chequeData)
-          });
-          
-          // Create negative bank deposit entry
-          const bankDepositUrl = `${import.meta.env.VITE_API_URL}/api/bank-deposits`;
-          const bankDepositData = {
-            date: new Date().toISOString().split('T')[0],
-            depositerName: editingAkrEasyCredit.fullName,
-            accountNumber: '',
-            accountName: 'Cheque Release - Down Payment',
-            purpose: `Cheque Release - Down Payment for ${editingAkrEasyCredit.vehicleType}`,
-            quantity: 1,
-            payment: -correctDownPayment, // Negative amount to deduct
-            slipImage: ''
-          };
-          
-          await fetch(bankDepositUrl, {
-            method: 'POST',
-            headers: { 
-              'Authorization': `Bearer ${token}`,
-              'Content-Type': 'application/json' 
-            },
-            body: JSON.stringify(bankDepositData)
-          });
           
           message.success(`Down payment cheque released successfully! 
             Amount: LKR ${correctDownPayment.toLocaleString()}
@@ -4523,7 +4413,7 @@ export default function AdminDashboard() {
       notes: record.notes || '',
       discountApplied: record.discountApplied || false,
       discountAmount: record.discountAmount || '',
-      leaseAmount: record.leaseAmount || '',
+      leaseAmount: record.balance ? record.balance.toString() : '',
       interestAmount: record.interestAmount || ''
     });
     setVehicleAllocationCouponsModalOpen(true);
@@ -4803,7 +4693,9 @@ export default function AdminDashboard() {
         remarks: `${depositForm.remarks} | Actual: ${depositForm.actualAmount} | Collected: ${depositForm.depositedAmount}`,
         actualAmount: parseFloat(depositForm.actualAmount),
         depositedAmount: actualCollected, // Use the actually collected amount
-        relatedCouponId: selectedCouponForDeposit?.couponId
+        relatedCouponId: selectedCouponForDeposit?.couponId,
+        depositedToBank: false, // Mark as collected but not yet deposited to bank
+        bankDepositDate: null
       };
 
       const response = await fetch(`${import.meta.env.VITE_API_URL}/api/account-data`, {
@@ -5405,7 +5297,7 @@ export default function AdminDashboard() {
                 ` : ''}
                 <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
                   <span class="detail-label" style="min-width: 120px;">Lease Amount:</span>
-                  <span class="detail-value" style="flex: 1;">Rs.${record.totalAmount ? parseFloat(record.totalAmount).toLocaleString() : '0'}</span>
+                  <span class="detail-value" style="flex: 1;">Rs.${record.balance ? parseFloat(record.balance).toLocaleString() : '0'}</span>
               </div>
                 ${record.interestAmount && record.interestAmount > 0 ? `
                 <div class="detail-row" style="margin: 3px 0; padding: 2px 0;">
@@ -7560,7 +7452,9 @@ export default function AdminDashboard() {
       // Prepare data for API
       const depositData = {
         ...bankDepositsForm,
-        slipImage: slipImageUrl || bankDepositsForm.slipImageUrl
+        slipImage: slipImageUrl || bankDepositsForm.slipImageUrl,
+        // Automatically set transaction type based on payment amount
+        transactionType: bankDepositsForm.payment >= 0 ? 'income' : 'outcome'
       };
       delete depositData.slipImageFile; // Remove file object
       
@@ -7587,7 +7481,10 @@ export default function AdminDashboard() {
         quantity: 0,
         payment: 0,
         slipImage: null,
-        slipImageUrl: ''
+        slipImageUrl: '',
+        transactionType: 'income',
+        category: '',
+        description: ''
       });
       fetchBankDeposits();
       fetchBankDepositsStats();
@@ -9516,6 +9413,36 @@ export default function AdminDashboard() {
       render: (purpose: string) => purpose || '-'
     },
     { 
+      title: 'Transaction Type', 
+      dataIndex: 'transactionType', 
+      key: 'transactionType',
+      render: (type: string, record: any) => {
+        // Always determine transaction type based on payment amount
+        const effectiveType = record.payment >= 0 ? 'income' : 'outcome';
+        return (
+          <span className={`px-2 py-1 rounded text-xs font-medium ${
+            effectiveType === 'income' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
+          }`}>
+            {effectiveType === 'income' ? 'Income' : 'Outcome'}
+          </span>
+        );
+      },
+      filters: [
+        { text: 'Income', value: 'income' },
+        { text: 'Outcome', value: 'outcome' }
+      ],
+      onFilter: (value: string, record: any) => {
+        const effectiveType = record.payment >= 0 ? 'income' : 'outcome';
+        return effectiveType === value;
+      }
+    },
+    { 
+      title: 'Category', 
+      dataIndex: 'category', 
+      key: 'category',
+      render: (category: string) => category || '-'
+    },
+    { 
       title: 'Quantity', 
       dataIndex: 'quantity', 
       key: 'quantity',
@@ -9526,7 +9453,13 @@ export default function AdminDashboard() {
       title: 'Payment (LKR)', 
       dataIndex: 'payment', 
       key: 'payment',
-      render: (payment: number) => `LKR ${payment.toLocaleString()}`,
+      render: (payment: number, record: any) => (
+        <span className={`font-medium ${
+          payment >= 0 ? 'text-green-600' : 'text-red-600'
+        }`}>
+          LKR {payment.toLocaleString()}
+        </span>
+      ),
       sorter: (a: any, b: any) => a.payment - b.payment
     },
     {
@@ -12539,22 +12472,14 @@ export default function AdminDashboard() {
               <h2 className="text-2xl font-bold mb-4">Account Data Management</h2>
               
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-5 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{accountDataStats.totalAmount?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Total Amount</div>
+                  <div className="text-2xl font-bold text-green-600">{accountDataStats.totalCollected?.toLocaleString() || '0'}</div>
+                  <div className="text-sm text-gray-600">Collected Money</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{accountDataStats.totalCredit?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Total Credit</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{accountDataStats.totalCost?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Total Cost</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{accountDataStats.depositedAmount?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Deposited Amount</div>
+                  <div className="text-2xl font-bold text-red-600">{accountDataStats.totalDeposited?.toLocaleString() || '0'}</div>
+                  <div className="text-sm text-gray-600">Deposited Money</div>
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-purple-600">{accountDataStats.count || '0'}</div>
@@ -13246,10 +13171,12 @@ export default function AdminDashboard() {
               <h2 className="text-2xl font-bold mb-4">Bank Deposits Management</h2>
               
               {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mb-6">
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{bankDepositsStats.totalPayment?.toLocaleString() || '0'}</div>
-                  <div className="text-sm text-gray-600">Total Payment</div>
+                  <div className={`text-2xl font-bold ${(bankDepositsStats.totalBalance || 0) >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    {bankDepositsStats.totalBalance?.toLocaleString() || '0'}
+                  </div>
+                  <div className="text-sm text-gray-600">Total Balance</div>
                 </Card>
                 <Card className="text-center">
                   <div className="text-2xl font-bold text-blue-600">{bankDepositsStats.totalQuantity || '0'}</div>
@@ -13292,7 +13219,10 @@ export default function AdminDashboard() {
                       quantity: 0,
                       payment: 0,
                       slipImage: null,
-                      slipImageUrl: ''
+                      slipImageUrl: '',
+                      transactionType: 'income',
+                      category: '',
+                      description: ''
                     });
                     setBankDepositsModalOpen(true);
                   }}>
@@ -13396,6 +13326,41 @@ export default function AdminDashboard() {
                         onChange={handleBankDepositNumberChange}
                         min="0"
                         step="1"
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Transaction Type *</label>
+                      <select
+                        name="transactionType"
+                        value={bankDepositsForm.transactionType}
+                        onChange={handleBankDepositFormChange}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      >
+                        <option value="income">Income</option>
+                        <option value="outcome">Outcome (Expense)</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Category</label>
+                      <input
+                        type="text"
+                        name="category"
+                        value={bankDepositsForm.category}
+                        onChange={handleBankDepositFormChange}
+                        placeholder="e.g., Sales, Rent, Utilities, etc."
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Description</label>
+                      <textarea
+                        name="description"
+                        value={bankDepositsForm.description}
+                        onChange={handleBankDepositFormChange}
+                        placeholder="Additional details about this transaction"
+                        rows={3}
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
@@ -13609,19 +13574,36 @@ export default function AdminDashboard() {
                       key: 'downPayment',
                       align: 'center' as const,
                       render: (amount: number, record: any) => {
-                        // Show down payment amount with registration fee breakdown (current Arrears display)
-                        const regFee = record.regFee || 0;
-                        const advanceAmount = amount - regFee;
-                        return (
-                          <div className="text-center">
-                            <div className="font-medium">LKR {amount.toLocaleString()}</div>
-                            {regFee > 0 && (
-                              <div className="text-xs text-gray-500">
-                                ({advanceAmount.toLocaleString()} + {regFee.toLocaleString()})
-                              </div>
-                            )}
-                          </div>
-                        );
+                        if (record.paymentMethod === 'Full Payment') {
+                          // For Full Payment: Down Payment = Total Amount from Vehicle Allocation Coupon
+                          const totalAmount = record.totalAmount || 0;
+                          const regFee = record.regFee || 0;
+                          const advanceAmount = totalAmount - regFee;
+                          return (
+                            <div className="text-center">
+                              <div className="font-medium">LKR {totalAmount.toLocaleString()}</div>
+                              {regFee > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  ({advanceAmount.toLocaleString()} + {regFee.toLocaleString()})
+                                </div>
+                              )}
+                            </div>
+                          );
+                        } else {
+                          // For Leasing: Show down payment amount with registration fee breakdown
+                          const regFee = record.regFee || 0;
+                          const advanceAmount = amount - regFee;
+                          return (
+                            <div className="text-center">
+                              <div className="font-medium">LKR {amount.toLocaleString()}</div>
+                              {regFee > 0 && (
+                                <div className="text-xs text-gray-500">
+                                  ({advanceAmount.toLocaleString()} + {regFee.toLocaleString()})
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
                       }
                     },
                     {
@@ -13691,8 +13673,8 @@ export default function AdminDashboard() {
                                   vehicleType: record.vehicleType,
                                   paymentMethod: record.paymentMethod,
                                   totalAmount: record.totalAmount.toString(),
-                                  downPayment: '0',
-                                  balance: record.totalAmount.toString(),
+                                  downPayment: record.totalAmount.toString(), // For Full Payment, down payment = total amount
+                                  balance: '0', // For Full Payment, balance starts at 0
                                   regFee: record.regFee.toString(),
                                   status: record.status
                                 });
@@ -13791,7 +13773,7 @@ export default function AdminDashboard() {
                               Release Down Payment
                             </Button>
                           )}
-                          {record.paymentMethod === 'Leasing via AKR' && record.chequeReleased && record.balance <= 0 && (
+                          {record.paymentMethod === 'Leasing via Other Company' && record.chequeReleased && (
                             <div className="text-center">
                               <div className="text-xs text-gray-500">Released on</div>
                               <div className="text-sm font-medium text-green-600">
@@ -13799,7 +13781,7 @@ export default function AdminDashboard() {
                               </div>
                             </div>
                           )}
-                          {record.paymentMethod === 'Leasing via Other Company' && record.chequeReleased && (
+                          {record.paymentMethod === 'Leasing via AKR' && record.chequeReleased && record.balance <= 0 && (
                             <div className="text-center">
                               <div className="text-xs text-gray-500">Released on</div>
                               <div className="text-sm font-medium text-green-600">
@@ -15910,7 +15892,7 @@ export default function AdminDashboard() {
                   <div className="flex-1 max-w-md">
                     <input
                       type="text"
-                      placeholder="Search coupons..."
+                      placeholder="Search by Coupon ID, Workshop No, Customer Name, Vehicle Type, Engine No, or Chassis No..."
                       value={vehicleAllocationCouponsSearch}
                       onChange={(e) => {
                         setVehicleAllocationCouponsSearch(e.target.value);
@@ -15944,6 +15926,13 @@ export default function AdminDashboard() {
                       key: 'couponId',
                       align: 'center' as const,
                       render: (text: string) => <span className="font-medium">{text}</span>
+                    },
+                    {
+                      title: 'Workshop No',
+                      dataIndex: 'workshopNo',
+                      key: 'workshopNo',
+                      align: 'center' as const,
+                      render: (text: string) => <span className="font-medium">{text || '-'}</span>
                     },
                     {
                       title: 'Customer Name',
@@ -16017,7 +16006,7 @@ export default function AdminDashboard() {
                         
                                                 const advancePayment = record.advancePayment || 0;
                         
-                        if (paymentMethod === 'Full Payment') {
+                                                if (paymentMethod === 'Full Payment') {
                           // For Full Payment: use total amount as arrears (since advance payment is 0)
                           arrears = totalAmount - amountCollected;
                         } else if (paymentMethod === 'Leasing via AKR') {
@@ -16047,8 +16036,8 @@ export default function AdminDashboard() {
                         
                         // Show amount based on payment method
                         if (paymentMethod === 'Full Payment') {
-                          return (
-                            <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
+                        return (
+                          <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
                               LKR {totalAmount.toLocaleString()}
                             </span>
                           );
@@ -16056,8 +16045,8 @@ export default function AdminDashboard() {
                           return (
                             <span style={{ color: '#ff4d4f', fontWeight: 'bold' }}>
                               LKR {advancePayment.toLocaleString()}
-                            </span>
-                          );
+                          </span>
+                        );
                         }
                       }
                     },
@@ -16610,7 +16599,7 @@ export default function AdminDashboard() {
                           onChange={handleVehicleAllocationCouponFormChange}
                           className="mr-2"
                         />
-                        <label className="text-sm font-medium">Apply 15,000 Discount for Ready Cash</label>
+                        <label className="text-sm font-medium">Apply  Discount </label>
                       </div>
                       <div>
                         <label className="block text-sm font-medium mb-1">Discount Amount</label>
@@ -16647,19 +16636,19 @@ export default function AdminDashboard() {
                       </div>
                       {/* Balance - Only show for leasing, not for Full Payment */}
                       {vehicleAllocationCouponForm.paymentMethod !== 'Full Payment' && (
-                        <div>
-                          <label className="block text-sm font-medium mb-1">Balance *</label>
-                          <input
-                            type="number"
-                            name="balance"
-                            value={vehicleAllocationCouponForm.balance}
-                            className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
-                            step="0.01"
-                            min="0"
-                            required
-                            readOnly
-                          />
-                        </div>
+                      <div>
+                        <label className="block text-sm font-medium mb-1">Balance *</label>
+                        <input
+                          type="number"
+                          name="balance"
+                          value={vehicleAllocationCouponForm.balance}
+                          className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200 bg-gray-100"
+                          step="0.01"
+                          min="0"
+                          required
+                          readOnly
+                        />
+                      </div>
                       )}
                     </div>
                   </div>
@@ -17541,14 +17530,14 @@ export default function AdminDashboard() {
                   {/* Bank Deposit Total */}
                   <div className="text-sm">
                     <span className="text-gray-600 font-medium">Bank Deposits:</span>
-                    <span className="text-green-600 font-semibold ml-2">LKR {bankDepositsStats.totalPayment?.toLocaleString() || '0'}</span>
+                    <span className="text-green-600 font-semibold ml-2">LKR {bankDepositsStats.totalBalance?.toLocaleString() || '0'}</span>
                     <span className="text-gray-500 text-xs ml-2">({bankDepositsStats.count || '0'} deposits)</span>
                   </div>
                   
                   {/* Account Data Total */}
                   <div className="text-sm">
                     <span className="text-gray-600 font-medium">Account Data Total:</span>
-                    <span className="text-blue-600 font-semibold ml-2">LKR {accountDataStats.totalAmount?.toLocaleString() || '0'}</span>
+                    <span className="text-blue-600 font-semibold ml-2">LKR {accountDataStats.totalCollected?.toLocaleString() || '0'}</span>
                     <span className="text-gray-500 text-xs ml-2">({accountDataStats.count || '0'} records)</span>
                   </div>
                 </div>
@@ -18134,63 +18123,63 @@ export default function AdminDashboard() {
                       
                       if (reminders.length === 0) {
                         return (
-                          <div className="text-center py-8 text-gray-500">
-                            <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                            </svg>
-                            <p>No cheque release reminders</p>
-                            <p className="text-xs mt-2">All cheques are up to date</p>
-                          </div>
+                      <div className="text-center py-8 text-gray-500">
+                        <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                          <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        <p>No cheque release reminders</p>
+                        <p className="text-xs mt-2">All cheques are up to date</p>
+                      </div>
                         );
                       }
                       
                       return reminders.slice(0, 8).map((reminder: any) => {
-                        const isOverdue = reminder.isOverdue;
-                        const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
-                        const daysUntilRelease = reminder.daysUntilRelease || 0;
-                        
-                        return (
-                          <div key={reminder._id} className={`p-3 rounded-lg border-l-4 ${
-                            isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
-                          }`}>
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="font-semibold text-gray-900">{reminder.fullName}</div>
-                                <div className="text-sm text-gray-600">{reminder.vehicleType}</div>
-                                <div className="text-sm text-gray-500">
-                                  Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
-                                </div>
-                                <div className="text-xs text-gray-400 mt-1">
+                         const isOverdue = reminder.isOverdue;
+                         const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                         const daysUntilRelease = reminder.daysUntilRelease || 0;
+                         
+                         return (
+                           <div key={reminder._id} className={`p-3 rounded-lg border-l-4 ${
+                             isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                           }`}>
+                             <div className="flex justify-between items-start">
+                               <div className="flex-1">
+                                 <div className="font-semibold text-gray-900">{reminder.fullName}</div>
+                                 <div className="text-sm text-gray-600">{reminder.vehicleType}</div>
+                                 <div className="text-sm text-gray-500">
+                                   Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
+                                 </div>
+                                 <div className="text-xs text-gray-400 mt-1">
                                   {reminder.chequeType}: LKR {reminder.chequeAmount.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
-                                </div>
-                              </div>
-                              <div className="text-right">
-                                <div className={`font-bold ${
-                                  isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
-                                }`}>
-                                  {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
-                                </div>
-                                <div className="text-xs text-gray-500">
-                                  {isOverdue ? 
-                                    `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
-                                    daysUntilRelease === 0 ? 'Due today' : 
-                                    daysUntilRelease === 1 ? 'Due tomorrow' : 
-                                    `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
-                                  }
-                                </div>
-                                <div className="text-xs text-gray-400">
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
+                                 </div>
+                               </div>
+                               <div className="text-right">
+                                 <div className={`font-bold ${
+                                   isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
+                                 }`}>
+                                   {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                 </div>
+                                 <div className="text-xs text-gray-500">
+                                   {isOverdue ? 
+                                     `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                     daysUntilRelease === 0 ? 'Due today' : 
+                                     daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                     `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                   }
+                                 </div>
+                                 <div className="text-xs text-gray-400">
                                   Expected: {reminder.expectedReleaseDate.toLocaleDateString()}
-                                </div>
-                                <div className="text-xs text-gray-400">
-                                  To: David Peries
-                                </div>
-                              </div>
-                            </div>
-                          </div>
-                        );
+                                 </div>
+                                 <div className="text-xs text-gray-400">
+                                   To: David Peries
+                                 </div>
+                               </div>
+                             </div>
+                           </div>
+                         );
                       });
                     })()}
                   </div>
@@ -18567,13 +18556,13 @@ export default function AdminDashboard() {
 
                     if (unreleasedCheques.length === 0) {
                       return (
-                        <div className="text-center py-12 text-gray-500">
-                          <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
-                          </svg>
-                          <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
-                          <p>All cheques are up to date</p>
-                        </div>
+                    <div className="text-center py-12 text-gray-500">
+                      <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                      </svg>
+                      <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
+                      <p>All cheques are up to date</p>
+                    </div>
                       );
                     }
 
@@ -18598,72 +18587,72 @@ export default function AdminDashboard() {
                       // Determine status based on days since purchase
                       const isOverdue = daysSincePurchase > 7; // Consider overdue after 7 days
                       const isDueSoon = daysSincePurchase > 3; // Due soon after 3 days
-                      
-                      return (
+                        
+                        return (
                         <div key={coupon._id} className={`p-6 rounded-lg border-l-4 ${
                           isOverdue ? 'border-red-500 bg-red-50' : isDueSoon ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
-                        }`}>
-                          <div className="flex justify-between items-start">
-                            <div className="flex-1">
-                              <div className="flex items-center gap-3 mb-3">
+                          }`}>
+                            <div className="flex justify-between items-start">
+                              <div className="flex-1">
+                                <div className="flex items-center gap-3 mb-3">
                                 <div className="font-semibold text-lg text-gray-900">{coupon.fullName}</div>
-                                <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
+                                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
                                   isOverdue ? 'bg-red-100 text-red-800' : isDueSoon ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
-                                }`}>
+                                  }`}>
                                   {isOverdue ? 'OVERDUE' : isDueSoon ? 'DUE SOON' : 'UPCOMING'}
-                                </span>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                <div>
-                                  <div className="text-sm text-gray-600">Vehicle</div>
+                                  </span>
+                                </div>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                  <div>
+                                    <div className="text-sm text-gray-600">Vehicle</div>
                                   <div className="font-medium">{coupon.vehicleType}</div>
-                                </div>
-                                <div>
-                                  <div className="text-sm text-gray-600">Coupon ID</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Coupon ID</div>
                                   <div className="font-medium">{coupon.couponId}</div>
-                                </div>
-                                <div>
-                                  <div className="text-sm text-gray-600">Contact</div>
+                                  </div>
+                                  <div>
+                                    <div className="text-sm text-gray-600">Contact</div>
                                   <div className="font-medium">{coupon.contactNo || 'N/A'}</div>
-                                </div>
-                                <div>
+                                  </div>
+                                  <div>
                                   <div className="text-sm text-gray-600">Payment Method</div>
                                   <div className="font-medium">{coupon.paymentMethod}</div>
+                                  </div>
                                 </div>
-                              </div>
-                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                <div>
+                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
+                                  <div>
                                   <div className="text-gray-600">Days since purchase</div>
                                   <div className="font-medium">{daysSincePurchase} day{daysSincePurchase !== 1 ? 's' : ''}</div>
-                                </div>
-                                <div>
+                                  </div>
+                                  <div>
                                   <div className="text-gray-600">Purchase date</div>
                                   <div className="font-medium">{purchaseDate.toLocaleDateString()}</div>
-                                </div>
-                                <div>
-                                  <div className="text-gray-600">Status</div>
-                                  <div className="font-medium">
-                                    {isOverdue ? 
+                                  </div>
+                                  <div>
+                                    <div className="text-gray-600">Status</div>
+                                    <div className="font-medium">
+                                      {isOverdue ? 
                                       `${daysSincePurchase - 7} day${(daysSincePurchase - 7) !== 1 ? 's' : ''} overdue` : 
                                       isDueSoon ? 'Due soon' : 
                                       'Upcoming'
-                                    }
+                                      }
+                                    </div>
                                   </div>
                                 </div>
                               </div>
-                            </div>
-                                                          <div className="text-right ml-4">
+                              <div className="text-right ml-4">
                                 <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
                                 <div className="text-xs text-gray-500 mb-3">
                                   {chequeType}: LKR {chequeAmount.toLocaleString()}
                                 </div>
                                 <div className="text-xs text-blue-600 font-medium">
                                   Go to AKR Easy Credit tab to release
+                                    </div>
+                                  </div>
                                 </div>
                               </div>
-                          </div>
-                        </div>
-                      );
+                            );
                     });
                   })()}
                 </div>
@@ -20551,14 +20540,8 @@ export default function AdminDashboard() {
                     <div className="bg-green-50 border border-green-200 rounded-lg p-3">
                       <p className="text-sm text-green-800">
                         <strong>Down Payment Breakdown:</strong><br/>
-                        • Correct Down Payment: LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()
-                          : (parseFloat(akrEasyCreditForm.advancePayment || '0') + parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                        }<br/>
-                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Advance Payment: LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? (parseFloat(akrEasyCreditForm.downPayment || '0') - parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                          : parseFloat(akrEasyCreditForm.advancePayment || '0').toLocaleString()
-                        }<br/>
+                        • Correct Down Payment: LKR {parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()}<br/>
+                        &nbsp;&nbsp;&nbsp;&nbsp;└─ Advance Payment: LKR {(parseFloat(akrEasyCreditForm.downPayment || '0') - parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()}<br/>
                         &nbsp;&nbsp;&nbsp;&nbsp;└─ Registration Fee: LKR {parseFloat(akrEasyCreditForm.regFee || '0').toLocaleString()}<br/>
                         <br/>
                         <strong>Additional Charges (Not in Down Payment):</strong><br/>
@@ -20573,10 +20556,7 @@ export default function AdminDashboard() {
                           </>
                         )}
                         <br/>
-                        <strong>Cheque to be Released:</strong> LKR {editingAkrEasyCredit?.paymentMethod === 'Leasing via Other Company' 
-                          ? parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()
-                          : (parseFloat(akrEasyCreditForm.advancePayment || '0') + parseFloat(akrEasyCreditForm.regFee || '0')).toLocaleString()
-                        }
+                        <strong>Cheque to be Released:</strong> LKR {parseFloat(akrEasyCreditForm.downPayment || '0').toLocaleString()}
                       </p>
                     </div>
                   </div>

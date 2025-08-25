@@ -230,6 +230,7 @@ exports.getAllVehicleAllocationCoupons = async (req, res, next) => {
     if (search) {
       query.$or = [
         { couponId: { $regex: search, $options: 'i' } },
+        { workshopNo: { $regex: search, $options: 'i' } },
         { fullName: { $regex: search, $options: 'i' } },
         { nicNo: { $regex: search, $options: 'i' } },
         { vehicleType: { $regex: search, $options: 'i' } },
