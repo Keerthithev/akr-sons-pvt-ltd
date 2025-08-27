@@ -12,5 +12,6 @@ router.post('/', bankDepositController.createBankDeposit);
 router.put('/:id', bankDepositController.updateBankDeposit);
 router.delete('/:id', bankDepositController.deleteBankDeposit);
 router.post('/bulk-import', bankDepositController.bulkImportBankDeposits);
+router.post('/manual-sync', bankDepositController.manualSyncAccountData);
 
 module.exports = router; 

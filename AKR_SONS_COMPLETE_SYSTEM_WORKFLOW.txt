@@ -1,0 +1,637 @@
+================================================================================
+                    AKR & SONS (PVT) LTD - COMPLETE SYSTEM WORKFLOW
+================================================================================
+
+SYSTEM OVERVIEW:
+AKR & SONS (PVT) LTD operates a comprehensive motorcycle dealership management 
+system that handles the entire sales lifecycle from customer inquiry to final 
+delivery and financial reconciliation. This system manages vehicle inventory, 
+customer management, sales processing, payment collection, leasing operations, 
+and financial tracking.
+
+================================================================================
+                            COMPLETE WORKFLOW PROCESS
+================================================================================
+
+PHASE 1: CUSTOMER INQUIRY & PRE-BOOKING
+========================================
+
+CUSTOMER JOURNEY:
+1. Customer visits AKR & SONS website
+2. Browses available motorcycle models
+3. Submits pre-booking form with:
+   - Personal details (name, phone, email)
+   - Preferred vehicle model (e.g., BAJAJ CT100 - LKR 637,950)
+   - Budget range
+   - Booking date and time
+
+ADMIN ACTIONS:
+1. Admin receives pre-booking notification in dashboard
+2. Reviews customer details and preferences
+3. Checks vehicle availability in inventory
+4. Updates booking status:
+   - Pending: Initial status
+   - Confirmed: Admin approves booking
+   - Rejected: Admin rejects booking
+
+EXAMPLE PRE-BOOKING:
+Customer Name: John Doe
+Phone: +94 77 123 4567
+Email: john.doe@email.com
+Preferred Vehicle: BAJAJ CT100
+Vehicle Price: LKR 637,950
+Booking Date: 2024-01-15
+Status: Pending
+
+================================================================================
+
+PHASE 2: VEHICLE ALLOCATION COUPON (VAC) CREATION
+==================================================
+
+ADMIN PROCESS:
+1. Admin confirms pre-booking
+2. Creates Vehicle Allocation Coupon (VAC)
+3. Allocates specific vehicle from inventory
+4. Captures complete customer and vehicle details
+
+VAC INFORMATION CAPTURED:
+
+CUSTOMER DETAILS:
+- Full Name: John Doe
+- Address: 123 Main Street, Colombo
+- NIC Number: 123456789V
+- Contact Number: +94 77 123 4567
+- Occupation: Engineer
+- Date of Birth: 1990-05-15
+
+VEHICLE DETAILS:
+- Vehicle Type: BAJAJ CT100
+- Engine Number: ENG123456789
+- Chassis Number: CHS987654321
+- Workshop Number: WS001 (Auto-generated)
+- Date of Purchase: 2024-01-15
+
+PAYMENT INFORMATION:
+- Payment Method: Leasing via AKR
+- Total Amount: LKR 657,089
+- Down Payment: LKR 160,160
+- Balance: LKR 496,929
+
+LEASING DETAILS:
+- Leasing Company: AKR Easy Credit
+- Officer Name: Anton Rojar Stalin
+- Officer Contact: +94 77 311 1266
+- Commission Percentage: 3%
+
+VAC STATUS TRACKING:
+- Pending: Initial creation
+- Approved: Admin approved
+- Completed: Full payment received
+- Cancelled: Transaction cancelled
+
+EXAMPLE VAC STRUCTURE:
+{
+  couponId: "VAC-001",
+  customerName: "John Doe",
+  vehicleType: "BAJAJ CT100",
+  engineNo: "ENG123456789",
+  chassisNo: "CHS987654321",
+  paymentMethod: "Leasing via AKR",
+  totalAmount: 657089,
+  downPayment: 160160,
+  balance: 496929,
+  status: "Pending"
+}
+
+================================================================================
+
+PHASE 3: PAYMENT METHOD SELECTION & PROCESSING
+===============================================
+
+PAYMENT METHOD 1: FULL PAYMENT
+------------------------------
+
+SCENARIO: Customer wants to pay entire amount upfront
+
+PROCESS FLOW:
+1. Vehicle Selection: Admin selects BAJAJ CT100 from inventory
+2. Amount Calculation:
+   Vehicle Price: LKR 637,950 (BAJAJ CT100)
+   Registration Fee: LKR 10,160
+   Total Amount: LKR 648,110
+   Down Payment: LKR 648,110 (Full amount)
+   Balance: LKR 0
+
+3. Payment Collection:
+   - Customer pays full amount upfront
+   - Admin records payment in Account Data
+   - VAC status updated to "Payment Received"
+
+4. Cheque Release Process:
+   - Admin marks cheque as released
+   - System creates negative bank deposit entry
+   - Cheque release date recorded
+   - VAC status updated to "Completed"
+
+5. Vehicle Delivery:
+   - Immediate vehicle delivery
+   - Inventory status updated to "OUT"
+   - Customer receives BAJAJ CT100
+
+PAYMENT METHOD 2: LEASING VIA AKR (AKR EASY CREDIT)
+---------------------------------------------------
+
+SCENARIO: Customer uses AKR's internal leasing system
+
+PROCESS FLOW:
+1. Initial Payment Calculation:
+   Vehicle Price: LKR 637,950 (BAJAJ CT100)
+   Advance Payment: LKR 150,000
+   Registration Fee: LKR 10,160
+   Interest Amount: LKR 19,139 (3% interest)
+   Total Amount: LKR 657,089
+   Down Payment: LKR 160,160 (Advance + Reg Fee)
+   Balance: LKR 496,929
+
+2. Installment Planning:
+   1st Installment: LKR 165,643 (Due: 1 month from purchase)
+   2nd Installment: LKR 165,643 (Due: 2 months from purchase)
+   3rd Installment: LKR 165,643 (Due: 3 months from purchase)
+
+3. Down Payment Collection:
+   - Customer pays advance payment + registration fee
+   - Admin records in Account Data
+   - VAC status: "Down Payment Received"
+
+4. Cheque Release for Down Payment:
+   - Admin releases down payment cheque
+   - Negative bank deposit entry created
+   - Cheque release date recorded
+
+5. Installment Payment Tracking:
+   - System tracks each installment
+   - Admin marks installments as paid/unpaid
+   - Automatic arrears calculation
+   - Payment reminders sent
+
+6. Balance Cheque Release:
+   - After all installments paid
+   - Admin releases balance cheque
+   - VAC status updated to "Completed"
+
+PAYMENT METHOD 3: LEASING VIA OTHER COMPANY
+-------------------------------------------
+
+SCENARIO: Customer uses external leasing company
+
+PROCESS FLOW:
+1. Amount Calculation:
+   Vehicle Price: LKR 637,950 (BAJAJ CT100)
+   Advance Payment: LKR 150,000
+   Registration Fee: LKR 10,160
+   Down Payment: LKR 160,160
+   Balance: LKR 477,790 (Handled by external company)
+
+2. Payment Collection:
+   - Customer pays advance payment + registration fee
+   - Admin records in Account Data
+   - VAC status: "Down Payment Received"
+
+3. External Company Processing:
+   - External company handles remaining balance
+   - AKR receives commission from external company
+   - VAC status: "External Processing"
+
+4. Cheque Release:
+   - Admin releases down payment cheque
+   - Negative bank deposit entry created
+   - VAC status updated to "Completed"
+
+================================================================================
+
+PHASE 4: ACCOUNT DATA MANAGEMENT
+================================
+
+PURPOSE: Track all financial transactions
+
+ACCOUNT DATA ENTRY PROCESS:
+1. Payment Collection Recording:
+   Date: 2024-01-15
+   Customer Name: John Doe
+   Payment Details: "Down Payment Collection - VAC-001 - BAJAJ CT100"
+   Amount Collected: LKR 160,160
+   Actual Amount: LKR 160,160
+   Collected Amount: LKR 160,160
+   Related VAC ID: VAC-001
+   Payment Mode: Cash
+
+2. Account Data Status Tracking:
+   - Collected: Payment received
+   - Deposited to Bank: Amount deposited
+   - Pending: Not yet deposited
+
+3. Bank Deposit Process:
+   - Admin transfers collected amount to bank
+   - Bank deposit entry created
+   - Account data status updated to "Deposited"
+   - Bank deposit date recorded
+
+EXAMPLE ACCOUNT DATA ENTRY:
+{
+  date: "2024-01-15",
+  name: "John Doe",
+  details: "Down Payment Collection - VAC-001 - BAJAJ CT100",
+  amount: 160160,
+  actualAmount: 160160,
+  depositedAmount: 160160,
+  relatedCouponId: "VAC-001",
+  depositedToBank: false,
+  remarks: "Advance payment collected"
+}
+
+================================================================================
+
+PHASE 5: BANK DEPOSIT MANAGEMENT
+================================
+
+PURPOSE: Track all bank transactions
+
+BANK DEPOSIT PROCESS:
+1. Deposit Entry Creation:
+   Date: 2024-01-15
+   Depositor Name: John Doe
+   Account Number: Main Account
+   Account Name: Main Bank
+   Purpose: "Vehicle payment deposit - BAJAJ CT100"
+   Amount Deposited: LKR 160,160
+   Transaction Type: Income
+   Slip Image: Uploaded deposit slip
+
+2. Transaction Types:
+   - Income: Money deposited to bank
+   - Outcome: Money withdrawn (cheque releases)
+
+3. Cheque Release Deductions:
+   - When cheque is released, negative amount recorded
+   - Transaction Type: "Outcome"
+   - Purpose: "Cheque Release - BAJAJ CT100"
+   - Amount deducted from bank balance
+
+EXAMPLE BANK DEPOSIT ENTRY:
+{
+  date: "2024-01-15",
+  depositerName: "John Doe",
+  accountNumber: "Main Account",
+  accountName: "Main Bank",
+  purpose: "Vehicle payment deposit - BAJAJ CT100",
+  payment: 160160,
+  transactionType: "income",
+  slipImage: "cloudinary_url"
+}
+
+EXAMPLE CHEQUE RELEASE DEDUCTION:
+{
+  date: "2024-01-19",
+  depositerName: "John Doe",
+  accountNumber: "Main Account",
+  accountName: "Main Bank",
+  purpose: "Cheque Release - Down Payment - BAJAJ CT100",
+  payment: -160160,
+  transactionType: "outcome",
+  slipImage: "cheque_slip_url"
+}
+
+================================================================================
+
+PHASE 6: AKR EASY CREDIT MANAGEMENT
+====================================
+
+PURPOSE: Manage internal leasing transactions
+
+AKR EASY CREDIT PROCESS:
+1. Leasing Setup:
+   - Customer selects AKR leasing for BAJAJ CT100
+   - System auto-calculates installments
+   - 3-month installment plan created
+   - Interest amount added to total
+
+2. Installment Tracking:
+   1st Installment: LKR 165,643 (Month 1)
+   2nd Installment: LKR 165,643 (Month 2)
+   3rd Installment: LKR 165,643 (Month 3)
+   Each installment tracked separately
+
+3. Payment Collection:
+   - Admin collects installment payments
+   - Records in Account Data
+   - Updates installment status
+   - Marks as paid/unpaid
+
+4. Arrears Management:
+   - System calculates overdue amounts
+   - Generates arrears reports
+   - Sends payment reminders
+   - Tracks payment history
+
+5. Balance Release:
+   - After all installments paid
+   - Admin releases balance cheque
+   - VAC status updated to "Completed"
+
+EXAMPLE INSTALLMENT TRACKING:
+{
+  firstInstallment: {
+    amount: 165643,
+    date: "2024-02-15",
+    paidAmount: 165643,
+    paidDate: "2024-02-15"
+  },
+  secondInstallment: {
+    amount: 165643,
+    date: "2024-03-15",
+    paidAmount: 0,
+    paidDate: null
+  },
+  thirdInstallment: {
+    amount: 165643,
+    date: "2024-04-15",
+    paidAmount: 0,
+    paidDate: null
+  }
+}
+
+================================================================================
+
+PHASE 7: INSTALLMENT PLANS MANAGEMENT
+======================================
+
+PURPOSE: Manage payment plans
+
+INSTALLMENT PLAN PROCESS:
+1. Plan Creation:
+   Total Amount: LKR 657,089
+   Number of Installments: 3 (for AKR)
+   Installment Amount: LKR 165,643 each
+   Due Dates Assignment
+
+2. Payment Tracking:
+   - Each installment tracked individually
+   - Payment amount recorded
+   - Payment date recorded
+   - Status updated (Paid/Pending/Overdue)
+
+3. Status Management:
+   - Active: Installments ongoing
+   - Completed: All installments paid
+   - Defaulted: Installments overdue
+   - Cancelled: Plan cancelled
+
+EXAMPLE INSTALLMENT PLAN:
+{
+  installmentId: "IP-VAC-001",
+  customerName: "John Doe",
+  totalAmount: 657089,
+  downPayment: 160160,
+  monthlyInstallment: 165643,
+  numberOfMonths: 3,
+  startDate: "2024-01-15",
+  endDate: "2024-04-15",
+  remainingBalance: 496929,
+  paymentStatus: "Active"
+}
+
+================================================================================
+
+PHASE 8: CHEQUE RELEASE PROCESS
+================================
+
+PURPOSE: Manage cheque releases
+
+CHEQUE RELEASE PROCESS:
+1. Down Payment Cheque Release:
+   - Admin verifies down payment received
+   - Marks cheque as released
+   - Creates negative bank deposit entry
+   - Records cheque release date
+   - Updates VAC status
+
+2. Balance Cheque Release (AKR Leasing):
+   - Admin verifies all installments paid
+   - Releases balance amount
+   - Creates negative bank deposit entry
+   - Updates VAC status to "Completed"
+
+3. Cheque Release Tracking:
+   - Release date recorded
+   - Amount released tracked
+   - Bank deduction recorded
+   - Status updated in VAC
+
+EXAMPLE CHEQUE RELEASE:
+{
+  date: "2024-01-19",
+  name: "John Doe",
+  details: "Cheque Release - VAC-001",
+  amount: 160160,
+  model: "BAJAJ CT100",
+  remarks: "Cheque released to David Peries for VAC-001",
+  couponId: "VAC-001",
+  vehicleType: "BAJAJ CT100"
+}
+
+================================================================================
+
+PHASE 9: VEHICLE DELIVERY & INVENTORY UPDATE
+=============================================
+
+PURPOSE: Manage vehicle delivery and inventory
+
+DELIVERY PROCESS:
+1. Payment Verification:
+   - Admin confirms full payment received
+   - VAC status updated to "Payment Complete"
+
+2. Vehicle Allocation:
+   - Specific BAJAJ CT100 assigned to customer
+   - Engine and chassis numbers recorded
+   - Vehicle details updated in VAC
+
+3. Inventory Update:
+   - Vehicle status changed to "OUT"
+   - Stock quantity reduced
+   - Delivery date recorded
+
+4. Customer Delivery:
+   - BAJAJ CT100 handed over to customer
+   - Delivery receipt generated
+   - Customer signature recorded
+
+EXAMPLE INVENTORY ENTRY:
+{
+  bikeId: "BIKE-001",
+  vehicleType: "BAJAJ CT100",
+  engineNo: "ENG123456789",
+  chassisNo: "CHS987654321",
+  status: "OUT",
+  date: "2024-01-15",
+  branch: "Main Branch"
+}
+
+================================================================================
+
+PHASE 10: ADMINISTRATIVE OPERATIONS
+===================================
+
+ADMIN DASHBOARD FUNCTIONS:
+
+1. Overview Management:
+   - View all pending transactions
+   - Check payment status
+   - Monitor arrears
+   - Review financial summary
+
+2. VAC Management:
+   - Create new VAC
+   - Edit existing VAC
+   - Update payment status
+   - Generate VAC documents
+
+3. Payment Management:
+   - Record payments
+   - Track collections
+   - Monitor arrears
+   - Send reminders
+
+4. Financial Management:
+   - Account data recording
+   - Bank deposit management
+   - Financial reporting
+   - Transaction reconciliation
+
+5. Inventory Management:
+   - Stock tracking
+   - Vehicle status updates
+   - Inventory reports
+   - Stock alerts
+
+REPORTING & ANALYTICS:
+
+1. Financial Reports:
+   - Daily/monthly collections
+   - Payment method distribution
+   - Arrears analysis
+   - Revenue reports
+
+2. Sales Reports:
+   - Vehicle sales by model
+   - Customer demographics
+   - Sales performance
+   - Commission tracking
+
+3. Operational Reports:
+   - VAC status reports
+   - Inventory reports
+   - Customer reports
+   - Payment tracking
+
+================================================================================
+
+COMPLETE DATA FLOW
+==================
+
+CUSTOMER JOURNEY:
+Customer Inquiry → Pre-booking → VAC Creation → Payment → Cheque Release → Vehicle Delivery
+
+PAYMENT FLOW:
+Payment Collection → Account Data → Bank Deposit → Cheque Release → Financial Reconciliation
+
+ADMIN WORKFLOW:
+Review Booking → Create VAC → Process Payment → Release Cheque → Update Inventory → Generate Reports
+
+================================================================================
+
+KEY FEATURES COVERED
+====================
+
+✅ Vehicle Allocation Coupons (VAC) - Complete creation and management
+✅ Admin Data Management - All administrative functions
+✅ Bank Deposit System - Income and outcome tracking
+✅ Cheque Release Process - Complete cheque management
+✅ AKR Easy Credit - Internal leasing system
+✅ Installment Plans - Payment plan management
+✅ All Payment Types - Full Payment, AKR Leasing, External Leasing
+✅ Financial Tracking - Complete financial management
+✅ Inventory Management - Stock and vehicle tracking
+✅ Reporting System - Comprehensive reporting
+✅ Document Generation - PDF document creation
+✅ Customer Management - Complete customer lifecycle
+✅ Payment Processing - All payment methods
+✅ Arrears Management - Overdue payment tracking
+✅ Commission Tracking - External company commissions
+
+================================================================================
+
+EXAMPLE COMPLETE TRANSACTION
+============================
+
+CUSTOMER: John Doe
+VEHICLE: BAJAJ CT100
+PRICE: LKR 637,950
+PAYMENT METHOD: Leasing via AKR
+
+STEP 1: Pre-booking
+- Customer submits pre-booking for BAJAJ CT100
+- Admin confirms booking
+
+STEP 2: VAC Creation
+- Admin creates VAC-001
+- Customer details captured
+- Vehicle allocated
+
+STEP 3: Payment Calculation
+- Vehicle Price: LKR 637,950
+- Advance Payment: LKR 150,000
+- Registration Fee: LKR 10,160
+- Interest Amount: LKR 19,139
+- Total Amount: LKR 657,089
+- Down Payment: LKR 160,160
+- Balance: LKR 496,929
+
+STEP 4: Installment Planning
+- 1st Installment: LKR 165,643 (Due: 2024-02-15)
+- 2nd Installment: LKR 165,643 (Due: 2024-03-15)
+- 3rd Installment: LKR 165,643 (Due: 2024-04-15)
+
+STEP 5: Payment Collection
+- Customer pays down payment: LKR 160,160
+- Account Data entry created
+- VAC status: "Down Payment Received"
+
+STEP 6: Cheque Release
+- Admin releases down payment cheque
+- Negative bank deposit entry created
+- Cheque release date: 2024-01-19
+
+STEP 7: Installment Tracking
+- 1st Installment paid: 2024-02-15
+- 2nd Installment paid: 2024-03-15
+- 3rd Installment paid: 2024-04-15
+
+STEP 8: Balance Release
+- All installments completed
+- Admin releases balance cheque
+- VAC status: "Completed"
+
+STEP 9: Vehicle Delivery
+- BAJAJ CT100 delivered to customer
+- Inventory status: "OUT"
+- Transaction completed
+
+================================================================================
+
+This comprehensive system provides end-to-end management of motorcycle dealership 
+operations, from initial customer contact to final vehicle delivery and financial 
+reconciliation. The system handles multiple payment methods, comprehensive financial 
+tracking, and complete administrative operations.
+
+================================================================================ 

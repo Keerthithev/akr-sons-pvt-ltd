@@ -1,8 +1,9 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react";
 import { Layout, Menu, Button, Modal, Table, Tag, message, Spin, Descriptions, Drawer, Row, Col, Card, Steps, Switch } from "antd";
-import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined } from "@ant-design/icons";
+import { CarOutlined, BookOutlined, UserOutlined, SettingOutlined, MenuOutlined, BankOutlined, ShoppingCartOutlined, CreditCardOutlined, TeamOutlined, ToolOutlined, InfoCircleOutlined, FileTextOutlined, ClockCircleOutlined, HistoryOutlined, UserAddOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
 import jsPDF from 'jspdf';
+import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
 
 const AKR_COMPANY_NAME = "AKR & SONS (PVT) LTD";
 
@@ -669,6 +670,40 @@ export default function AdminDashboard() {
   const [accountDataDepositModalOpen, setAccountDataDepositModalOpen] = useState(false);
   const [selectedAccountDataForDeposit, setSelectedAccountDataForDeposit] = useState<any>(null);
   const [accountDataDepositLoading, setAccountDataDepositLoading] = useState(false);
+  const [accountDataSyncLoading, setAccountDataSyncLoading] = useState(false);
+  
+  // Advanced Customer State
+  const [advancedCustomers, setAdvancedCustomers] = useState<any[]>([]);
+  const [advancedCustomersLoading, setAdvancedCustomersLoading] = useState(false);
+  const [advancedCustomersError, setAdvancedCustomersError] = useState("");
+  const [advancedCustomersSearch, setAdvancedCustomersSearch] = useState('');
+  const [advancedCustomersPagination, setAdvancedCustomersPagination] = useState({ current: 1, pageSize: 10, total: 0 });
+  const [advancedCustomersStats, setAdvancedCustomersStats] = useState<any>({
+    totalCustomers: 0,
+    totalPreBookings: 0,
+    totalAdvanceAmount: 0,
+    bikeStats: []
+  });
+  const [advancedCustomerModalOpen, setAdvancedCustomerModalOpen] = useState(false);
+  const [editingAdvancedCustomer, setEditingAdvancedCustomer] = useState<any>(null);
+  const [advancedCustomerForm, setAdvancedCustomerForm] = useState<any>({
+    customerName: '',
+    contactNo: '',
+    email: '',
+    address: '',
+    bikeModel: '',
+    bikeColor: '',
+    advanceAmount: '',
+    preBookingDate: new Date().toISOString().split('T')[0],
+    expectedDeliveryDate: '',
+    notes: '',
+    status: 'Pending'
+  });
+  
+  // Bike models and colors from database
+  const [availableBikeModels, setAvailableBikeModels] = useState<string[]>([]);
+  const [availableBikeColors, setAvailableBikeColors] = useState<string[]>([]);
+  const [bikeModelsWithColors, setBikeModelsWithColors] = useState<any[]>([]);
   const [viewBankDepositModalOpen, setViewBankDepositModalOpen] = useState(false);
   const [viewingBankDeposit, setViewingBankDeposit] = useState<any>(null);
   const [bankDepositPdfLoading, setBankDepositPdfLoading] = useState(false);
@@ -775,6 +810,164 @@ export default function AdminDashboard() {
     address: '',
     settledDate: ''
   });
+
+  // PDF Overlay state
+  const [pdfOverlayForm, setPdfOverlayForm] = useState({
+    customerName: '',
+    vehicleNumber: '',
+    crNumber: '',
+    nicNumber: '',
+    address: '',
+    settledDate: ''
+  });
+  const [pdfOverlayModalOpen, setPdfOverlayModalOpen] = useState(false);
+  const [pdfOverlayLoading, setPdfOverlayLoading] = useState(false);
+  const [pdfPreviewUrl, setPdfPreviewUrl] = useState('/thushyanthini (8).pdf');
+
+  // Real-time PDF preview generation
+  useEffect(() => {
+    const generatePreview = async () => {
+      if (!pdfOverlayForm.customerName && !pdfOverlayForm.vehicleNumber && !pdfOverlayForm.crNumber && !pdfOverlayForm.nicNumber && !pdfOverlayForm.address && !pdfOverlayForm.settledDate) {
+        setPdfPreviewUrl('/thushyanthini (8).pdf');
+        return;
+      }
+
+      try {
+        // Fetch the PDF template
+        const response = await fetch('/thushyanthini (8).pdf');
+        const pdfBytes = await response.arrayBuffer();
+        
+        // Load the PDF document
+        const pdfDoc = await PDFDocument.load(pdfBytes);
+        const pages = pdfDoc.getPages();
+        const firstPage = pages[0];
+        
+        // Get the page dimensions
+        const { width, height } = firstPage.getSize();
+        
+        // Load a standard font
+        const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+        const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+        
+        // Define text positions
+        const textPositions = {
+          customerName: { x: 115, y: height - 232 },
+          vehicleNumber: { x: 115, y: height - 268 },
+          crNumber: { x: 115, y: height - 304 },
+          nicNumber: { x: 480, y: height - 305 },
+          address: { x: 115, y: height - 340 },
+          settledDate: { x: 480, y: height - 269 }
+        };
+        
+        // Add text overlays
+        if (pdfOverlayForm.customerName) {
+          firstPage.drawText(pdfOverlayForm.customerName, {
+            x: textPositions.customerName.x,
+            y: textPositions.customerName.y,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        if (pdfOverlayForm.vehicleNumber) {
+          firstPage.drawText(pdfOverlayForm.vehicleNumber, {
+            x: textPositions.vehicleNumber.x,
+            y: textPositions.vehicleNumber.y,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+          
+          // Also add to subject line
+          firstPage.drawText(pdfOverlayForm.vehicleNumber, {
+            x: 502,
+            y: height - 412,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        if (pdfOverlayForm.crNumber) {
+          firstPage.drawText(pdfOverlayForm.crNumber, {
+            x: textPositions.crNumber.x,
+            y: textPositions.crNumber.y,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        if (pdfOverlayForm.nicNumber) {
+          firstPage.drawText(pdfOverlayForm.nicNumber, {
+            x: textPositions.nicNumber.x,
+            y: textPositions.nicNumber.y,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        if (pdfOverlayForm.address) {
+          const addressLines = pdfOverlayForm.address.split(' ').reduce((lines, word) => {
+            const lastLine = lines[lines.length - 1] || '';
+            if ((lastLine + ' ' + word).length > 35) {
+              lines.push(word);
+            } else {
+              lines[lines.length - 1] = (lastLine + ' ' + word).trim();
+            }
+            return lines;
+          }, ['']);
+          
+          addressLines.forEach((line, index) => {
+            firstPage.drawText(line, {
+              x: textPositions.address.x,
+              y: textPositions.address.y - (index * 12),
+              size: 11,
+              font: boldFont,
+              color: rgb(0, 0, 0)
+            });
+          });
+        }
+        
+        if (pdfOverlayForm.settledDate) {
+          const settledDate = new Date(pdfOverlayForm.settledDate).toLocaleDateString('en-GB');
+          firstPage.drawText(settledDate, {
+            x: textPositions.settledDate.x,
+            y: textPositions.settledDate.y,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        if (pdfOverlayForm.customerName) {
+          firstPage.drawText(pdfOverlayForm.customerName, {
+            x: 132,
+            y: height - 488,
+            size: 11,
+            font: boldFont,
+            color: rgb(0, 0, 0)
+          });
+        }
+        
+        // Save the modified PDF
+        const modifiedPdfBytes = await pdfDoc.save();
+        
+        // Create a blob and update the preview URL
+        const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+        const url = URL.createObjectURL(blob);
+        setPdfPreviewUrl(url);
+      } catch (error) {
+        console.error('Error generating PDF preview:', error);
+      }
+    };
+
+    // Debounce the preview generation
+    const timeoutId = setTimeout(generatePreview, 500);
+    return () => clearTimeout(timeoutId);
+  }, [pdfOverlayForm]);
 
   const [installmentPlanForm, setInstallmentPlanForm] = useState({
     installmentId: '',
@@ -922,6 +1115,8 @@ export default function AdminDashboard() {
   const [viewAccountDataModalOpen, setViewAccountDataModalOpen] = useState(false);
   const [viewingAccountData, setViewingAccountData] = useState<any>(null);
   const [accountDataPdfLoading, setAccountDataPdfLoading] = useState(false);
+  const [accountDataFilter, setAccountDataFilter] = useState<'all' | 'deposited' | 'pending'>('all');
+  const [allAccountData, setAllAccountData] = useState<any[]>([]);
   
   // Bank Deposits state
   const [bankDeposits, setBankDeposits] = useState<any[]>([]);
@@ -931,14 +1126,16 @@ export default function AdminDashboard() {
   const [bankDepositsPagination, setBankDepositsPagination] = useState({ current: 1, pageSize: 50, total: 0 });
   const [bankDepositsStats, setBankDepositsStats] = useState<any>({});
   const [bankDepositsModalOpen, setBankDepositsModalOpen] = useState(false);
+  const [bankDepositsFilter, setBankDepositsFilter] = useState<'all' | 'income' | 'outcome'>('all');
+  const [allBankDeposits, setAllBankDeposits] = useState<any[]>([]);
   const [bankDepositsForm, setBankDepositsForm] = useState<any>({
     date: '',
     depositerName: '',
     accountNumber: '',
     accountName: '',
     purpose: '',
-    quantity: 0,
-    payment: 0,
+    quantity: '',
+    payment: '',
     slipImage: null,
     slipImageUrl: '',
     transactionType: 'income',
@@ -954,6 +1151,8 @@ export default function AdminDashboard() {
   const [akrEasyCreditSearch, setAkrEasyCreditSearch] = useState('');
   const [akrEasyCreditPagination, setAkrEasyCreditPagination] = useState({ current: 1, pageSize: 10, total: 0 });
   const [akrEasyCreditFilter, setAkrEasyCreditFilter] = useState<'unreleased' | 'released'>('unreleased');
+  const [akrEasyCreditPaymentMethodFilter, setAkrEasyCreditPaymentMethodFilter] = useState<'all' | 'Full Payment' | 'Leasing via AKR' | 'Leasing via Other Company'>('all');
+  const [allAkrEasyCreditData, setAllAkrEasyCreditData] = useState<any[]>([]);
   const [akrEasyCreditStats, setAkrEasyCreditStats] = useState<any>({
     totalLeases: 0,
     completedLeases: 0,
@@ -1495,6 +1694,7 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const data = await res.json();
       
+      setAllAccountData(data.data);
       setAccountData(data.data);
       setAccountDataPagination(data.pagination);
       setAccountDataLoading(false);
@@ -1502,6 +1702,18 @@ export default function AdminDashboard() {
       setAccountDataError("Failed to load account data: " + err.message);
       setAccountDataLoading(false);
     }
+  };
+
+  // Filter account data based on selected filter
+  const getFilteredAccountData = () => {
+    if (accountDataFilter === 'all') {
+      return allAccountData;
+    } else if (accountDataFilter === 'deposited') {
+      return allAccountData.filter(record => record.depositedToBank === true);
+    } else if (accountDataFilter === 'pending') {
+      return allAccountData.filter(record => record.depositedToBank === false);
+    }
+    return allAccountData;
   };
 
   // Fetch account data stats
@@ -1530,6 +1742,22 @@ export default function AdminDashboard() {
       fetchAccountDataStats();
     }
   }, [akrTab]);
+
+  // Update filtered data when filter changes
+  useEffect(() => {
+    const filtered = getFilteredAccountData();
+    if (accountDataSearch) {
+      const searchFiltered = filtered.filter(record => 
+        record.name?.toLowerCase().includes(accountDataSearch.toLowerCase()) ||
+        record.details?.toLowerCase().includes(accountDataSearch.toLowerCase()) ||
+        record.model?.toLowerCase().includes(accountDataSearch.toLowerCase()) ||
+        record.remarks?.toLowerCase().includes(accountDataSearch.toLowerCase())
+      );
+      setAccountData(searchFiltered);
+    } else {
+      setAccountData(filtered);
+    }
+  }, [accountDataFilter, allAccountData, accountDataSearch]);
 
   // Fetch installment plans from Vehicle Allocation Coupons
   const fetchInstallmentPlans = async (page = 1, search = '', status = '', month = '') => {
@@ -2977,6 +3205,27 @@ export default function AdminDashboard() {
     }
   }, [akrEasyCreditData]);
 
+  // Update AKR Easy Credit data when filters change
+  useEffect(() => {
+    const filteredData = getFilteredAkrEasyCreditData();
+    setAkrEasyCreditPagination(prev => ({
+      ...prev,
+      current: 1,
+      total: filteredData.length
+    }));
+  }, [akrEasyCreditFilter, akrEasyCreditPaymentMethodFilter, akrEasyCreditSearch, allAkrEasyCreditData]);
+
+  // Load Advanced Customer data when tab is selected
+  useEffect(() => {
+    if (akrTab === 'advancedCustomer') {
+      fetchAdvancedCustomers();
+      fetchAdvancedCustomerStats();
+      fetchAvailableBikeModels();
+      fetchAvailableBikeColors();
+      fetchBikeModelsWithColors();
+    }
+  }, [akrTab]);
+
   // Load overview data on component mount
   useEffect(() => {
     // Load data needed for overview dashboard on initial load
@@ -2985,6 +3234,9 @@ export default function AdminDashboard() {
     fetchAccountDataStats(); // Load account data stats on initial load
     fetchBankDepositsStats(); // Load bank deposits stats on initial load
     fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders
+    fetchDetailedStockInfo(); // Load detailed stock information for overview
+    fetchBikeInventory(); // Load bike inventory for accurate stock calculation
+    fetchChequeReleaseReminders(); // Load cheque release reminders for overview
   }, []);
 
   // Auto-generate workshop number when modal opens
@@ -3100,6 +3352,37 @@ export default function AdminDashboard() {
     }
   };
 
+  // Calculate stock statistics from bike inventory data
+  const calculateStockStats = () => {
+    if (!bikeInventory || bikeInventory.length === 0) {
+      return {
+        totalBikes: 0,
+        availableBikes: 0,
+        soldBikes: 0,
+        availableByModel: {}
+      };
+    }
+
+    const availableBikes = bikeInventory.filter(bike => bike.status === 'in');
+    const soldBikes = bikeInventory.filter(bike => bike.status === 'out');
+    
+    // Group available bikes by model
+    const availableByModel = availableBikes.reduce((acc, bike) => {
+      if (!acc[bike.model]) {
+        acc[bike.model] = 0;
+      }
+      acc[bike.model]++;
+      return acc;
+    }, {} as Record<string, number>);
+
+    return {
+      totalBikes: bikeInventory.length,
+      availableBikes: availableBikes.length,
+      soldBikes: soldBikes.length,
+      availableByModel
+    };
+  };
+
   // Auto-sync bike status on page load (only once)
   const autoSyncBikeStatus = async () => {
     try {
@@ -3135,11 +3418,10 @@ export default function AdminDashboard() {
         return;
       }
 
-      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=${page}&limit=10`;
+      // Fetch all data for client-side filtering
+      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=1&limit=1000`;
       
       if (search) url += `&search=${encodeURIComponent(search)}`;
-      if (status) url += `&status=${encodeURIComponent(status)}`;
-      if (paymentMethod) url += `&paymentMethod=${encodeURIComponent(paymentMethod)}`;
 
       const res = await fetch(url, {
         headers: {
@@ -3153,11 +3435,16 @@ export default function AdminDashboard() {
       const data = await res.json();
       
       // Filter for AKR Easy Credit, Other Company leases, and Full Payment transactions
-      let filteredData = data.vehicleAllocationCoupons.filter((coupon: any) => 
+      let allFilteredData = data.vehicleAllocationCoupons.filter((coupon: any) => 
         coupon.paymentMethod === 'Leasing via AKR' || 
         coupon.paymentMethod === 'Leasing via Other Company' ||
         coupon.paymentMethod === 'Full Payment'
       );
+      
+      setAllAkrEasyCreditData(allFilteredData);
+      
+      // Apply client-side filtering
+      let filteredData = allFilteredData;
       
       // Apply status filter
       if (status === 'Released') {
@@ -3178,8 +3465,8 @@ export default function AdminDashboard() {
       
       setAkrEasyCreditData(filteredData);
       setAkrEasyCreditPagination({
-        current: data.page || 1,
-        pageSize: data.totalPages ? Math.ceil(data.total / data.totalPages) : 10,
+        current: 1,
+        pageSize: 10,
         total: filteredData.length
       });
     } catch (err: any) {
@@ -3187,6 +3474,417 @@ export default function AdminDashboard() {
       setAkrEasyCreditError(err.message);
     } finally {
       setAkrEasyCreditLoading(false);
+    }
+  };
+
+  // AKR Easy Credit filtering functions
+  const getFilteredAkrEasyCreditData = () => {
+    let filteredData = allAkrEasyCreditData;
+
+    // Apply payment method filter
+    if (akrEasyCreditPaymentMethodFilter !== 'all') {
+      filteredData = filteredData.filter((coupon: any) => 
+        coupon.paymentMethod === akrEasyCreditPaymentMethodFilter
+      );
+    }
+
+    // Apply status filter
+    if (akrEasyCreditFilter === 'released') {
+      filteredData = filteredData.filter((coupon: any) => {
+        if (coupon.paymentMethod === 'Full Payment') {
+          return coupon.chequeReleased; // Released if cheque is released
+        }
+        return coupon.status === 'Completed'; // For leasing, use original status
+      });
+    } else if (akrEasyCreditFilter === 'unreleased') {
+      filteredData = filteredData.filter((coupon: any) => {
+        if (coupon.paymentMethod === 'Full Payment') {
+          return !coupon.chequeReleased; // Unreleased if cheque is not released
+        }
+        return coupon.status === 'Pending'; // For leasing, use original status
+      });
+    }
+
+    // Apply search filter
+    if (akrEasyCreditSearch) {
+      filteredData = filteredData.filter((coupon: any) => 
+        coupon.fullName?.toLowerCase().includes(akrEasyCreditSearch.toLowerCase()) ||
+        coupon.vehicleType?.toLowerCase().includes(akrEasyCreditSearch.toLowerCase()) ||
+        coupon.couponId?.toLowerCase().includes(akrEasyCreditSearch.toLowerCase())
+      );
+    }
+
+    return filteredData;
+  };
+
+  const getPaginatedAkrEasyCreditData = () => {
+    const filteredData = getFilteredAkrEasyCreditData();
+    const startIndex = (akrEasyCreditPagination.current - 1) * akrEasyCreditPagination.pageSize;
+    const endIndex = startIndex + akrEasyCreditPagination.pageSize;
+    return filteredData.slice(startIndex, endIndex);
+  };
+
+  // Advanced Customer API functions
+  const fetchAdvancedCustomers = async (page = 1, search = '', status = '', bikeModel = '') => {
+    setAdvancedCustomersLoading(true);
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      let url = `${import.meta.env.VITE_API_URL}/api/advanced-customers?page=${page}&limit=10`;
+      
+      if (search) url += `&search=${encodeURIComponent(search)}`;
+      if (status) url += `&status=${encodeURIComponent(status)}`;
+      if (bikeModel) url += `&bikeModel=${encodeURIComponent(bikeModel)}`;
+
+      const res = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      
+      setAdvancedCustomers(data.advancedCustomers);
+      setAdvancedCustomersPagination({
+        current: data.pagination.current,
+        pageSize: data.pagination.pageSize,
+        total: data.pagination.total
+      });
+    } catch (err: any) {
+      console.error("Failed to load advanced customers:", err.message);
+      setAdvancedCustomersError(err.message);
+    } finally {
+      setAdvancedCustomersLoading(false);
+    }
+  };
+
+  const fetchAdvancedCustomerStats = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/stats/overview`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      setAdvancedCustomersStats(data.stats);
+    } catch (err: any) {
+      console.error("Failed to load advanced customer stats:", err.message);
+    }
+  };
+
+  const createAdvancedCustomer = async (customerData: any) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      // Prepare data for API call
+      const apiData = {
+        ...customerData,
+        advanceAmount: customerData.advanceAmount ? parseFloat(customerData.advanceAmount) : 0
+      };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(apiData)
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      
+      // Create corresponding Account Data entry
+      try {
+        const accountDataEntry = {
+          date: customerData.preBookingDate || new Date().toISOString().split('T')[0],
+          name: customerData.customerName,
+          details: `Advanced Customer Pre-Booking - ${customerData.bikeModel} ${customerData.bikeColor}`,
+          amount: parseFloat(customerData.advanceAmount) || 0,
+          model: customerData.bikeModel,
+          color: customerData.bikeColor,
+          credit: 0,
+          cost: 0,
+          balance: 0,
+          chequeReceivedDate: '',
+          chequeReleaseDate: '',
+          paymentMode: 'Cash',
+          remarks: `Pre-booking advance payment for ${customerData.bikeModel}`,
+          leasing: 'Advanced Customer',
+          depositedToBank: false,
+          depositedAmount: 0,
+          bankDepositDate: null
+        };
+
+        const accountRes = await fetch(`${import.meta.env.VITE_API_URL}/api/account-data`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(accountDataEntry)
+        });
+
+        if (accountRes.ok) {
+          console.log('Account Data entry created successfully for Advanced Customer');
+        } else {
+          console.error('Failed to create Account Data entry:', accountRes.statusText);
+        }
+      } catch (accountError) {
+        console.error('Error creating Account Data entry:', accountError);
+      }
+
+      message.success('Advanced customer created successfully');
+      setAdvancedCustomerModalOpen(false);
+      setAdvancedCustomerForm({
+        customerName: '',
+        contactNo: '',
+        email: '',
+        address: '',
+        bikeModel: '',
+        bikeColor: '',
+        advanceAmount: '',
+        preBookingDate: new Date().toISOString().split('T')[0],
+        expectedDeliveryDate: '',
+        notes: '',
+        status: 'Pending'
+      });
+      fetchAdvancedCustomers();
+      fetchAdvancedCustomerStats();
+      
+      // Refresh Account Data if the tab is currently open
+      if (akrTab === 'accountData') {
+        fetchAccountData();
+        fetchAccountDataStats();
+      }
+      
+      return data;
+    } catch (err: any) {
+      console.error("Failed to create advanced customer:", err.message);
+      message.error(err.message);
+      throw err;
+    }
+  };
+
+  const updateAdvancedCustomer = async (id: string, customerData: any) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      // Prepare data for API call
+      const apiData = {
+        ...customerData,
+        advanceAmount: customerData.advanceAmount ? parseFloat(customerData.advanceAmount) : 0
+      };
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify(apiData)
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      
+      // Update corresponding Account Data entry if advance amount changed
+      if (editingAdvancedCustomer && editingAdvancedCustomer.advanceAmount !== customerData.advanceAmount) {
+        try {
+          // Find and update the corresponding Account Data entry
+          const accountDataEntry = {
+            date: customerData.preBookingDate || new Date().toISOString().split('T')[0],
+            name: customerData.customerName,
+            details: `Advanced Customer Pre-Booking - ${customerData.bikeModel} ${customerData.bikeColor}`,
+            amount: customerData.advanceAmount,
+            model: customerData.bikeModel,
+            color: customerData.bikeColor,
+            credit: 0,
+            cost: 0,
+            balance: 0,
+            chequeReceivedDate: '',
+            chequeReleaseDate: '',
+            paymentMode: 'Cash',
+            remarks: `Pre-booking advance payment for ${customerData.bikeModel}`,
+            leasing: 'Advanced Customer',
+            depositedToBank: false,
+            depositedAmount: 0,
+            bankDepositDate: null
+          };
+
+          // Note: This would require finding the existing Account Data entry by customer name and details
+          // For now, we'll just log that the amount changed
+          console.log('Advanced Customer amount changed - Account Data should be updated manually if needed');
+        } catch (accountError) {
+          console.error('Error updating Account Data entry:', accountError);
+        }
+      }
+
+      message.success('Advanced customer updated successfully');
+      setAdvancedCustomerModalOpen(false);
+      setEditingAdvancedCustomer(null);
+      setAdvancedCustomerForm({
+        customerName: '',
+        contactNo: '',
+        email: '',
+        address: '',
+        bikeModel: '',
+        bikeColor: '',
+        advanceAmount: '',
+        preBookingDate: new Date().toISOString().split('T')[0],
+        expectedDeliveryDate: '',
+        notes: '',
+        status: 'Pending'
+      });
+      fetchAdvancedCustomers();
+      fetchAdvancedCustomerStats();
+      
+      // Refresh Account Data if the tab is currently open
+      if (akrTab === 'accountData') {
+        fetchAccountData();
+        fetchAccountDataStats();
+      }
+      
+      return data;
+    } catch (err: any) {
+      console.error("Failed to update advanced customer:", err.message);
+      message.error(err.message);
+      throw err;
+    }
+  };
+
+  const deleteAdvancedCustomer = async (id: string) => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/${id}`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      message.success('Advanced customer deleted successfully');
+      fetchAdvancedCustomers();
+      fetchAdvancedCustomerStats();
+      
+      // Refresh Account Data if the tab is currently open
+      if (akrTab === 'accountData') {
+        fetchAccountData();
+        fetchAccountDataStats();
+      }
+    } catch (err: any) {
+      console.error("Failed to delete advanced customer:", err.message);
+      message.error(err.message);
+    }
+  };
+
+  // Fetch available bike models from database
+  const fetchAvailableBikeModels = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/bikes/models`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      setAvailableBikeModels(data.bikeModels || []);
+    } catch (err: any) {
+      console.error("Failed to fetch bike models:", err.message);
+    }
+  };
+
+  // Fetch available bike colors from database
+  const fetchAvailableBikeColors = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/bikes/colors`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      setAvailableBikeColors(data.bikeColors || []);
+    } catch (err: any) {
+      console.error("Failed to fetch bike colors:", err.message);
+    }
+  };
+
+  // Fetch bike models with colors
+  const fetchBikeModelsWithColors = async () => {
+    try {
+      const token = localStorage.getItem('adminToken');
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const res = await fetch(`${import.meta.env.VITE_API_URL}/api/advanced-customers/bikes/models-with-colors`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
+      
+      const data = await res.json();
+      setBikeModelsWithColors(data.bikes || []);
+    } catch (err: any) {
+      console.error("Failed to fetch bike models with colors:", err.message);
     }
   };
 
@@ -4407,6 +5105,7 @@ export default function AdminDashboard() {
       chequeNo: record.chequeNo || '',
       chequeAmount: record.chequeAmount || '',
       paymentType: record.paymentType || 'Cash',
+      paymentMethod: record.paymentMethod || 'Full Payment',
       vehicleIssueDate: record.vehicleIssueDate ? new Date(record.vehicleIssueDate).toISOString().split('T')[0] : '',
       vehicleIssueTime: record.vehicleIssueTime || '',
       status: record.status || 'Pending',
@@ -6817,8 +7516,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: bankDepositsPagination.pageSize.toString(),
+        page: '1',
+        limit: '1000', // Fetch all data for filtering
         search: search
       });
       
@@ -6831,8 +7530,7 @@ export default function AdminDashboard() {
       if (!res.ok) throw new Error("Status " + res.status + ": " + res.statusText);
       const response = await res.json();
       
-
-      
+      setAllBankDeposits(response.data);
       setBankDeposits(response.data);
       setBankDepositsPagination(response.pagination);
       setBankDepositsLoading(false);
@@ -6859,6 +7557,37 @@ export default function AdminDashboard() {
       console.error("Failed to load bank deposits stats:", err.message);
     }
   };
+
+  // Get filtered bank deposits based on filter and search
+  const getFilteredBankDeposits = () => {
+    let filtered = allBankDeposits;
+    
+    // Apply filter
+    if (bankDepositsFilter === 'income') {
+      filtered = filtered.filter(deposit => deposit.payment > 0);
+    } else if (bankDepositsFilter === 'outcome') {
+      filtered = filtered.filter(deposit => deposit.payment < 0);
+    }
+    
+    // Apply search
+    if (bankDepositsSearch) {
+      const searchLower = bankDepositsSearch.toLowerCase();
+      filtered = filtered.filter(deposit =>
+        deposit.depositerName?.toLowerCase().includes(searchLower) ||
+        deposit.accountName?.toLowerCase().includes(searchLower) ||
+        deposit.purpose?.toLowerCase().includes(searchLower) ||
+        deposit.accountNumber?.toLowerCase().includes(searchLower)
+      );
+    }
+    
+    return filtered;
+  };
+
+  // Update bank deposits when filter or search changes
+  useEffect(() => {
+    const filtered = getFilteredBankDeposits();
+    setBankDeposits(filtered);
+  }, [bankDepositsFilter, allBankDeposits, bankDepositsSearch]);
 
   // Load bank deposits when tab is selected
   useEffect(() => {
@@ -7210,6 +7939,45 @@ export default function AdminDashboard() {
     }
   };
 
+  // Sync Account Data with Bank Deposits
+  const handleAccountDataSync = async () => {
+    try {
+      setAccountDataSyncLoading(true);
+      const token = localStorage.getItem('adminToken');
+      
+      if (!token || !validateToken(token)) {
+        handleAuthError();
+        return;
+      }
+
+      const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:5050';
+      const res = await fetch(`${apiUrl}/api/bank-deposits/manual-sync`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json'
+        }
+      });
+
+      if (!res.ok) throw new Error("Failed to sync account data");
+
+      const result = await res.json();
+      
+      message.success(`Sync completed! ${result.results?.length || 0} entries updated.`);
+      
+      // Refresh data
+      fetchAccountData();
+      fetchAccountDataStats();
+      fetchBankDeposits();
+      
+    } catch (err: any) {
+      console.error('Error syncing account data:', err);
+      message.error("Failed to sync account data: " + err.message);
+    } finally {
+      setAccountDataSyncLoading(false);
+    }
+  };
+
   // Edit account data
   const handleEditAccountData = (record: any) => {
     setEditingAccountData(record);
@@ -7453,8 +8221,8 @@ export default function AdminDashboard() {
       const depositData = {
         ...bankDepositsForm,
         slipImage: slipImageUrl || bankDepositsForm.slipImageUrl,
-        // Automatically set transaction type based on payment amount
-        transactionType: bankDepositsForm.payment >= 0 ? 'income' : 'outcome'
+        // Use the user's selected transaction type
+        transactionType: bankDepositsForm.transactionType
       };
       delete depositData.slipImageFile; // Remove file object
       
@@ -7478,8 +8246,8 @@ export default function AdminDashboard() {
         accountNumber: '',
         accountName: '',
         purpose: '',
-        quantity: 0,
-        payment: 0,
+        quantity: '',
+        payment: '',
         slipImage: null,
         slipImageUrl: '',
         transactionType: 'income',
@@ -7534,10 +8302,13 @@ export default function AdminDashboard() {
       accountNumber: record.accountNumber || '',
       accountName: record.accountName || '',
       purpose: record.purpose || '',
-      quantity: record.quantity || 0,
-      payment: record.payment || 0,
+        quantity: record.quantity || '',
+        payment: record.payment || '',
       slipImage: null,
-      slipImageUrl: record.slipImage || ''
+        slipImageUrl: record.slipImage || '',
+        transactionType: record.transactionType || 'income',
+        category: record.category || '',
+        description: record.description || ''
     });
     setBankDepositsModalOpen(true);
   };
@@ -9058,6 +9829,12 @@ export default function AdminDashboard() {
               onClick: () => setAkrTab('customers')
             },
             {
+              key: 'advancedCustomer',
+              label: 'Advanced Customer',
+              icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><UserAddOutlined style={{ fontSize: 20 }} /></span>,
+              onClick: () => setAkrTab('advancedCustomer')
+            },
+            {
               key: 'commissionerLetter',
               label: 'Commissioner Letter',
               icon: <span style={{ display: 'inline-flex', alignItems: 'center', justifyContent: 'center', width: 22, height: 22 }}><FileTextOutlined style={{ fontSize: 20 }} /></span>,
@@ -9255,21 +10032,15 @@ export default function AdminDashboard() {
       dataIndex: 'amount', 
       key: 'amount',
       render: (amount: number, record: any) => {
-        // If deposited to bank, show as negative amount
-        const displayAmount = record.depositedToBank ? -Math.abs(amount) : amount;
-        const color = record.depositedToBank ? 'text-red-600' : 'text-green-600';
+        // Show positive amounts in green (income), negative amounts in red (deposits)
+        const color = amount >= 0 ? 'text-green-600' : 'text-red-600';
         return (
           <span className={color}>
-            LKR {displayAmount.toLocaleString()}
+            LKR {amount.toLocaleString()}
           </span>
         );
       },
-      sorter: (a: any, b: any) => {
-        // Sort by absolute amount, but consider deposited status
-        const aAmount = a.depositedToBank ? -Math.abs(a.amount) : a.amount;
-        const bAmount = b.depositedToBank ? -Math.abs(b.amount) : b.amount;
-        return aAmount - bAmount;
-      }
+      sorter: (a: any, b: any) => a.amount - b.amount
     },
     { 
       title: 'Model', 
@@ -9281,43 +10052,50 @@ export default function AdminDashboard() {
       title: 'Color', 
       dataIndex: 'color', 
       key: 'color',
-      render: (color: string) => color || '-'
+      render: (color: string) => color || '-',
+      hidden: true
     },
     { 
       title: 'Credit (LKR)', 
       dataIndex: 'credit', 
       key: 'credit',
-      render: (credit: number) => credit > 0 ? `LKR ${credit.toLocaleString()}` : '-'
+      render: (credit: number) => credit > 0 ? `LKR ${credit.toLocaleString()}` : '-',
+      hidden: true
     },
     { 
       title: 'Cost (LKR)', 
       dataIndex: 'cost', 
       key: 'cost',
-      render: (cost: number) => cost > 0 ? `LKR ${cost.toLocaleString()}` : '-'
+      render: (cost: number) => cost > 0 ? `LKR ${cost.toLocaleString()}` : '-',
+      hidden: true
     },
     { 
       title: 'Balance', 
       dataIndex: 'balance', 
       key: 'balance',
-      render: (balance: number) => balance > 0 ? `LKR ${balance.toLocaleString()}` : '-'
+      render: (balance: number) => balance > 0 ? `LKR ${balance.toLocaleString()}` : '-',
+      hidden: true
     },
     { 
       title: 'Cheque Received', 
       dataIndex: 'chequeReceivedDate', 
       key: 'chequeReceivedDate',
-      render: (date: string) => date ? new Date(date).toLocaleDateString('en-GB') : '-'
+      render: (date: string) => date ? new Date(date).toLocaleDateString('en-GB') : '-',
+      hidden: true
     },
     { 
       title: 'Cheque Release', 
       dataIndex: 'chequeReleaseDate', 
       key: 'chequeReleaseDate',
-      render: (date: string) => date ? new Date(date).toLocaleDateString('en-GB') : '-'
+      render: (date: string) => date ? new Date(date).toLocaleDateString('en-GB') : '-',
+      hidden: true
     },
     { 
       title: 'Payment Mode', 
       dataIndex: 'paymentMode', 
       key: 'paymentMode',
-      render: (mode: string) => mode || '-'
+      render: (mode: string) => mode || '-',
+      hidden: true
     },
     { 
       title: 'Remarks', 
@@ -9329,7 +10107,8 @@ export default function AdminDashboard() {
       title: 'Leasing', 
       dataIndex: 'leasing', 
       key: 'leasing',
-      render: (leasing: string) => leasing || '-'
+      render: (leasing: string) => leasing || '-',
+      hidden: true
     },
     {
       title: 'Actions',
@@ -12487,6 +13266,51 @@ export default function AdminDashboard() {
                 </Card>
               </div>
 
+              {/* Sticky Filter Bar */}
+              <div className="sticky top-0 z-10 bg-white border-b border-gray-200 mb-4 pb-4">
+                <div className="flex space-x-1 bg-gray-100 p-1 rounded-lg">
+                  <button
+                    onClick={() => {
+                      setAccountDataFilter('all');
+                      setAccountDataSearch('');
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      accountDataFilter === 'all'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    All Records ({allAccountData.length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAccountDataFilter('deposited');
+                      setAccountDataSearch('');
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      accountDataFilter === 'deposited'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Deposited ({allAccountData.filter(record => record.depositedToBank === true).length})
+                  </button>
+                  <button
+                    onClick={() => {
+                      setAccountDataFilter('pending');
+                      setAccountDataSearch('');
+                    }}
+                    className={`flex-1 py-2 px-4 rounded-md text-sm font-medium transition-colors ${
+                      accountDataFilter === 'pending'
+                        ? 'bg-white text-blue-600 shadow-sm'
+                        : 'text-gray-600 hover:text-gray-900'
+                    }`}
+                  >
+                    Pending ({allAccountData.filter(record => record.depositedToBank === false).length})
+                  </button>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                 <input
                   type="text"
@@ -12494,8 +13318,14 @@ export default function AdminDashboard() {
                   value={accountDataSearch}
                   onChange={e => {
                     setAccountDataSearch(e.target.value);
-                    // Auto-search as user types
-                    fetchAccountData(1, e.target.value);
+                    // Filter the current data based on search
+                    const filtered = getFilteredAccountData().filter(record => 
+                      record.name?.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                      record.details?.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                      record.model?.toLowerCase().includes(e.target.value.toLowerCase()) ||
+                      record.remarks?.toLowerCase().includes(e.target.value.toLowerCase())
+                    );
+                    setAccountData(filtered);
                   }}
                   className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow w-full sm:w-64"
                 />
@@ -12525,21 +13355,29 @@ export default function AdminDashboard() {
                   <Button type="default" onClick={exportAccountDataToPDF}>
                     Export PDF
                   </Button>
+                  <Button 
+                    type="default" 
+                    onClick={handleAccountDataSync}
+                    loading={accountDataSyncLoading}
+                    className="bg-orange-500 text-white hover:bg-orange-600"
+                  >
+                    🔄 Sync Data
+                  </Button>
                 </div>
               </div>
 
               <div className="overflow-x-auto">
                 <Table
-                  dataSource={accountData}
+                  dataSource={getFilteredAccountData()}
                   loading={accountDataLoading}
-                  columns={accountDataColumns}
+                  columns={accountDataColumns.filter(col => !col.hidden)}
                   rowKey="_id"
                   pagination={{
-                    current: accountDataPagination.current,
-                    pageSize: accountDataPagination.pageSize,
-                    total: accountDataPagination.total,
-                    onChange: (page) => fetchAccountData(page, accountDataSearch),
-                    showSizeChanger: false
+                    current: 1,
+                    pageSize: 50,
+                    total: getFilteredAccountData().length,
+                    showSizeChanger: false,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
                   }}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1500 }}
@@ -13195,6 +14033,50 @@ export default function AdminDashboard() {
                 </Card>
               </div>
 
+              {/* Sticky Filter Bar */}
+              <div className="sticky top-0 z-10 bg-white border-b border-gray-200 py-3 mb-4 shadow-sm">
+                <div className="flex flex-wrap items-center justify-between gap-4">
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm font-medium text-gray-700">Filter:</span>
+                    <div className="flex gap-1">
+                      <button
+                        onClick={() => setBankDepositsFilter('all')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          bankDepositsFilter === 'all'
+                            ? 'bg-blue-100 text-blue-700 border border-blue-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      >
+                        All Records ({allBankDeposits.length})
+                      </button>
+                      <button
+                        onClick={() => setBankDepositsFilter('income')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          bankDepositsFilter === 'income'
+                            ? 'bg-green-100 text-green-700 border border-green-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      >
+                        Income ({allBankDeposits.filter(deposit => deposit.payment > 0).length})
+                      </button>
+                      <button
+                        onClick={() => setBankDepositsFilter('outcome')}
+                        className={`px-3 py-1.5 text-sm font-medium rounded-md transition-colors ${
+                          bankDepositsFilter === 'outcome'
+                            ? 'bg-red-100 text-red-700 border border-red-200'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200 border border-gray-200'
+                        }`}
+                      >
+                        Outcome ({allBankDeposits.filter(deposit => deposit.payment < 0).length})
+                      </button>
+                    </div>
+                  </div>
+                  <div className="text-sm text-gray-500">
+                    Showing {bankDeposits.length} of {allBankDeposits.length} records
+                  </div>
+                </div>
+              </div>
+
               <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2 mb-4">
                 <input
                   type="text"
@@ -13202,8 +14084,6 @@ export default function AdminDashboard() {
                   value={bankDepositsSearch}
                   onChange={e => {
                     setBankDepositsSearch(e.target.value);
-                    // Auto-search as user types
-                    fetchBankDeposits(1, e.target.value);
                   }}
                   className="border px-3 py-2 rounded-lg text-sm focus:ring-2 focus:ring-blue-200 shadow w-full sm:w-64"
                 />
@@ -13216,8 +14096,8 @@ export default function AdminDashboard() {
                       accountNumber: '',
                       accountName: '',
                       purpose: '',
-                      quantity: 0,
-                      payment: 0,
+                      quantity: '',
+                      payment: '',
                       slipImage: null,
                       slipImageUrl: '',
                       transactionType: 'income',
@@ -13241,11 +14121,11 @@ export default function AdminDashboard() {
                   columns={bankDepositColumns}
                   rowKey="_id"
                   pagination={{
-                    current: bankDepositsPagination.current,
-                    pageSize: bankDepositsPagination.pageSize,
-                    total: bankDepositsPagination.total,
-                    onChange: (page) => fetchBankDeposits(page, bankDepositsSearch),
-                    showSizeChanger: false
+                    current: 1,
+                    pageSize: 50,
+                    total: bankDeposits.length,
+                    showSizeChanger: false,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
                   }}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1200 }}
@@ -13322,10 +14202,10 @@ export default function AdminDashboard() {
                       <input
                         type="number"
                         name="quantity"
-                        value={bankDepositsForm.quantity}
+                        value={bankDepositsForm.quantity || ''}
                         onChange={handleBankDepositNumberChange}
-                        min="0"
                         step="1"
+                        placeholder="0"
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       />
                     </div>
@@ -13334,7 +14214,15 @@ export default function AdminDashboard() {
                       <select
                         name="transactionType"
                         value={bankDepositsForm.transactionType}
-                        onChange={handleBankDepositFormChange}
+                        onChange={(e) => {
+                          const newType = e.target.value;
+                          setBankDepositsForm(prev => ({
+                            ...prev,
+                            transactionType: newType,
+                            // Auto-adjust payment sign based on transaction type
+                            payment: prev.payment ? (newType === 'outcome' ? -Math.abs(prev.payment) : Math.abs(prev.payment)) : prev.payment
+                          }));
+                        }}
                         required
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       >
@@ -13369,13 +14257,16 @@ export default function AdminDashboard() {
                       <input
                         type="number"
                         name="payment"
-                        value={bankDepositsForm.payment}
+                        value={bankDepositsForm.payment || ''}
                         onChange={handleBankDepositNumberChange}
                         required
-                        min="0"
                         step="0.01"
+                        placeholder="0.00"
                         className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                       />
+                      <p className="text-xs text-gray-500 mt-1">
+                        Use positive values for income, negative values for outcome
+                      </p>
                     </div>
                   </div>
                   
@@ -13467,23 +14358,96 @@ export default function AdminDashboard() {
           {/* AKR Easy Credit / Other Tab */}
           {akrTab === 'akrEasyCredit' && (
             <div className="col-span-full">
-              {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{akrEasyCreditStats.totalLeases}</div>
-                  <div className="text-sm text-gray-600">Total Transactions</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{akrEasyCreditStats.completedLeases}</div>
-                  <div className="text-sm text-gray-600">Released</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{akrEasyCreditStats.pendingLeases}</div>
-                  <div className="text-sm text-gray-600">Unreleased</div>
-                </Card>
+
+
+              {/* Sticky Filter Bar */}
+              <div className="bg-white rounded-xl shadow p-4 mb-6 sticky top-0 z-10">
+                <div className="space-y-4">
+                  {/* Payment Method Filter */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Payment Method</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setAkrEasyCreditPaymentMethodFilter('all')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditPaymentMethodFilter === 'all'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        All Methods ({allAkrEasyCreditData.length})
+                      </button>
+                      <button
+                        onClick={() => setAkrEasyCreditPaymentMethodFilter('Full Payment')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditPaymentMethodFilter === 'Full Payment'
+                            ? 'bg-purple-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Full Payment ({allAkrEasyCreditData.filter((item: any) => item.paymentMethod === 'Full Payment').length})
+                      </button>
+                      <button
+                        onClick={() => setAkrEasyCreditPaymentMethodFilter('Leasing via AKR')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditPaymentMethodFilter === 'Leasing via AKR'
+                            ? 'bg-blue-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Leasing via AKR ({allAkrEasyCreditData.filter((item: any) => item.paymentMethod === 'Leasing via AKR').length})
+                      </button>
+                      <button
+                        onClick={() => setAkrEasyCreditPaymentMethodFilter('Leasing via Other Company')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditPaymentMethodFilter === 'Leasing via Other Company'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Leasing via Other Company ({allAkrEasyCreditData.filter((item: any) => item.paymentMethod === 'Leasing via Other Company').length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Status</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setAkrEasyCreditFilter('unreleased')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditFilter === 'unreleased'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Unreleased ({allAkrEasyCreditData.filter((item: any) => {
+                          if (item.paymentMethod === 'Full Payment') {
+                            return !item.chequeReleased;
+                          }
+                          return item.status === 'Pending';
+                        }).length})
+                      </button>
+                      <button
+                        onClick={() => setAkrEasyCreditFilter('released')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditFilter === 'released'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Released ({allAkrEasyCreditData.filter((item: any) => {
+                          if (item.paymentMethod === 'Full Payment') {
+                            return item.chequeReleased;
+                          }
+                          return item.status === 'Completed';
+                        }).length})
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
-
-
 
               {/* Search and Actions */}
               <div className="bg-white rounded-xl shadow p-6 mb-6">
@@ -13495,13 +14459,12 @@ export default function AdminDashboard() {
                       value={akrEasyCreditSearch}
                       onChange={(e) => {
                         setAkrEasyCreditSearch(e.target.value);
-                        fetchAkrEasyCredit(1, e.target.value);
                       }}
                       className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
                     />
                   </div>
                   <div className="flex gap-2">
-                    <Button type="default" onClick={() => fetchAkrEasyCredit()}>
+                    <Button type="default" onClick={() => fetchAkrEasyCredit(1, '')}>
                       Refresh
                     </Button>
                     <Button type="default" onClick={() => exportAkrEasyCreditToPDF()}>
@@ -13514,7 +14477,7 @@ export default function AdminDashboard() {
               {/* Leases Table */}
               <div className="bg-white rounded-xl shadow overflow-hidden">
                 <Table
-                  dataSource={akrEasyCreditData}
+                  dataSource={getPaginatedAkrEasyCreditData()}
                   loading={akrEasyCreditLoading}
                   columns={[
                     {
@@ -13797,7 +14760,7 @@ export default function AdminDashboard() {
                     current: akrEasyCreditPagination?.current || 1,
                     pageSize: akrEasyCreditPagination?.pageSize || 10,
                     total: akrEasyCreditPagination?.total || 0,
-                    onChange: (page) => fetchAkrEasyCredit(page, akrEasyCreditSearch),
+                    onChange: (page) => setAkrEasyCreditPagination(prev => ({ ...prev, current: page })),
                     showSizeChanger: false
                   }}
                   rowKey="_id"
@@ -14001,110 +14964,470 @@ export default function AdminDashboard() {
           {akrTab === 'commissionerLetter' && (
             <div className="col-span-full">
               <div className="bg-white rounded-xl shadow-lg p-6">
-                <h2 className="text-2xl font-bold mb-6 text-gray-800">Commissioner Letter Generator</h2>
+                <h2 className="text-2xl font-bold mb-6 text-gray-800">Commissioner Letter PDF Overlay</h2>
                 
-                <div className="max-w-2xl mx-auto">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Customer Name *
-                      </label>
-                      <input
-                        type="text"
-                        value={commissionerLetterForm.customerName}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, customerName: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-black focus:border-black"
-                        placeholder="Enter customer full name"
-                      />
+                <div className="max-w-4xl mx-auto">
+                  <div className="text-center mb-8">
+                    <div className="bg-green-50 border border-green-200 rounded-lg p-6 mb-6">
+                      <h3 className="text-lg font-semibold text-green-800 mb-2">📄 Automatic PDF Overlay System</h3>
+                      <p className="text-green-700 text-sm">
+                        Type customer details in the form and the system will automatically generate a PDF with all details filled in. 
+                        No manual writing needed - just print the completed document!
+                      </p>
                     </div>
                     
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Vehicle Number *
-                      </label>
-                      <input
-                        type="text"
-                        value={commissionerLetterForm.vehicleNumber}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, vehicleNumber: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-black focus:border-black"
-                        placeholder="Enter vehicle number"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        CR Number *
-                      </label>
-                      <input
-                        type="text"
-                        value={commissionerLetterForm.crNumber}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, crNumber: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Enter CR number"
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        NIC Number *
-                      </label>
-                      <input
-                        type="text"
-                        value={commissionerLetterForm.nicNumber}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, nicNumber: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Enter NIC number"
-                      />
-                    </div>
-                    
-                    <div className="md:col-span-2">
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Address *
-                      </label>
-                      <textarea
-                        value={commissionerLetterForm.address}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, address: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                        placeholder="Enter customer address"
-                        rows={3}
-                      />
-                    </div>
-                    
-                    <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">
-                        Settled Date *
-                      </label>
-                      <input
-                        type="date"
-                        value={commissionerLetterForm.settledDate}
-                        onChange={(e) => setCommissionerLetterForm(prev => ({ ...prev, settledDate: e.target.value }))}
-                        className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-green-500 focus:border-green-500"
-                      />
-                    </div>
-                  </div>
-                  
-                  <div className="mt-8 text-center">
                     <Button 
                       type="primary" 
                       size="large"
-                      onClick={generateCommissionerLetter}
-                      className="bg-black hover:bg-gray-800 border-black hover:border-gray-800 px-8 py-3 text-lg"
+                      onClick={() => setPdfOverlayModalOpen(true)}
+                      className="bg-blue-600 hover:bg-blue-700 border-blue-600 hover:border-blue-700 px-8 py-3 text-lg"
+                      icon={<FileTextOutlined />}
                     >
-                      Generate Commissioner Letter
+                      Open PDF Overlay Editor
                     </Button>
                   </div>
                   
-                  <div className="mt-6 p-4 bg-green-50 border border-green-200 rounded-lg">
-                    <h3 className="text-lg font-semibold text-green-800 mb-2">About Commissioner Letter</h3>
-                    <p className="text-green-700 text-sm">
-                      This letter confirms that a customer has successfully settled all outstanding payments for their vehicle. 
-                      It includes all relevant vehicle and customer details and serves as an official confirmation document.
-                    </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div className="bg-gray-50 rounded-lg p-6">
+                      <h4 className="text-lg font-semibold text-gray-800 mb-4">📋 Instructions</h4>
+                      <ul className="text-sm text-gray-600 space-y-2">
+                        <li>• Click "Open PDF Overlay Editor" to start</li>
+                        <li>• Type customer details in the form</li>
+                        <li>• Click "Generate PDF with Auto Overlay"</li>
+                        <li>• PDF opens with all details filled in</li>
+                        <li>• Print the completed document</li>
+                      </ul>
+                    </div>
+                    
+                    <div className="bg-green-50 rounded-lg p-6">
+                      <h4 className="text-lg font-semibold text-green-800 mb-4">✅ Features</h4>
+                      <ul className="text-sm text-green-700 space-y-2">
+                        <li>• Automatic PDF generation with filled details</li>
+                        <li>• Real-time preview of typed information</li>
+                        <li>• Print-ready output with professional formatting</li>
+                        <li>• No manual writing required</li>
+                        <li>• Save and reuse form data</li>
+                      </ul>
+                    </div>
                   </div>
                 </div>
               </div>
+            </div>
+          )}
+
+          {akrTab === 'advancedCustomer' && (
+            <div className="col-span-full">
+              {/* Statistics Cards */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-6">
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Customers</p>
+                      <p className="text-2xl font-bold text-gray-900">{advancedCustomersStats.totalCustomers || 0}</p>
+                    </div>
+                    <div className="p-3 bg-blue-100 rounded-full">
+                      <UserOutlined className="text-blue-600 text-xl" />
+                    </div>
+                  </div>
+                </div>
+
+                <div className="bg-white rounded-xl shadow-lg p-6">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <p className="text-sm font-medium text-gray-600">Total Advance Amount</p>
+                      <p className="text-2xl font-bold text-gray-900">LKR {(advancedCustomersStats.totalAdvanceAmount || 0).toLocaleString()}</p>
+                    </div>
+                    <div className="p-3 bg-yellow-100 rounded-full">
+                      <BankOutlined className="text-yellow-600 text-xl" />
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Bike Model and Color Statistics */}
+              {advancedCustomers && advancedCustomers.length > 0 && (
+                <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                  <h3 className="text-lg font-semibold mb-4">Bike Model and Color Bookings</h3>
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                    {(() => {
+                      // Group customers by bike model and color
+                      const vehicleStats = advancedCustomers.reduce((acc: any, customer: any) => {
+                        const model = customer.bikeModel;
+                        const color = customer.bikeColor || 'No Color';
+                        
+                        if (!acc[model]) {
+                          acc[model] = {};
+                        }
+                        
+                        if (!acc[model][color]) {
+                          acc[model][color] = 0;
+                        }
+                        
+                        acc[model][color]++;
+                        return acc;
+                      }, {});
+                      
+                      // Flatten the data for side-by-side display
+                      const flatStats: any[] = [];
+                      Object.entries(vehicleStats).forEach(([model, colors]: [string, any]) => {
+                        Object.entries(colors).forEach(([color, count]: [string, number]) => {
+                          flatStats.push({ model, color, count });
+                        });
+                      });
+                      
+                      return flatStats.map((item: any, index: number) => (
+                        <div key={index} className="bg-gradient-to-r from-blue-50 to-indigo-50 border border-blue-200 rounded-lg p-4 hover:shadow-md transition-shadow">
+                          <div className="flex items-center justify-between">
+                            <div className="flex-1">
+                              <h4 className="font-bold text-gray-800 text-lg mb-1">{item.model}</h4>
+                              <p className="text-gray-600 text-sm">{item.color}</p>
+                            </div>
+                            <div className="ml-4">
+                              <span className="bg-blue-500 text-white px-3 py-1 rounded-full text-sm font-semibold">
+                                {item.count} booking{item.count !== 1 ? 's' : ''}
+                              </span>
+                            </div>
+                          </div>
+                        </div>
+                      ));
+                    })()}
+                  </div>
+                </div>
+              )}
+
+
+
+              {/* Search and Actions */}
+              <div className="bg-white rounded-xl shadow-lg p-6 mb-6">
+                <div className="flex flex-col sm:flex-row gap-4 items-center justify-between">
+                  <div className="flex-1 max-w-md">
+                      <input
+                        type="text"
+                      placeholder="Search by customer name, contact, or bike model..."
+                      value={advancedCustomersSearch}
+                      onChange={(e) => {
+                        setAdvancedCustomersSearch(e.target.value);
+                        fetchAdvancedCustomers(1, e.target.value);
+                      }}
+                      className="w-full border px-4 py-2 rounded-lg focus:ring-2 focus:ring-blue-200"
+                    />
+                  </div>
+                  <div className="flex gap-2">
+                    <Button 
+                      type="primary" 
+                      onClick={() => setAdvancedCustomerModalOpen(true)}
+                      icon={<UserAddOutlined />}
+                    >
+                      Add Advanced Customer
+                    </Button>
+                  </div>
+                </div>
+                    </div>
+                    
+              {/* Advanced Customers Table */}
+              <div className="bg-white rounded-xl shadow-lg overflow-hidden">
+                <Table
+                  dataSource={advancedCustomers}
+                  loading={advancedCustomersLoading}
+                  columns={[
+                    {
+                      title: 'Customer Name',
+                      dataIndex: 'customerName',
+                      key: 'customerName',
+                      render: (name: string) => <span className="font-medium">{name}</span>
+                    },
+                    {
+                      title: 'Contact',
+                      dataIndex: 'contactNo',
+                      key: 'contactNo',
+                      render: (contact: string) => contact || '-'
+                    },
+                    {
+                      title: 'Bike Model',
+                      dataIndex: 'bikeModel',
+                      key: 'bikeModel',
+                      render: (model: string) => <span className="text-blue-600 font-medium">{model}</span>
+                    },
+                    {
+                      title: 'Bike Color',
+                      dataIndex: 'bikeColor',
+                      key: 'bikeColor',
+                      render: (color: string) => (
+                        <span className="px-2 py-1 bg-gray-100 rounded-full text-sm">{color}</span>
+                      )
+                    },
+                    {
+                      title: 'Advance Amount',
+                      dataIndex: 'advanceAmount',
+                      key: 'advanceAmount',
+                      render: (amount: number) => (
+                        <span className="font-semibold text-green-600">LKR {amount?.toLocaleString()}</span>
+                      )
+                    },
+                    {
+                      title: 'Pre-Booking Date',
+                      dataIndex: 'preBookingDate',
+                      key: 'preBookingDate',
+                      render: (date: string) => date ? new Date(date).toLocaleDateString('en-GB') : '-'
+                    },
+                    {
+                      title: 'Status',
+                      dataIndex: 'status',
+                      key: 'status',
+                      render: (status: string) => {
+                        const statusColors = {
+                          'Pending': 'orange',
+                          'Confirmed': 'green',
+                          'Cancelled': 'red',
+                          'Delivered': 'blue'
+                        };
+                        return (
+                          <Tag color={statusColors[status as keyof typeof statusColors] || 'default'}>
+                            {status}
+                          </Tag>
+                        );
+                      }
+                    },
+                    {
+                      title: 'Actions',
+                      key: 'actions',
+                      render: (_: any, record: any) => (
+                        <div className="flex gap-2">
+                          <Button 
+                            type="link" 
+                            size="small" 
+                            onClick={() => {
+                              setEditingAdvancedCustomer(record);
+                              setAdvancedCustomerForm({
+                                customerName: record.customerName,
+                                contactNo: record.contactNo,
+                                email: record.email,
+                                address: record.address,
+                                bikeModel: record.bikeModel,
+                                bikeColor: record.bikeColor,
+                                advanceAmount: record.advanceAmount,
+                                preBookingDate: record.preBookingDate ? new Date(record.preBookingDate).toISOString().split('T')[0] : '',
+                                expectedDeliveryDate: record.expectedDeliveryDate ? new Date(record.expectedDeliveryDate).toISOString().split('T')[0] : '',
+                                notes: record.notes,
+                                status: record.status
+                              });
+                              setAdvancedCustomerModalOpen(true);
+                            }}
+                          >
+                            Edit
+                          </Button>
+                          <Button 
+                            type="link" 
+                            size="small" 
+                            danger 
+                            onClick={() => {
+                              Modal.confirm({
+                                title: 'Delete Advanced Customer',
+                                content: `Are you sure you want to delete ${record.customerName}?`,
+                                onOk: () => deleteAdvancedCustomer(record._id)
+                              });
+                            }}
+                          >
+                            Delete
+                          </Button>
+                        </div>
+                      )
+                    }
+                  ]}
+                  rowKey="_id"
+                  pagination={{
+                    current: advancedCustomersPagination.current,
+                    pageSize: advancedCustomersPagination.pageSize,
+                    total: advancedCustomersPagination.total,
+                    onChange: (page) => fetchAdvancedCustomers(page, advancedCustomersSearch),
+                    showSizeChanger: false
+                  }}
+                  className="rounded-xl overflow-hidden"
+                  scroll={{ x: 1200 }}
+                />
+              </div>
+
+              {/* Add/Edit Advanced Customer Modal */}
+              <Modal
+                title={editingAdvancedCustomer ? "Edit Advanced Customer" : "Add Advanced Customer"}
+                open={advancedCustomerModalOpen}
+                onCancel={() => {
+                  setAdvancedCustomerModalOpen(false);
+                  setEditingAdvancedCustomer(null);
+                  setAdvancedCustomerForm({
+                    customerName: '',
+                    contactNo: '',
+                    email: '',
+                    address: '',
+                    bikeModel: '',
+                    bikeColor: '',
+                    advanceAmount: '',
+                    preBookingDate: new Date().toISOString().split('T')[0],
+                    expectedDeliveryDate: '',
+                    notes: '',
+                    status: 'Pending'
+                  });
+                }}
+                footer={null}
+                width={800}
+                centered
+              >
+                <form onSubmit={(e) => { 
+                  e.preventDefault(); 
+                  if (editingAdvancedCustomer) {
+                    updateAdvancedCustomer(editingAdvancedCustomer._id, advancedCustomerForm);
+                  } else {
+                    createAdvancedCustomer(advancedCustomerForm);
+                  }
+                }} className="space-y-4">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Customer Name *</label>
+                      <input
+                        type="text"
+                        value={advancedCustomerForm.customerName}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, customerName: e.target.value }))}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        placeholder="Enter customer name"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Contact Number *</label>
+                      <input
+                        type="text"
+                        value={advancedCustomerForm.contactNo}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, contactNo: e.target.value }))}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        placeholder="Enter contact number"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Email</label>
+                      <input
+                        type="email"
+                        value={advancedCustomerForm.email}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, email: e.target.value }))}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        placeholder="Enter email address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Address</label>
+                      <input
+                        type="text"
+                        value={advancedCustomerForm.address}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, address: e.target.value }))}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        placeholder="Enter address"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Bike Model *</label>
+                      <select
+                        value={advancedCustomerForm.bikeModel}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, bikeModel: e.target.value }))}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      >
+                        <option value="">Select Bike Model</option>
+                        {availableBikeModels.map((model: string) => (
+                          <option key={model} value={model}>{model}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Bike Color *</label>
+                      <select
+                        value={advancedCustomerForm.bikeColor}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, bikeColor: e.target.value }))}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      >
+                        <option value="">Select Bike Color</option>
+                        {availableBikeColors.map((color: string) => (
+                          <option key={color} value={color}>{color}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Advance Amount</label>
+                      <input
+                        type="number"
+                        value={advancedCustomerForm.advanceAmount}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, advanceAmount: e.target.value }))}
+                        min="0"
+                        step="0.01"
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                        placeholder="Enter advance amount (optional)"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Pre-Booking Date *</label>
+                      <input
+                        type="date"
+                        value={advancedCustomerForm.preBookingDate}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, preBookingDate: e.target.value }))}
+                        required
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Expected Delivery Date</label>
+                      <input
+                        type="date"
+                        value={advancedCustomerForm.expectedDeliveryDate}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, expectedDeliveryDate: e.target.value }))}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      />
+                  </div>
+                    <div>
+                      <label className="block text-sm font-medium mb-1">Status</label>
+                      <select
+                        value={advancedCustomerForm.status}
+                        onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, status: e.target.value }))}
+                        className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      >
+                        <option value="Pending">Pending</option>
+                        <option value="Confirmed">Confirmed</option>
+                        <option value="Cancelled">Cancelled</option>
+                        <option value="Delivered">Delivered</option>
+                      </select>
+                    </div>
+                  </div>
+                  <div className="md:col-span-2">
+                    <label className="block text-sm font-medium mb-1">Notes</label>
+                    <textarea
+                      value={advancedCustomerForm.notes}
+                      onChange={(e) => setAdvancedCustomerForm(prev => ({ ...prev, notes: e.target.value }))}
+                      className="w-full border px-3 py-2 rounded focus:ring-2 focus:ring-blue-200"
+                      placeholder="Enter any additional notes"
+                      rows={3}
+                    />
+                  </div>
+                  <div className="flex justify-end gap-2 pt-4">
+                    <Button 
+                      type="default" 
+                      onClick={() => {
+                        setAdvancedCustomerModalOpen(false);
+                        setEditingAdvancedCustomer(null);
+                      }}
+                    >
+                      Cancel
+                    </Button>
+                    <Button 
+                      type="primary" 
+                      htmlType="submit"
+                    >
+                      {editingAdvancedCustomer ? 'Update' : 'Create'} Advanced Customer
+                    </Button>
+                  </div>
+                </form>
+              </Modal>
               </div>
           )}
+
           {akrTab === 'salesTransactions' && (
             <div className="col-span-full">
               {/* Search and Actions */}
@@ -16360,6 +17683,17 @@ export default function AdminDashboard() {
                             <option key={engineNo} value={engineNo}>{engineNo}</option>
                           ))
                         }
+                        {/* Show current engine number if it's not in the dropdown (for editing) */}
+                        {vehicleAllocationCouponForm.engineNo && 
+                         vehicleAllocationCouponForm.vehicleType && 
+                         !vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === vehicleAllocationCouponForm.vehicleType)?.engineNumbers?.includes(vehicleAllocationCouponForm.engineNo) && (
+                          <option value={vehicleAllocationCouponForm.engineNo}>{vehicleAllocationCouponForm.engineNo} (Current)</option>
+                        )}
+                        {/* Show current engine number if vehicle type is not selected (for editing) */}
+                        {vehicleAllocationCouponForm.engineNo && 
+                         !vehicleAllocationCouponForm.vehicleType && (
+                          <option value={vehicleAllocationCouponForm.engineNo}>{vehicleAllocationCouponForm.engineNo} (Current)</option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -16377,6 +17711,17 @@ export default function AdminDashboard() {
                             <option key={chassisNo} value={chassisNo}>{chassisNo}</option>
                           ))
                         }
+                        {/* Show current chassis number if it's not in the dropdown (for editing) */}
+                        {vehicleAllocationCouponForm.chassisNo && 
+                         vehicleAllocationCouponForm.vehicleType && 
+                         !vehicleAllocationCouponDropdownData.vehicles?.find(v => v.name === vehicleAllocationCouponForm.vehicleType)?.chassisNumbers?.includes(vehicleAllocationCouponForm.chassisNo) && (
+                          <option value={vehicleAllocationCouponForm.chassisNo}>{vehicleAllocationCouponForm.chassisNo} (Current)</option>
+                        )}
+                        {/* Show current chassis number if vehicle type is not selected (for editing) */}
+                        {vehicleAllocationCouponForm.chassisNo && 
+                         !vehicleAllocationCouponForm.vehicleType && (
+                          <option value={vehicleAllocationCouponForm.chassisNo}>{vehicleAllocationCouponForm.chassisNo} (Current)</option>
+                        )}
                       </select>
                     </div>
                     <div>
@@ -17563,7 +18908,16 @@ export default function AdminDashboard() {
                   <div className="flex items-center justify-between">
                     <div>
                       <p className="text-green-100 text-sm font-medium">Available Stock</p>
-                      <p className="text-3xl font-bold">{detailedStockInfo.reduce((sum, model) => sum + model.totalStock, 0)}</p>
+                      <p className="text-3xl font-bold">
+                        {bikeInventoryLoading ? (
+                          <Spin size="small" />
+                        ) : (
+                          calculateStockStats().availableBikes
+                        )}
+                      </p>
+                      <p className="text-green-200 text-xs mt-1">
+                        of {calculateStockStats().totalBikes} total
+                      </p>
                     </div>
                     <div className="bg-green-400 bg-opacity-30 p-3 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -17731,8 +19085,8 @@ export default function AdminDashboard() {
                       </h3>
                       <Button 
                         type="default" 
-                        onClick={fetchDetailedStockInfo}
-                        loading={detailedStockInfoLoading}
+                        onClick={() => fetchBikeInventory()}
+                        loading={bikeInventoryLoading}
                         size="small"
                         className="text-blue-600 hover:text-blue-800"
                       >
@@ -17740,12 +19094,12 @@ export default function AdminDashboard() {
                       </Button>
                     </div>
                     
-                    {detailedStockInfoLoading ? (
+                    {bikeInventoryLoading ? (
                       <div className="text-center py-8">
                         <Spin size="large" />
                         <p className="text-gray-500 mt-2">Loading stock information...</p>
                       </div>
-                    ) : detailedStockInfo.length === 0 ? (
+                    ) : bikeInventory.filter(bike => bike.status === 'in').length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
@@ -17755,16 +19109,41 @@ export default function AdminDashboard() {
                       </div>
                     ) : (
                       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
-                        {detailedStockInfo.map((model: any, index: number) => (
+                        {(() => {
+                          // Calculate stock info from bike inventory data
+                          const stockByModel = {};
+                          
+                          bikeInventory
+                            .filter(bike => bike.status === 'in') // Only available bikes
+                            .forEach(bike => {
+                              if (!stockByModel[bike.model]) {
+                                stockByModel[bike.model] = {
+                                  model: bike.model,
+                                  totalStock: 0,
+                                  colors: {}
+                                };
+                              }
+                              
+                              stockByModel[bike.model].totalStock++;
+                              
+                              if (!stockByModel[bike.model].colors[bike.color]) {
+                                stockByModel[bike.model].colors[bike.color] = [];
+                              }
+                              stockByModel[bike.model].colors[bike.color].push(bike);
+                            });
+                          
+                          const stockArray = Object.values(stockByModel).sort((a: any, b: any) => b.totalStock - a.totalStock);
+                          
+                          return stockArray.map((model: any, index: number) => (
                           <div key={index} className="bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
                             <div className="flex justify-between items-start mb-3">
                               <div className="flex-1">
                                 <h4 className="font-semibold text-gray-900 text-sm leading-tight">{model.model}</h4>
-                                <p className="text-xs text-gray-500 mt-1">{model.category || 'N/A'}</p>
+                                  <p className="text-xs text-gray-500 mt-1">Available Stock</p>
                               </div>
                               <div className="text-right ml-2">
                                 <div className="text-lg font-bold text-blue-600">{model.totalStock}</div>
-                                <div className="text-xs text-gray-500">Total</div>
+                                  <div className="text-xs text-gray-500">Available</div>
                               </div>
                             </div>
                             
@@ -17777,7 +19156,8 @@ export default function AdminDashboard() {
                               ))}
                             </div>
                           </div>
-                        ))}
+                          ));
+                        })()}
                       </div>
                     )}
                     
@@ -17785,15 +19165,36 @@ export default function AdminDashboard() {
                       <div className="flex flex-wrap justify-center gap-6 text-sm">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                          <span>Good Stock ({detailedStockInfo.filter(m => m.totalStock > 2).length})</span>
+                          <span>Good Stock ({(() => {
+                            const stockByModel = {};
+                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
+                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
+                              stockByModel[bike.model]++;
+                            });
+                            return Object.values(stockByModel).filter(count => count > 2).length;
+                          })()})</span>
                         </div>
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                          <span>Low Stock ({detailedStockInfo.filter(m => m.totalStock > 0 && m.totalStock <= 2).length})</span>
+                          <span>Low Stock ({(() => {
+                            const stockByModel = {};
+                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
+                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
+                              stockByModel[bike.model]++;
+                            });
+                            return Object.values(stockByModel).filter(count => count > 0 && count <= 2).length;
+                          })()})</span>
                         </div>
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                          <span>Out of Stock ({detailedStockInfo.filter(m => m.totalStock === 0).length})</span>
+                          <span>Out of Stock ({(() => {
+                            const stockByModel = {};
+                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
+                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
+                              stockByModel[bike.model]++;
+                            });
+                            return Object.values(stockByModel).filter(count => count === 0).length;
+                          })()})</span>
                         </div>
                       </div>
                     </div>
@@ -18047,18 +19448,35 @@ export default function AdminDashboard() {
                     </h3>
                     <div className="flex items-center gap-2">
                       <div className="text-sm text-gray-500">
-                        {(() => {
-                          const reminders = akrEasyCreditData.filter((coupon: any) => {
-                            if (coupon.paymentMethod === 'Full Payment') {
-                              return !coupon.chequeReleased && parseFloat(coupon.totalAmount) > 0;
-                            } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                              return parseFloat(coupon.balance) > 0;
-                            }
-                            return false;
-                          });
-                          return `${reminders.length} pending`;
-                        })()}
+                        {chequeReleaseRemindersLoading ? 'Loading...' : `${chequeReleaseReminders.filter((r: any) => r.status === 'pending').length} pending`}
                       </div>
+                      <Button 
+                        type="link" 
+                        size="small" 
+                        onClick={() => {
+                          console.log('=== CHEQUE RELEASE REMINDERS DEBUG ===');
+                          console.log('Total Cheque Release Reminders:', chequeReleaseReminders.length);
+                          console.log('Loading State:', chequeReleaseRemindersLoading);
+                          console.log('All reminders:', chequeReleaseReminders);
+                          
+                          // Check each reminder
+                          chequeReleaseReminders.forEach((reminder: any, index: number) => {
+                            console.log(`Reminder ${index + 1}:`, {
+                              couponId: reminder.couponId,
+                              fullName: reminder.fullName,
+                              downPayment: reminder.downPayment,
+                              daysSinceDownPayment: reminder.daysSinceDownPayment,
+                              daysUntilRelease: reminder.daysUntilRelease,
+                              isOverdue: reminder.isOverdue,
+                              status: reminder.status,
+                              chequeReleaseDate: reminder.chequeReleaseDate
+                            });
+                          });
+                        }}
+                        className="text-orange-600 hover:text-orange-800"
+                      >
+                        Debug
+                      </Button>
                       <Button 
                         type="link" 
                         size="small" 
@@ -18070,59 +19488,12 @@ export default function AdminDashboard() {
                     </div>
                   </div>
                   <div className="space-y-3 max-h-80 overflow-y-auto">
-                    {(() => {
-                      // Calculate cheque release reminders from AKR Easy Credit data
-                      const today = new Date();
-                      const reminders = akrEasyCreditData.filter((coupon: any) => {
-                        // Only show unreleased cheques
-                        if (coupon.paymentMethod === 'Full Payment') {
-                          return !coupon.chequeReleased && parseFloat(coupon.totalAmount) > 0;
-                        } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                          return parseFloat(coupon.balance) > 0;
-                        }
-                        return false; // Exclude Leasing via Other Company
-                      }).map((coupon: any) => {
-                        const downPaymentDate = coupon.dateOfPurchase ? new Date(coupon.dateOfPurchase) : today;
-                        const daysSinceDownPayment = Math.floor((today.getTime() - downPaymentDate.getTime()) / (1000 * 60 * 60 * 24));
-                        
-                        // Calculate expected release date (7 days after down payment)
-                        const expectedReleaseDate = new Date(downPaymentDate);
-                        expectedReleaseDate.setDate(expectedReleaseDate.getDate() + 7);
-                        
-                        const daysUntilRelease = Math.floor((expectedReleaseDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24));
-                        const isOverdue = daysUntilRelease < 0;
-                        const daysOverdue = Math.abs(daysUntilRelease);
-                        
-                        let chequeAmount = 0;
-                        let chequeType = '';
-                        
-                        if (coupon.paymentMethod === 'Full Payment') {
-                          chequeAmount = parseFloat(coupon.totalAmount) || 0;
-                          chequeType = 'Full Payment (2 Cheques)';
-                        } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                          chequeAmount = parseFloat(coupon.balance) || 0;
-                          chequeType = 'Balance Payment';
-                        }
-                        
-                        return {
-                          ...coupon,
-                          isOverdue,
-                          daysSinceDownPayment,
-                          daysUntilRelease,
-                          daysOverdue,
-                          chequeAmount,
-                          chequeType,
-                          expectedReleaseDate
-                        };
-                      }).sort((a, b) => {
-                        // Sort by urgency: overdue first, then by days until release
-                        if (a.isOverdue && !b.isOverdue) return -1;
-                        if (!a.isOverdue && b.isOverdue) return 1;
-                        return a.daysUntilRelease - b.daysUntilRelease;
-                      });
-                      
-                      if (reminders.length === 0) {
-                        return (
+                    {chequeReleaseRemindersLoading ? (
+                      <div className="text-center py-8">
+                        <Spin size="large" />
+                        <p className="text-gray-500 mt-2">Loading cheque release reminders...</p>
+                      </div>
+                    ) : chequeReleaseReminders.length === 0 ? (
                       <div className="text-center py-8 text-gray-500">
                         <svg className="w-12 h-12 mx-auto mb-3 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -18130,10 +19501,8 @@ export default function AdminDashboard() {
                         <p>No cheque release reminders</p>
                         <p className="text-xs mt-2">All cheques are up to date</p>
                       </div>
-                        );
-                      }
-                      
-                      return reminders.slice(0, 8).map((reminder: any) => {
+                    ) : (
+                      chequeReleaseReminders.slice(0, 8).map((reminder: any) => {
                          const isOverdue = reminder.isOverdue;
                          const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
                          const daysUntilRelease = reminder.daysUntilRelease || 0;
@@ -18150,7 +19519,7 @@ export default function AdminDashboard() {
                                    Contact: {reminder.contactNo || 'N/A'} | Coupon: {reminder.couponId}
                                  </div>
                                  <div className="text-xs text-gray-400 mt-1">
-                                  {reminder.chequeType}: LKR {reminder.chequeAmount.toLocaleString()}
+                                  Down Payment: LKR {parseFloat(reminder.downPayment).toLocaleString()}
                                  </div>
                                  <div className="text-xs text-gray-400">
                                    Days since payment: {daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}
@@ -18170,18 +19539,18 @@ export default function AdminDashboard() {
                                      `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
                                    }
                                  </div>
-                                 <div className="text-xs text-gray-400">
-                                  Expected: {reminder.expectedReleaseDate.toLocaleDateString()}
+                                 <div className="text-xs text-gray-500">
+                                   Expected: {reminder.chequeReleaseDate ? new Date(reminder.chequeReleaseDate).toLocaleDateString() : 'N/A'}
                                  </div>
-                                 <div className="text-xs text-gray-400">
+                                 <div className="text-xs text-gray-500">
                                    To: David Peries
                                  </div>
                                </div>
                              </div>
                            </div>
                          );
-                      });
-                    })()}
+                       })
+                     )}
                   </div>
                 </div>
 
@@ -20602,6 +21971,377 @@ export default function AdminDashboard() {
           </div>
 
 
+        </div>
+      </Modal>
+
+      {/* PDF Overlay Modal */}
+      <Modal
+        title={
+          <div className="flex items-center gap-2">
+            <FileTextOutlined className="text-blue-600" />
+            <span>Commissioner Letter PDF Overlay Editor</span>
+          </div>
+        }
+        open={pdfOverlayModalOpen}
+        onCancel={() => setPdfOverlayModalOpen(false)}
+        footer={null}
+        width="95%"
+        style={{ top: 10 }}
+        bodyStyle={{ padding: 0, height: '90vh' }}
+      >
+        <div className="flex h-full">
+          {/* PDF Viewer with Overlay */}
+          <div className="w-2/3 border-r border-gray-200 relative">
+            <div className="p-4 bg-gray-50 border-b border-gray-200 flex justify-between items-center">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800">PDF Template with Overlay</h3>
+                <p className="text-sm text-gray-600">thushyanthini (8).pdf</p>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="small"
+                  onClick={() => {
+                    // Print the PDF with overlay
+                    const printWindow = window.open('/thushyanthini (8).pdf', '_blank');
+                    if (printWindow) {
+                      printWindow.print();
+                    }
+                  }}
+                  icon={<FileTextOutlined />}
+                >
+                  Print
+                </Button>
+                <Button
+                  size="small"
+                  onClick={() => {
+                    // Download the PDF
+                    const link = document.createElement('a');
+                    link.href = '/thushyanthini (8).pdf';
+                    link.download = 'commissioner-letter.pdf';
+                    link.click();
+                  }}
+                >
+                  Download
+                </Button>
+              </div>
+            </div>
+            <div className="h-full overflow-auto relative">
+              {/* PDF iframe */}
+              <iframe
+                src={pdfPreviewUrl}
+                className="w-full h-full"
+                title="Commissioner Letter PDF"
+                key={pdfPreviewUrl} // Force re-render when URL changes
+              />
+              
+              {/* Overlay Instructions */}
+              <div className="absolute top-4 right-4 bg-green-600 text-white p-3 rounded-lg shadow-lg max-w-xs">
+                <h4 className="font-semibold mb-2">✅ Live PDF Overlay System</h4>
+                <ul className="text-sm space-y-1">
+                  <li>• Type details in the form</li>
+                  <li>• PDF updates in real-time</li>
+                  <li>• See changes instantly</li>
+                  <li>• Print when ready</li>
+                </ul>
+              </div>
+            </div>
+          </div>
+
+          {/* Overlay Form */}
+          <div className="w-1/3 p-6 overflow-y-auto">
+            <div className="space-y-6">
+              <div>
+                <h3 className="text-lg font-semibold text-gray-800 mb-4">📝 Type Details for Live Overlay</h3>
+                <p className="text-sm text-gray-600 mb-4">
+                  Type the customer details below. The PDF will update in real-time as you type, showing your changes instantly.
+                </p>
+              </div>
+
+              <div className="space-y-4">
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Customer Name *
+                  </label>
+                  <input
+                    type="text"
+                    value={pdfOverlayForm.customerName}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, customerName: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter customer full name"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Vehicle Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={pdfOverlayForm.vehicleNumber}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, vehicleNumber: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter vehicle number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    CR Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={pdfOverlayForm.crNumber}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, crNumber: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter CR number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    NIC Number *
+                  </label>
+                  <input
+                    type="text"
+                    value={pdfOverlayForm.nicNumber}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, nicNumber: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter NIC number"
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Address *
+                  </label>
+                  <textarea
+                    value={pdfOverlayForm.address}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, address: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    placeholder="Enter customer address"
+                    rows={3}
+                  />
+                </div>
+                
+                <div>
+                  <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Settled Date *
+                  </label>
+                  <input
+                    type="date"
+                    value={pdfOverlayForm.settledDate}
+                    onChange={(e) => setPdfOverlayForm(prev => ({ ...prev, settledDate: e.target.value }))}
+                    className="w-full border border-gray-300 rounded-lg px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                  />
+                </div>
+
+
+              </div>
+
+              {/* Preview Section */}
+              <div className="border-t pt-6">
+                <h4 className="text-lg font-semibold text-gray-800 mb-4">👁️ Details Preview</h4>
+                <div className="bg-gray-50 border border-gray-200 rounded-lg p-4">
+                  <div className="text-sm space-y-2">
+                    <p><strong>Customer:</strong> {pdfOverlayForm.customerName || 'Not specified'}</p>
+                    <p><strong>Vehicle:</strong> {pdfOverlayForm.vehicleNumber || 'Not specified'}</p>
+                    <p><strong>CR Number:</strong> {pdfOverlayForm.crNumber || 'Not specified'}</p>
+                    <p><strong>NIC:</strong> {pdfOverlayForm.nicNumber || 'Not specified'}</p>
+                    <p><strong>Address:</strong> {pdfOverlayForm.address || 'Not specified'}</p>
+                    <p><strong>Date:</strong> {pdfOverlayForm.settledDate ? new Date(pdfOverlayForm.settledDate).toLocaleDateString() : 'Not specified'}</p>
+                  </div>
+                </div>
+              </div>
+
+              {/* Action Buttons */}
+              <div className="flex flex-col gap-3 pt-4 border-t">
+                <Button
+                  type="primary"
+                  size="large"
+                  onClick={async () => {
+                    if (!pdfOverlayForm.customerName || !pdfOverlayForm.vehicleNumber || !pdfOverlayForm.crNumber || !pdfOverlayForm.nicNumber || !pdfOverlayForm.address || !pdfOverlayForm.settledDate) {
+                      message.error('Please fill in all required fields');
+                      return;
+                    }
+
+                    setPdfOverlayLoading(true);
+                    try {
+                      // Fetch the PDF template
+                      const response = await fetch('/thushyanthini (8).pdf');
+                      const pdfBytes = await response.arrayBuffer();
+                      
+                      // Load the PDF document
+                      const pdfDoc = await PDFDocument.load(pdfBytes);
+                      const pages = pdfDoc.getPages();
+                      const firstPage = pages[0];
+                      
+                      // Get the page dimensions
+                      const { width, height } = firstPage.getSize();
+                      
+                      // Load a standard font
+                      const font = await pdfDoc.embedFont(StandardFonts.Helvetica);
+                      const boldFont = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+                      
+                      // Define text positions with 0.8 cm gap from labels and increased vertical spacing
+                      // 0.8 cm ≈ 30 points in PDF coordinates
+                      const textPositions = {
+                        customerName: { x: 115, y: height - 232 }, // Name field - shifted down, 0.8 cm right of "Name :"
+                        vehicleNumber: { x: 115, y: height - 268 }, // Vehicle No field - increased gap, 0.8 cm right of "Vehicle No :"
+                        crNumber: { x: 115, y: height - 304 }, // CR.NO field - increased gap, 0.8 cm right of "CR.NO :"
+                        nicNumber: { x: 480, y: height - 305 }, // Nic. No field - aligned with CR.NO, 0.8 cm right of "NIC NO:"
+                        address: { x: 115, y: height - 340 }, // Address field - increased gap, 0.8 cm right of "Address :"
+                        settledDate: { x: 480, y: height - 269 } // Settled field - aligned with Vehicle No, 0.8 cm right of "Settled:"
+                      };
+                      
+                      // Add text overlays with adjusted positioning and font sizes
+                      firstPage.drawText(pdfOverlayForm.customerName, {
+                        x: textPositions.customerName.x,
+                        y: textPositions.customerName.y,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      firstPage.drawText(pdfOverlayForm.vehicleNumber, {
+                        x: textPositions.vehicleNumber.x,
+                        y: textPositions.vehicleNumber.y,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      firstPage.drawText(pdfOverlayForm.crNumber, {
+                        x: textPositions.crNumber.x,
+                        y: textPositions.crNumber.y,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      firstPage.drawText(pdfOverlayForm.nicNumber, {
+                        x: textPositions.nicNumber.x,
+                        y: textPositions.nicNumber.y,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      // Handle address (may need to wrap text)
+                      const addressLines = pdfOverlayForm.address.split(' ').reduce((lines, word) => {
+                        const lastLine = lines[lines.length - 1] || '';
+                        if ((lastLine + ' ' + word).length > 35) {
+                          lines.push(word);
+                        } else {
+                          lines[lines.length - 1] = (lastLine + ' ' + word).trim();
+                        }
+                        return lines;
+                      }, ['']);
+                      
+                      addressLines.forEach((line, index) => {
+                        firstPage.drawText(line, {
+                          x: textPositions.address.x,
+                          y: textPositions.address.y - (index * 12),
+                          size: 11,
+                          font: boldFont,
+                          color: rgb(0, 0, 0)
+                        });
+                      });
+                      
+                      const settledDate = new Date(pdfOverlayForm.settledDate).toLocaleDateString('en-GB');
+                      firstPage.drawText(settledDate, {
+                        x: textPositions.settledDate.x,
+                        y: textPositions.settledDate.y,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      // Add vehicle number to the subject line - next to "Vehicle No:"
+                      firstPage.drawText(pdfOverlayForm.vehicleNumber, {
+                        x: 502,
+                        y: height - 409,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+                      // Add customer name in the body paragraph - next to "fulfilled by the hirer,"
+                      firstPage.drawText(pdfOverlayForm.customerName, {
+                        x:132,
+                        y: height - 488,
+                        size: 11,
+                        font: boldFont,
+                        color: rgb(0, 0, 0)
+                      });
+                      
+
+                      
+                      // Save the modified PDF
+                      const modifiedPdfBytes = await pdfDoc.save();
+                      
+                      // Create a blob and download/open the PDF
+                      const blob = new Blob([modifiedPdfBytes], { type: 'application/pdf' });
+                      const url = URL.createObjectURL(blob);
+                      
+                      // Open the PDF in a new window for printing
+                      const printWindow = window.open(url, '_blank');
+                      if (printWindow) {
+                        printWindow.onload = () => {
+                          setTimeout(() => {
+                            printWindow.print();
+                          }, 1000);
+                        };
+                      }
+                      
+                      message.success('PDF with auto overlay generated successfully!');
+                    } catch (error) {
+                      console.error('Error generating PDF with overlay:', error);
+                      message.error('Failed to generate PDF with overlay');
+                    } finally {
+                      setPdfOverlayLoading(false);
+                    }
+                  }}
+                  loading={pdfOverlayLoading}
+                  className="bg-green-600 hover:bg-green-700"
+                  icon={<FileTextOutlined />}
+                >
+                  Generate PDF with Auto Overlay
+                </Button>
+                <Button
+                  size="large"
+                  onClick={() => {
+                    // Save form data
+                    setCommissionerLetterForm(pdfOverlayForm);
+                    message.success('Form data saved!');
+                  }}
+                  className="bg-green-600 hover:bg-green-700 text-white"
+                >
+                  Save Form Data
+                </Button>
+                <Button
+                  size="large"
+                  onClick={() => {
+                    setPdfOverlayForm({
+                      customerName: '',
+                      vehicleNumber: '',
+                      crNumber: '',
+                      nicNumber: '',
+                      address: '',
+                      settledDate: ''
+                    });
+                  }}
+                >
+                  Clear Form
+                </Button>
+                <Button
+                  size="large"
+                  onClick={() => setPdfOverlayModalOpen(false)}
+                >
+                  Close Editor
+                </Button>
+              </div>
+            </div>
+          </div>
         </div>
       </Modal>
     </div>

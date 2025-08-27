@@ -1,0 +1,455 @@
+================================================================================
+                AKR & SONS (PVT) LTD - ENHANCED PAYMENT TYPE WORKFLOWS
+================================================================================
+
+SYSTEM OVERVIEW:
+This document details the specific payment workflows for all three payment types
+in the AKR & SONS motorcycle dealership system, including amount collection,
+deposit processes, cheque releases, and installment management.
+
+VEHICLE EXAMPLE: BAJAJ CT100
+PRICE: LKR 637,950
+REGISTRATION FEE: LKR 10,160
+DOCUMENT CHARGE: LKR 5,000
+INSURANCE: LKR 15,000
+CUSTOMER: Keerthigan
+
+================================================================================
+
+🟢 PAYMENT TYPE 1: FULL PAYMENT WORKFLOW
+========================================
+
+SCENARIO: Customer pays entire amount upfront
+
+🟡 STEP 1: VEHICLE ALLOCATION COUPON (VAC) CREATION
+---------------------------------------------------
+Admin fills VAC form with vehicle details:
+- Vehicle Type: BAJAJ CT100
+- Customer Name: Keerthigan
+- Payment Method: Full Payment
+- Vehicle Price: LKR 637,950
+- Registration Fee: LKR 10,160 (if applicable)
+- Discount Amount: LKR 15,000 (if available)
+- Total Amount: LKR 633,110 (Vehicle Price + Reg Fee - Discount)
+
+🟡 STEP 2: PAYMENT COLLECTION IN VAC SECTION
+--------------------------------------------
+1. Admin clicks "Collect Payment" button in VAC section
+2. Amount automatically transferred to Account Data tab
+3. Account Data entry created:
+   {
+     date: "2024-01-15",
+     name: "Keerthigan",
+     details: "Full Payment Collection - VAC-001 - BAJAJ CT100",
+     amount: 633110,
+     actualAmount: 633110,
+     depositedAmount: 0,
+     relatedCouponId: "VAC-001",
+     depositedToBank: false,
+     remarks: "Full payment collected from customer"
+   }
+
+🟡 STEP 3: BANK DEPOSIT PROCESS
+-------------------------------
+1. Admin deposits collected amount to bank
+2. Admin attaches deposit slip image
+3. Account Data status updated to "Deposited to Bank"
+4. Amount automatically appears in Bank Deposit tab:
+   {
+     date: "2024-01-15",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Full Payment Deposit - BAJAJ CT100",
+     payment: 633110,
+     transactionType: "income",
+     slipImage: "deposit_slip_url"
+   }
+
+🟡 STEP 4: OVERVIEW SECTION - CHEQUE RELEASE REMINDERS
+------------------------------------------------------
+1. Admin checks Overview section
+2. System shows pending cheque releases for Keerthigan
+3. Shows amount needed to be released to David Peries
+4. Status: "Pending Cheque Release"
+
+🟡 STEP 5: AKR EASY CREDIT/OTHER TAB - CHEQUE RELEASE
+-----------------------------------------------------
+1. Admin goes to AKR Easy Credit/Other tab
+2. Finds Keerthigan's record
+3. Clicks "Release Cheque" button
+4. System creates 2 cheques:
+   - Cheque 1: LKR 316,555 (50% of total)
+   - Cheque 2: LKR 316,555 (50% of total)
+
+🟡 STEP 6: NEGATIVE BANK DEPOSIT ENTRIES
+----------------------------------------
+1. Cheque 1 Release - Negative entry created:
+   {
+     date: "2024-01-19",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Cheque Release 1 - Full Payment - BAJAJ CT100",
+     payment: -316555,
+     transactionType: "outcome",
+     slipImage: "cheque1_slip_url"
+   }
+
+2. Cheque 2 Release - Negative entry created:
+   {
+     date: "2024-01-19",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Cheque Release 2 - Full Payment - BAJAJ CT100",
+     payment: -316555,
+     transactionType: "outcome",
+     slipImage: "cheque2_slip_url"
+   }
+
+🟡 STEP 7: VAC STATUS UPDATE
+----------------------------
+- VAC status updated to "Completed"
+- Cheque release date recorded
+- Vehicle ready for delivery
+
+🟡 STEP 8: VEHICLE DELIVERY
+---------------------------
+- Immediate vehicle delivery to Keerthigan
+- Inventory status updated to "OUT"
+- Customer receives BAJAJ CT100
+
+================================================================================
+
+🔵 PAYMENT TYPE 2: LEASING VIA AKR WORKFLOW
+===========================================
+
+SCENARIO: Customer uses AKR's internal leasing system
+
+🟡 STEP 1: VEHICLE ALLOCATION COUPON (VAC) CREATION
+---------------------------------------------------
+Admin fills VAC form with leasing details:
+- Vehicle Type: BAJAJ CT100
+- Customer Name: Keerthigan
+- Payment Method: Leasing via AKR
+- Vehicle Price: LKR 637,950
+- Advance Payment: LKR 150,000
+- Registration Fee: LKR 10,160
+- Document Charge: LKR 5,000
+- Insurance: LKR 15,000
+- Interest Amount: LKR 19,139 (3% of vehicle price)
+- Total Amount: LKR 657,089 (Vehicle Price + Interest)
+- Down Payment: LKR 140,160 (Advance - Doc Charge - Insurance + Reg Fee)
+- Balance: LKR 516,929 (Total Amount - Down Payment)
+
+🟡 STEP 2: DOWN PAYMENT COLLECTION IN VAC SECTION
+-------------------------------------------------
+1. Admin clicks "Collect Payment" button for down payment
+2. Down payment amount transferred to Account Data tab
+3. Account Data entry created:
+   {
+     date: "2024-01-15",
+     name: "Keerthigan",
+     details: "Down Payment Collection - AKR Leasing - VAC-001 - BAJAJ CT100",
+     amount: 140160,
+     actualAmount: 140160,
+     depositedAmount: 0,
+     relatedCouponId: "VAC-001",
+     depositedToBank: false,
+     remarks: "Down payment collected for AKR leasing"
+   }
+
+🟡 STEP 3: BANK DEPOSIT FOR DOWN PAYMENT
+----------------------------------------
+1. Admin deposits down payment to bank
+2. Admin attaches deposit slip image
+3. Account Data status updated to "Deposited to Bank"
+4. Amount appears in Bank Deposit tab:
+   {
+     date: "2024-01-15",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Down Payment Deposit - AKR Leasing - BAJAJ CT100",
+     payment: 140160,
+     transactionType: "income",
+     slipImage: "down_payment_deposit_slip_url"
+   }
+
+🟡 STEP 4: DOWN PAYMENT CHEQUE RELEASE TO DAVID PERIES
+------------------------------------------------------
+1. Admin goes to AKR Easy Credit/Other tab
+2. Finds Keerthigan's record
+3. Clicks "Release Down Payment Cheque" button
+4. Negative bank deposit entry created:
+   {
+     date: "2024-01-19",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Cheque Release - Down Payment - AKR Leasing - BAJAJ CT100",
+     payment: -140160,
+     transactionType: "outcome",
+     slipImage: "down_payment_cheque_slip_url"
+   }
+
+🟡 STEP 5: BALANCE CHEQUE RELEASE TO DAVID PERIES (AKR's RISK)
+-------------------------------------------------------------
+1. Admin immediately releases balance cheque (AKR's own risk)
+2. Negative bank deposit entry created:
+   {
+     date: "2024-01-19",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Cheque Release - Balance - AKR Leasing - BAJAJ CT100",
+     payment: -516929,
+     transactionType: "outcome",
+     slipImage: "balance_cheque_slip_url"
+   }
+
+🟡 STEP 6: INSTALLMENT PLAN CREATION
+------------------------------------
+1. System creates 3-installment plan:
+   - 1st Installment: LKR 172,310 (Due: 2024-02-15)
+   - 2nd Installment: LKR 172,310 (Due: 2024-03-15)
+   - 3rd Installment: LKR 172,309 (Due: 2024-04-15)
+
+2. Installment tracking structure:
+   {
+     firstInstallment: {
+       amount: 172310,
+       date: "2024-02-15",
+       paidAmount: 0,
+       paidDate: null
+     },
+     secondInstallment: {
+       amount: 172310,
+       date: "2024-03-15",
+       paidAmount: 0,
+       paidDate: null
+     },
+     thirdInstallment: {
+       amount: 172309,
+       date: "2024-04-15",
+       paidAmount: 0,
+       paidDate: null
+     }
+   }
+
+🟡 STEP 7: INSTALLMENT COLLECTION PROCESS
+-----------------------------------------
+1. 1st Installment Collection (2024-02-15):
+   - Customer Keerthigan pays: LKR 172,310
+   - Admin clicks "Collect Payment" in VAC section
+   - Account Data entry created:
+     {
+       date: "2024-02-15",
+       name: "Keerthigan",
+       details: "1st Installment Collection - AKR Leasing - VAC-001 - BAJAJ CT100",
+       amount: 172310,
+       actualAmount: 172310,
+       depositedAmount: 0,
+       relatedCouponId: "VAC-001",
+       depositedToBank: false,
+       remarks: "1st installment collected"
+     }
+   - Admin deposits to bank and attaches slip
+   - Bank Deposit entry created
+   - Installment status updated to "Paid"
+
+2. 2nd Installment Collection (2024-03-15):
+   - Customer Keerthigan pays: LKR 172,310
+   - Same process as 1st installment
+   - Installment status updated to "Paid"
+
+3. 3rd Installment Collection (2024-04-15):
+   - Customer Keerthigan pays: LKR 172,309
+   - Same process as previous installments
+   - Installment status updated to "Paid"
+
+🟡 STEP 8: VAC STATUS UPDATE
+----------------------------
+- After all installments paid, VAC status updated to "Completed"
+- All payments collected and deposited
+- Transaction fully reconciled
+
+🟡 STEP 9: VEHICLE DELIVERY
+---------------------------
+- Vehicle delivered to Keerthigan after down payment
+- Inventory status updated to "OUT"
+- Customer receives BAJAJ CT100
+
+================================================================================
+
+🟠 PAYMENT TYPE 3: LEASING VIA OTHER COMPANY WORKFLOW
+=====================================================
+
+SCENARIO: Customer uses external leasing company
+
+🟡 STEP 1: VEHICLE ALLOCATION COUPON (VAC) CREATION
+---------------------------------------------------
+Admin fills VAC form with external leasing details:
+- Vehicle Type: BAJAJ CT100
+- Customer Name: Keerthigan
+- Payment Method: Leasing via Other Company
+- Vehicle Price: LKR 637,950
+- Advance Payment: LKR 150,000
+- Registration Fee: LKR 10,160
+- Document Charge: LKR 5,000
+- Insurance: LKR 15,000
+- Down Payment: LKR 140,160 (Advance - Doc Charge - Insurance + Reg Fee)
+- Balance: LKR 497,790 (Handled by external company)
+
+🟡 STEP 2: DOWN PAYMENT COLLECTION IN VAC SECTION
+-------------------------------------------------
+1. Admin clicks "Collect Payment" button for down payment
+2. Down payment amount transferred to Account Data tab
+3. Account Data entry created:
+   {
+     date: "2024-01-15",
+     name: "Keerthigan",
+     details: "Down Payment Collection - External Leasing - VAC-001 - BAJAJ CT100",
+     amount: 140160,
+     actualAmount: 140160,
+     depositedAmount: 0,
+     relatedCouponId: "VAC-001",
+     depositedToBank: false,
+     remarks: "Down payment collected for external leasing"
+   }
+
+🟡 STEP 3: BANK DEPOSIT FOR DOWN PAYMENT
+----------------------------------------
+1. Admin deposits down payment to bank
+2. Admin attaches deposit slip image
+3. Account Data status updated to "Deposited to Bank"
+4. Amount appears in Bank Deposit tab:
+   {
+     date: "2024-01-15",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Down Payment Deposit - External Leasing - BAJAJ CT100",
+     payment: 140160,
+     transactionType: "income",
+     slipImage: "down_payment_deposit_slip_url"
+   }
+
+🟡 STEP 4: DOWN PAYMENT CHEQUE RELEASE TO DAVID PERIES
+------------------------------------------------------
+1. Admin goes to AKR Easy Credit/Other tab
+2. Finds Keerthigan's record
+3. Clicks "Release Down Payment Cheque" button
+4. Negative bank deposit entry created:
+   {
+     date: "2024-01-19",
+     depositerName: "Keerthigan",
+     accountNumber: "Main Account",
+     accountName: "Main Bank",
+     purpose: "Cheque Release - Down Payment - External Leasing - BAJAJ CT100",
+     payment: -140160,
+     transactionType: "outcome",
+     slipImage: "down_payment_cheque_slip_url"
+   }
+
+🟡 STEP 5: EXTERNAL COMPANY PROCESSING
+--------------------------------------
+1. External company handles remaining balance: LKR 497,790
+2. External company processes their own leasing agreement
+3. AKR receives commission from external company
+4. VAC status updated to "External Processing"
+
+🟡 STEP 6: NO INSTALLMENT MANAGEMENT
+------------------------------------
+1. No installment plans created in AKR system
+2. External company manages all balance payments
+3. No further cheque releases from AKR
+4. VAC status remains "External Processing"
+
+🟡 STEP 7: VEHICLE DELIVERY
+---------------------------
+- Vehicle delivered to Keerthigan through external company process
+- Inventory status updated to "OUT"
+- Customer receives BAJAJ CT100
+
+================================================================================
+
+🔴 KEY DIFFERENCES BETWEEN PAYMENT TYPES
+========================================
+
+🟢 FULL PAYMENT:
+- Collect full amount upfront (including all charges)
+- Divide into 2 cheques for release to David Peries
+- Immediate vehicle delivery
+- No installment tracking
+
+🔵 LEASING VIA AKR:
+- Collect down payment (Advance - Doc Charge - Insurance + Reg Fee)
+- Release both down payment AND balance cheques to David Peries (AKR's own risk)
+- Collect balance through 3 installments over 3 months
+- Full payment tracking and reconciliation
+
+🟠 LEASING VIA OTHER COMPANY:
+- Collect down payment only (Advance - Doc Charge - Insurance + Reg Fee)
+- Release only down payment cheque to David Peries
+- External company handles balance
+- No installment management in AKR system
+
+================================================================================
+
+🟣 FINANCIAL IMPACT SUMMARY
+===========================
+
+🟢 FULL PAYMENT:
+- Total Collected: LKR 633,110
+- Total Released to David Peries: LKR 633,110 (2 cheques)
+- Net Impact: LKR 0
+
+🔵 LEASING VIA AKR:
+- Total Collected: LKR 657,089 (140,160 + 516,929)
+- Total Released to David Peries: LKR 657,089 (2 cheques)
+- Net Impact: LKR 0
+- Risk: AKR releases balance before collecting installments
+
+🟠 LEASING VIA OTHER COMPANY:
+- Total Collected: LKR 140,160
+- Total Released to David Peries: LKR 140,160 (1 cheque)
+- Net Impact: LKR 0
+- External company handles: LKR 497,790
+
+================================================================================
+
+🟡 IMPORTANT NOTES:
+===================
+
+1. DOCUMENT CHARGE AND INSURANCE:
+   - Both leasing types include document charge (LKR 5,000) and insurance (LKR 15,000)
+   - These are deducted from the advance payment
+   - Down payment = Advance Payment - Document Charge - Insurance + Registration Fee
+
+2. INTEREST CALCULATION:
+   - Only AKR leasing includes interest (3% of vehicle price)
+   - Interest is added to the total amount
+   - Installments are calculated based on the balance after down payment
+
+3. AKR's RISK:
+   - AKR releases both down payment and balance cheques immediately to David Peries
+   - This means AKR takes the risk of releasing money before collecting installments
+   - Then collects the balance amount through 3 installments over 3 months
+
+4. WORKFLOW SEQUENCE:
+   - VAC Creation → Payment Collection → Bank Deposit → Cheque Release to David Peries
+   - All amounts flow through Account Data → Bank Deposit → Negative Bank Deposit (Cheque Release)
+
+5. CUSTOMER NAME:
+   - All examples use customer name: Keerthigan
+
+================================================================================
+
+This enhanced workflow shows exactly how each payment type is processed,
+including the complete flow from VAC creation to cheque release to David Peries,
+with proper color coding for better understanding and using customer name Keerthigan
+as requested.
+
+================================================================================ 

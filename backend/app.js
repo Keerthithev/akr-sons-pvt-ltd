@@ -20,6 +20,7 @@ const supplierRoutes = require('./routes/supplier');
 const serviceWarrantyRoutes = require('./routes/serviceWarranty');
 const additionalInfoRoutes = require('./routes/additionalInfo');
 const vehicleAllocationCouponRoutes = require('./routes/vehicleAllocationCoupon');
+const advancedCustomerRoutes = require('./routes/advancedCustomer');
 
 // Load env vars
 dotenv.config({ path: './.env' });
@@ -76,6 +77,7 @@ app.use('/api/suppliers', supplierRoutes);
 app.use('/api/service-warranty', serviceWarrantyRoutes);
 app.use('/api/additional-info', additionalInfoRoutes);
 app.use('/api/vehicle-allocation-coupons', vehicleAllocationCouponRoutes);
+app.use('/api/advanced-customers', advancedCustomerRoutes);
 
 // Serve static files from the React app build directory
 const distPath = path.join(__dirname, 'dist');

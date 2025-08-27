@@ -47,6 +47,11 @@ const accountDataSchema = new mongoose.Schema({
   },
   bankDepositDate: {
     type: Date
+  },
+  type: {
+    type: String,
+    enum: ['Advance Payment', 'Down Payment', 'Registration Fee', 'Document Charge', 'Bank Deposit', 'Advanced Customer', 'Manual Entry', 'Money Collection'],
+    default: 'Manual Entry'
   }
 }, {
   timestamps: true

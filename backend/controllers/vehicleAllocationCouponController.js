@@ -206,6 +206,10 @@ exports.createVehicleAllocationCoupon = async (req, res, next) => {
     });
     await customer.save();
 
+    // REMOVED: No longer creating Money Collection entries
+    // Only individual payment entries will be created (Advance Payment, Down Payment, etc.)
+    // This prevents the unwanted "Money Collection" summary entries
+
     // Note: Sales Transaction and Installment Plan data are now displayed directly from Vehicle Allocation Coupon
     // No separate records are created - all data comes from the coupon itself
 
@@ -430,7 +434,9 @@ exports.updateVehicleAllocationCoupon = async (req, res, next) => {
     }
     
     // Status logic based on payment method and installment payments
-    if (currentCoupon.paymentMethod === 'Leasing via AKR') {
+    const paymentMethod = req.body.paymentMethod || currentCoupon.paymentMethod;
+    
+    if (paymentMethod === 'Leasing via AKR') {
       // For "Leasing via AKR" - status depends on installment payments
       if (isInstallmentUpdate) {
         const updatedCoupon = { ...currentCoupon.toObject(), ...req.body };
@@ -448,7 +454,7 @@ exports.updateVehicleAllocationCoupon = async (req, res, next) => {
           updateData.status = 'Pending';
         }
       }
-    } else if (currentCoupon.paymentMethod === 'Full Payment' || currentCoupon.paymentMethod === 'Leasing via Other Company') {
+    } else if (paymentMethod === 'Full Payment' || paymentMethod === 'Leasing via Other Company') {
       // For "Full Payment" or "Leasing via Other Company" - automatically mark as "Completed"
       updateData.status = 'Completed';
     }
@@ -475,6 +481,28 @@ exports.updateVehicleAllocationCoupon = async (req, res, next) => {
       },
       { new: true, upsert: true }
     );
+
+    // Update Account Data entry for total money collected changes
+    const AccountData = require('../models/AccountData');
+    
+    // Check if any payment amounts have changed
+    const paymentAmountsChanged = 
+      (req.body.advancePayment !== undefined && req.body.advancePayment !== currentCoupon.advancePayment) ||
+      (req.body.downPayment !== undefined && req.body.downPayment !== currentCoupon.downPayment) ||
+      (req.body.regFee !== undefined && req.body.regFee !== currentCoupon.regFee) ||
+      (req.body.docCharge !== undefined && req.body.docCharge !== currentCoupon.docCharge);
+    
+    if (paymentAmountsChanged) {
+      // Delete existing money collection entries for this coupon (remove all Money Collection entries)
+      await AccountData.deleteMany({
+        details: { $regex: `Money Collection - Vehicle Allocation Coupon ${currentCoupon.couponId}`, $options: 'i' },
+        type: 'Money Collection'
+      });
+      
+      // REMOVED: No longer creating Money Collection entries
+      // Only individual payment entries will be created (Advance Payment, Down Payment, etc.)
+      console.log(`Removed Money Collection entries for VAC ${currentCoupon.couponId} - only individual payment entries will remain`);
+    }
 
     // Note: Sales Transaction and Installment Plan data are updated directly in the Vehicle Allocation Coupon
     // No separate record updates needed - all data is stored in the coupon itself
@@ -517,6 +545,12 @@ exports.deleteVehicleAllocationCoupon = async (req, res, next) => {
     await Customer.deleteMany({ 
       fullName: vehicleAllocationCoupon.fullName,
       phoneNo: vehicleAllocationCoupon.contactNo 
+    });
+
+    // Delete related Account Data entries
+    const AccountData = require('../models/AccountData');
+    await AccountData.deleteMany({
+      details: { $regex: `Vehicle Allocation Coupon ${vehicleAllocationCoupon.couponId}`, $options: 'i' }
     });
 
     // Note: No separate Sales Transaction or Installment Plan records to delete
@@ -874,7 +908,7 @@ exports.getChequeReleaseReminders = async (req, res, next) => {
       downPayment: { $gt: 0 },
       chequeReleased: false
     })
-    .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate')
+    .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate paymentMethod')
     .sort({ chequeReleaseDate: 1 })
     .limit(20);
 
@@ -907,7 +941,7 @@ exports.getChequeReleaseReminders = async (req, res, next) => {
         downPayment: { $gt: 0 },
         chequeReleased: true
       })
-      .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate')
+      .select('couponId fullName contactNo downPayment downPaymentDate chequeReleaseDate vehicleType chequeReleasedDate paymentMethod')
       .sort({ chequeReleasedDate: -1 })
       .limit(20);
 
