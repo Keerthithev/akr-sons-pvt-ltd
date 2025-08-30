@@ -4366,8 +4366,8 @@ export default function AdminDashboard() {
           if (updated.paymentMethod === 'Full Payment') {
             // For Full Payment: 
             // Total = bike price only
-            const calculatedTotalAmount = basePrice;
-            updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
+      const calculatedTotalAmount = basePrice + regFee + docCharge + insuranceCo - discountAmount;
+    updated.totalAmount = Math.max(0, calculatedTotalAmount).toString();
             
             // Down payment = advance payment + reg fee (automatically calculated)
             const calculatedDownPayment = advancePayment + regFee;
@@ -17415,6 +17415,9 @@ export default function AdminDashboard() {
                           <Button size="small" onClick={() => handleEditVehicleAllocationCoupon(record)}>
                             Edit
                           </Button>
+                          <Button size="small" type="default" onClick={() => exportIndividualVehicleAllocationCouponToPDF(record)}>
+                            Export PDF
+                          </Button>
                           {record.paymentType === 'Cash' && (() => {
                             // Calculate arrears based on payment method
                             const downPayment = record.downPayment || 0;
@@ -17818,7 +17821,7 @@ export default function AdminDashboard() {
                       <div className="mb-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
                         <p className="text-sm text-blue-800">
                           <strong>Note:</strong> For Full Payment, no advance payment is required. 
-                          The total amount is calculated as Bike Price + Registration Fee - Discount. 
+                          The total amount is calculated as Bike Price + Registration Fee + insurance + doc charge  - Discount. 
                           Down payment and balance allocation will be handled in the AKR Easy Credit tab.
                         </p>
                       </div>
@@ -17826,7 +17829,7 @@ export default function AdminDashboard() {
                     <div className="text-sm text-gray-600 mb-4">
                       <p><strong>Payment Calculation Rules:</strong></p>
                       <ul className="list-disc list-inside space-y-1">
-                        <li><strong>Full Payment:</strong> Total = Bike Price + Registration Fee - Discount (Down Payment & Balance set in AKR Easy Credit tab)</li>
+                        <li><strong>Full Payment:</strong> Total = Bike Price + insurance+ doc charge+ Registration Fee - Discount </li>
                         <li><strong>Lease via AKR:</strong> Down Payment = Advance Payment - (Document Charge + Insurance)</li>
                         <li><strong>Lease via Other Company:</strong> Down Payment = Advance Payment - (Document Charge + Insurance)</li>
                       </ul>

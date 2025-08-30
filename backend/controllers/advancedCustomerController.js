@@ -103,10 +103,67 @@ const updateAdvancedCustomer = async (req, res) => {
 // Delete advanced customer
 const deleteAdvancedCustomer = async (req, res) => {
   try {
-    const customer = await AdvancedCustomer.findByIdAndDelete(req.params.id);
+    const customer = await AdvancedCustomer.findById(req.params.id);
     if (!customer) {
       return res.status(404).json({ success: false, message: 'Advanced customer not found' });
     }
+
+    // Find the corresponding AccountData entry for this advanced customer
+    const AccountData = require('../models/AccountData');
+    const accountDataEntry = await AccountData.findOne({
+      type: 'Advanced Customer',
+      name: customer.customerName,
+      amount: customer.advanceAmount
+    });
+
+    if (accountDataEntry) {
+      // Check if the amount was deposited to bank
+      if (accountDataEntry.depositedToBank) {
+        // If deposited, reduce the bank deposit amount
+        const BankDeposit = require('../models/BankDeposit');
+        const bankDeposit = await BankDeposit.findOne({
+          payment: accountDataEntry.amount,
+          date: accountDataEntry.bankDepositDate
+        });
+
+        if (bankDeposit) {
+          // Reduce the bank deposit amount
+          bankDeposit.payment -= accountDataEntry.amount;
+          if (bankDeposit.payment === 0) {
+            // If payment becomes 0, delete the bank deposit record
+            await BankDeposit.findByIdAndDelete(bankDeposit._id);
+          } else {
+            await bankDeposit.save();
+          }
+        }
+      } else {
+        // If not deposited, mark the account data entry as deposited (to cancel the pending amount)
+        accountDataEntry.depositedToBank = true;
+        accountDataEntry.depositedAmount = accountDataEntry.amount;
+        accountDataEntry.bankDepositDate = new Date();
+        await accountDataEntry.save();
+      }
+
+      // Delete the account data entry
+      await AccountData.findByIdAndDelete(accountDataEntry._id);
+    }
+
+    // Create a refund entry in Bank Deposit for tracking
+    const BankDeposit = require('../models/BankDeposit');
+    const refundEntry = new BankDeposit({
+      date: new Date(),
+      depositerName: customer.customerName,
+      payment: -(customer.advanceAmount || 0), // Negative amount for refund
+      transactionType: 'outcome',
+      description: `Refund - Advanced Customer Cancellation (${customer.customerName})`,
+      quantity: 1,
+      purpose: `Refund of advance payment for ${customer.bikeModel} ${customer.bikeColor} pre-booking cancellation`
+    });
+    await refundEntry.save();
+
+    // Delete the advanced customer
+    await AdvancedCustomer.findByIdAndDelete(req.params.id);
+
     res.json({ success: true, message: 'Advanced customer deleted successfully' });
   } catch (error) {
     console.error('Error deleting advanced customer:', error);
