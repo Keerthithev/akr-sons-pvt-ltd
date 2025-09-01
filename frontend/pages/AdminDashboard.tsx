@@ -1679,8 +1679,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: accountDataPagination.pageSize.toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all account data at once
         search: search
       });
       
@@ -1696,7 +1696,11 @@ export default function AdminDashboard() {
       
       setAllAccountData(data.data);
       setAccountData(data.data);
-      setAccountDataPagination(data.pagination);
+      setAccountDataPagination({
+        current: 1,
+        pageSize: data.data.length,
+        total: data.data.length
+      });
       setAccountDataLoading(false);
     } catch (err: any) {
       setAccountDataError("Failed to load account data: " + err.message);
@@ -1765,8 +1769,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: installmentPagination.pageSize.toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all installment plans at once
         search: search
       });
       
@@ -1832,8 +1836,8 @@ export default function AdminDashboard() {
       
       setInstallmentPlans(transformedData);
       setInstallmentPagination({
-        current: parseInt(page),
-        pageSize: installmentPagination.pageSize,
+        current: 1,
+        pageSize: transformedData.length,
         total: transformedData.length
       });
       setInstallmentLoading(false);
@@ -3190,6 +3194,7 @@ export default function AdminDashboard() {
       autoSyncBikeStatus(); // Auto-sync bike status
     }
     if (akrTab === 'chequeReleaseReminders') {
+      fetchChequeReleaseReminders(true); // Load cheque release reminders with released ones
       fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders calculation
       fetchAkrEasyCreditStats();
     }
@@ -3213,7 +3218,7 @@ export default function AdminDashboard() {
       current: 1,
       total: filteredData.length
     }));
-  }, [akrEasyCreditFilter, akrEasyCreditPaymentMethodFilter, akrEasyCreditSearch, allAkrEasyCreditData]);
+  }, [akrEasyCreditPaymentMethodFilter, akrEasyCreditSearch, allAkrEasyCreditData]);
 
   // Load Advanced Customer data when tab is selected
   useEffect(() => {
@@ -3256,8 +3261,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: (limit || vehicleAllocationCouponsPagination.pageSize).toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all coupons at once
         search: search,
         status: status,
         paymentType: paymentType
@@ -3275,9 +3280,9 @@ export default function AdminDashboard() {
       
       setVehicleAllocationCoupons(data.vehicleAllocationCoupons);
       setVehicleAllocationCouponsPagination({
-        current: parseInt(page),
-        pageSize: vehicleAllocationCouponsPagination.pageSize,
-        total: data.total
+        current: 1,
+        pageSize: data.vehicleAllocationCoupons.length,
+        total: data.vehicleAllocationCoupons.length
       });
       setVehicleAllocationCouponsLoading(false);
     } catch (err: any) {
@@ -3419,7 +3424,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch all data for client-side filtering
-      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=1&limit=1000`;
+      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=1&limit=10000`; // Fetch all records
       
       if (search) url += `&search=${encodeURIComponent(search)}`;
 
@@ -3466,7 +3471,7 @@ export default function AdminDashboard() {
       setAkrEasyCreditData(filteredData);
       setAkrEasyCreditPagination({
         current: 1,
-        pageSize: 10,
+        pageSize: filteredData.length,
         total: filteredData.length
       });
     } catch (err: any) {
@@ -3488,23 +3493,6 @@ export default function AdminDashboard() {
       );
     }
 
-    // Apply status filter
-    if (akrEasyCreditFilter === 'released') {
-      filteredData = filteredData.filter((coupon: any) => {
-        if (coupon.paymentMethod === 'Full Payment') {
-          return coupon.chequeReleased; // Released if cheque is released
-        }
-        return coupon.status === 'Completed'; // For leasing, use original status
-      });
-    } else if (akrEasyCreditFilter === 'unreleased') {
-      filteredData = filteredData.filter((coupon: any) => {
-        if (coupon.paymentMethod === 'Full Payment') {
-          return !coupon.chequeReleased; // Unreleased if cheque is not released
-        }
-        return coupon.status === 'Pending'; // For leasing, use original status
-      });
-    }
-
     // Apply search filter
     if (akrEasyCreditSearch) {
       filteredData = filteredData.filter((coupon: any) => 
@@ -3519,9 +3507,7 @@ export default function AdminDashboard() {
 
   const getPaginatedAkrEasyCreditData = () => {
     const filteredData = getFilteredAkrEasyCreditData();
-    const startIndex = (akrEasyCreditPagination.current - 1) * akrEasyCreditPagination.pageSize;
-    const endIndex = startIndex + akrEasyCreditPagination.pageSize;
-    return filteredData.slice(startIndex, endIndex);
+    return filteredData; // Return all data without pagination
   };
 
   // Advanced Customer API functions
@@ -3534,7 +3520,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      let url = `${import.meta.env.VITE_API_URL}/api/advanced-customers?page=${page}&limit=10`;
+      let url = `${import.meta.env.VITE_API_URL}/api/advanced-customers?page=1&limit=10000`; // Always fetch page 1, all records
       
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (status) url += `&status=${encodeURIComponent(status)}`;
@@ -3553,9 +3539,9 @@ export default function AdminDashboard() {
       
       setAdvancedCustomers(data.advancedCustomers);
       setAdvancedCustomersPagination({
-        current: data.pagination.current,
-        pageSize: data.pagination.pageSize,
-        total: data.pagination.total
+        current: 1,
+        pageSize: data.advancedCustomers.length,
+        total: data.advancedCustomers.length
       });
     } catch (err: any) {
       console.error("Failed to load advanced customers:", err.message);
@@ -7516,8 +7502,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1',
-        limit: '1000', // Fetch all data for filtering
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all deposits at once
         search: search
       });
       
@@ -7532,7 +7518,11 @@ export default function AdminDashboard() {
       
       setAllBankDeposits(response.data);
       setBankDeposits(response.data);
-      setBankDepositsPagination(response.pagination);
+      setBankDepositsPagination({
+        current: 1,
+        pageSize: response.data.length,
+        total: response.data.length
+      });
       setBankDepositsLoading(false);
     } catch (err: any) {
       setBankDepositsError("Failed to load bank deposits: " + err.message);
@@ -7603,8 +7593,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: (bikeInventoryPagination?.pageSize || 10).toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all bikes at once
         search: search
       });
       
@@ -7618,7 +7608,11 @@ export default function AdminDashboard() {
       const response = await res.json();
       
       setBikeInventory(response.data);
-      setBikeInventoryPagination(response.pagination);
+      setBikeInventoryPagination({
+        current: 1,
+        pageSize: response.data.length,
+        total: response.data.length
+      });
       setBikeInventoryLoading(false);
     } catch (err: any) {
       console.error('Error fetching bike inventory:', err);
@@ -10495,8 +10489,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: customersPagination.pageSize.toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all customers at once
         search: search
       });
       
@@ -10510,7 +10504,11 @@ export default function AdminDashboard() {
       const response = await res.json();
       
       setCustomers(response.data);
-      setCustomersPagination(response.pagination);
+      setCustomersPagination({
+        current: 1,
+        pageSize: response.data.length,
+        total: response.data.length
+      });
       setCustomersLoading(false);
     } catch (err: any) {
       setCustomersError("Failed to load customers: " + err.message);
@@ -10579,8 +10577,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: page.toString(),
-        limit: salesTransactionsPagination.pageSize.toString(),
+        page: '1', // Always fetch page 1
+        limit: '10000', // Fetch all transactions at once
         search: search
       });
       
@@ -10638,7 +10636,11 @@ export default function AdminDashboard() {
       }));
       
       setSalesTransactions(transformedData);
-      setSalesTransactionsPagination(response.pagination);
+      setSalesTransactionsPagination({
+        current: 1,
+        pageSize: transformedData.length,
+        total: transformedData.length
+      });
       setSalesTransactionsLoading(false);
     } catch (err: any) {
       setSalesTransactionsError("Failed to load sales transactions: " + err.message);
@@ -13372,13 +13374,7 @@ export default function AdminDashboard() {
                   loading={accountDataLoading}
                   columns={accountDataColumns.filter(col => !col.hidden)}
                   rowKey="_id"
-                  pagination={{
-                    current: 1,
-                    pageSize: 50,
-                    total: getFilteredAccountData().length,
-                    showSizeChanger: false,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-                  }}
+                  pagination={false}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1500 }}
                 />
@@ -13834,14 +13830,7 @@ export default function AdminDashboard() {
                   loading={bikeInventoryLoading}
                   columns={bikeInventoryColumns}
                   rowKey="_id"
-                  pagination={{
-                    current: bikeInventoryPagination.current,
-                    pageSize: bikeInventoryPagination.pageSize,
-                    total: filteredBikeInventory.length,
-                    onChange: (page) => setBikeInventoryPagination(prev => ({ ...prev, current: page })),
-                    showSizeChanger: true,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-                  }}
+                  pagination={false}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1500 }}
                 />
@@ -14120,13 +14109,7 @@ export default function AdminDashboard() {
                   loading={bankDepositsLoading}
                   columns={bankDepositColumns}
                   rowKey="_id"
-                  pagination={{
-                    current: 1,
-                    pageSize: 50,
-                    total: bankDeposits.length,
-                    showSizeChanger: false,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-                  }}
+                  pagination={false}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1200 }}
                 />
@@ -14406,43 +14389,6 @@ export default function AdminDashboard() {
                         }`}
                       >
                         Leasing via Other Company ({allAkrEasyCreditData.filter((item: any) => item.paymentMethod === 'Leasing via Other Company').length})
-                      </button>
-                    </div>
-                  </div>
-
-                  {/* Status Filter */}
-                  <div>
-                    <h3 className="text-sm font-medium text-gray-700 mb-2">Status</h3>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        onClick={() => setAkrEasyCreditFilter('unreleased')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          akrEasyCreditFilter === 'unreleased'
-                            ? 'bg-orange-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        Unreleased ({allAkrEasyCreditData.filter((item: any) => {
-                          if (item.paymentMethod === 'Full Payment') {
-                            return !item.chequeReleased;
-                          }
-                          return item.status === 'Pending';
-                        }).length})
-                      </button>
-                      <button
-                        onClick={() => setAkrEasyCreditFilter('released')}
-                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
-                          akrEasyCreditFilter === 'released'
-                            ? 'bg-green-600 text-white'
-                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-                        }`}
-                      >
-                        Released ({allAkrEasyCreditData.filter((item: any) => {
-                          if (item.paymentMethod === 'Full Payment') {
-                            return item.chequeReleased;
-                          }
-                          return item.status === 'Completed';
-                        }).length})
                       </button>
                     </div>
                   </div>
@@ -14756,13 +14702,7 @@ export default function AdminDashboard() {
                       )
                     }
                   ]}
-                  pagination={{
-                    current: akrEasyCreditPagination?.current || 1,
-                    pageSize: akrEasyCreditPagination?.pageSize || 10,
-                    total: akrEasyCreditPagination?.total || 0,
-                    onChange: (page) => setAkrEasyCreditPagination(prev => ({ ...prev, current: page })),
-                    showSizeChanger: false
-                  }}
+                  pagination={false}
                   rowKey="_id"
                   scroll={{ x: true }}
                 />
@@ -14858,13 +14798,7 @@ export default function AdminDashboard() {
                     }
                   ]}
                   rowKey="_id"
-                  pagination={{
-                    current: customersPagination.current,
-                    pageSize: customersPagination.pageSize,
-                    total: customersPagination.total,
-                    onChange: (page) => fetchCustomers(page, customersSearch),
-                    showSizeChanger: false
-                  }}
+                  pagination={false}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1200 }}
                 />
@@ -15235,13 +15169,7 @@ export default function AdminDashboard() {
                     }
                   ]}
                   rowKey="_id"
-                  pagination={{
-                    current: advancedCustomersPagination.current,
-                    pageSize: advancedCustomersPagination.pageSize,
-                    total: advancedCustomersPagination.total,
-                    onChange: (page) => fetchAdvancedCustomers(page, advancedCustomersSearch),
-                    showSizeChanger: false
-                  }}
+                  pagination={false}
                   className="rounded-xl overflow-hidden"
                   scroll={{ x: 1200 }}
                 />
@@ -15569,13 +15497,7 @@ export default function AdminDashboard() {
                     },
 
                   ]}
-                  pagination={{
-                    current: salesTransactionsPagination?.current || 1,
-                    pageSize: salesTransactionsPagination?.pageSize || 50,
-                    total: salesTransactionsPagination?.total || 0,
-                    onChange: (page) => fetchSalesTransactions(page, salesTransactionsSearch),
-                    showSizeChanger: false
-                  }}
+                  pagination={false}
                   rowKey="_id"
                   loading={salesTransactionsLoading}
                   scroll={{ x: true }}
@@ -16225,15 +16147,7 @@ export default function AdminDashboard() {
                     },
 
                   ]}
-                  pagination={{
-                    current: installmentPagination?.current || 1,
-                    pageSize: installmentPagination?.pageSize || 50,
-                    total: installmentPagination?.total || 0,
-                    onChange: (page) => fetchInstallmentPlans(page, installmentSearch, installmentStatusFilter, installmentMonthFilter),
-                    showSizeChanger: true,
-                    showQuickJumper: true,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-                  }}
+                  pagination={false}
                 />
                   </div>
                 </div>
@@ -17498,15 +17412,7 @@ export default function AdminDashboard() {
                       )
                     }
                   ]}
-                  pagination={{
-                    current: vehicleAllocationCouponsPagination.current,
-                    pageSize: vehicleAllocationCouponsPagination.pageSize,
-                    total: vehicleAllocationCouponsPagination.total,
-                    onChange: (page) => fetchVehicleAllocationCoupons(page, vehicleAllocationCouponsSearch),
-                    showSizeChanger: true,
-                    showQuickJumper: true,
-                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
-                  }}
+                  pagination={false}
                     />
                   </div>
                 </div>
@@ -19896,15 +19802,7 @@ export default function AdminDashboard() {
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div className="text-sm text-gray-500">
-                    {(() => {
-                      const unreleasedCheques = akrEasyCreditData.filter((coupon: any) => {
-                        // Only show transactions where balance needs cheque release
-                        const isFullPayment = coupon.paymentMethod === 'Full Payment' && !coupon.chequeReleased && coupon.totalAmount > 0;
-                        const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR' && coupon.balance > 0;
-                        return isFullPayment || isAKRLeasing;
-                      });
-                      return `Total: ${unreleasedCheques.length} reminders`;
-                    })()}
+                    {chequeReleaseRemindersLoading ? 'Loading...' : `Total: ${chequeReleaseReminders.filter((r: any) => r.status === 'pending').length} reminders`}
                   </div>
                   <Button 
                     type="primary" 
@@ -19917,16 +19815,10 @@ export default function AdminDashboard() {
                 
                 <div className="space-y-4">
                   {(() => {
-                    // Get unreleased cheques from AKR Easy Credit data
-                    const unreleasedCheques = akrEasyCreditData.filter((coupon: any) => {
-                      // Only show transactions where balance needs cheque release
-                      const isFullPayment = coupon.paymentMethod === 'Full Payment' && !coupon.chequeReleased && coupon.totalAmount > 0;
-                      const isAKRLeasing = coupon.paymentMethod === 'Leasing via AKR' && coupon.balance > 0;
-                      
-                      return isFullPayment || isAKRLeasing;
-                    });
+                    // Use the chequeReleaseReminders data from the API
+                    const pendingReminders = chequeReleaseReminders.filter((reminder: any) => reminder.status === 'pending');
 
-                    if (unreleasedCheques.length === 0) {
+                    if (pendingReminders.length === 0) {
                       return (
                     <div className="text-center py-12 text-gray-500">
                       <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -19938,93 +19830,55 @@ export default function AdminDashboard() {
                       );
                     }
 
-                    return unreleasedCheques.map((coupon: any) => {
-                      const today = new Date();
-                      const purchaseDate = new Date(coupon.dateOfPurchase);
-                      const daysSincePurchase = Math.floor((today.getTime() - purchaseDate.getTime()) / (1000 * 60 * 60 * 24));
+                    return pendingReminders.map((reminder: any) => {
+                      const isOverdue = reminder.isOverdue;
+                      const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
+                      const daysUntilRelease = reminder.daysUntilRelease || 0;
                       
-                      // Calculate cheque amount based on payment method
-                      let chequeAmount = 0;
-                      let chequeType = '';
-                      
-                      if (coupon.paymentMethod === 'Full Payment') {
-                        chequeAmount = coupon.totalAmount;
-                        chequeType = 'Full Payment (2 Cheques)';
-                      } else if (coupon.paymentMethod === 'Leasing via AKR') {
-                        // For AKR leasing, show balance amount (not down payment)
-                        chequeAmount = coupon.balance;
-                        chequeType = 'Balance Payment';
-                      }
-                      
-                      // Determine status based on days since purchase
-                      const isOverdue = daysSincePurchase > 7; // Consider overdue after 7 days
-                      const isDueSoon = daysSincePurchase > 3; // Due soon after 3 days
-                        
-                        return (
-                        <div key={coupon._id} className={`p-6 rounded-lg border-l-4 ${
-                          isOverdue ? 'border-red-500 bg-red-50' : isDueSoon ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
-                          }`}>
-                            <div className="flex justify-between items-start">
-                              <div className="flex-1">
-                                <div className="flex items-center gap-3 mb-3">
-                                <div className="font-semibold text-lg text-gray-900">{coupon.fullName}</div>
-                                  <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
-                                  isOverdue ? 'bg-red-100 text-red-800' : isDueSoon ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
-                                  }`}>
-                                  {isOverdue ? 'OVERDUE' : isDueSoon ? 'DUE SOON' : 'UPCOMING'}
-                                  </span>
+                      return (
+                        <div key={reminder._id} className={`p-6 rounded-lg border-l-4 ${
+                          isOverdue ? 'border-red-500 bg-red-50' : daysUntilRelease <= 1 ? 'border-orange-500 bg-orange-50' : 'border-blue-500 bg-blue-50'
+                        }`}>
+                          <div className="flex justify-between items-start">
+                            <div className="flex-1">
+                              <div className="flex items-center gap-3 mb-3">
+                                <div className="font-semibold text-lg text-gray-900">{reminder.fullName}</div>
+                                <span className={`inline-flex px-3 py-1 text-sm font-semibold rounded-full ${
+                                  isOverdue ? 'bg-red-100 text-red-800' : daysUntilRelease <= 1 ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'
+                                }`}>
+                                  {isOverdue ? 'OVERDUE' : daysUntilRelease <= 1 ? 'DUE SOON' : 'UPCOMING'}
+                                </span>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                                <div>
+                                  <div className="text-sm text-gray-600">Vehicle</div>
+                                  <div className="font-medium">{reminder.vehicleType}</div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
-                                  <div>
-                                    <div className="text-sm text-gray-600">Vehicle</div>
-                                  <div className="font-medium">{coupon.vehicleType}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-sm text-gray-600">Coupon ID</div>
-                                  <div className="font-medium">{coupon.couponId}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-sm text-gray-600">Contact</div>
-                                  <div className="font-medium">{coupon.contactNo || 'N/A'}</div>
-                                  </div>
-                                  <div>
-                                  <div className="text-sm text-gray-600">Payment Method</div>
-                                  <div className="font-medium">{coupon.paymentMethod}</div>
-                                  </div>
+                                <div>
+                                  <div className="text-sm text-gray-600">Coupon ID</div>
+                                  <div className="font-medium">{reminder.couponId}</div>
                                 </div>
-                                <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
-                                  <div>
-                                  <div className="text-gray-600">Days since purchase</div>
-                                  <div className="font-medium">{daysSincePurchase} day{daysSincePurchase !== 1 ? 's' : ''}</div>
-                                  </div>
-                                  <div>
-                                  <div className="text-gray-600">Purchase date</div>
-                                  <div className="font-medium">{purchaseDate.toLocaleDateString()}</div>
-                                  </div>
-                                  <div>
-                                    <div className="text-gray-600">Status</div>
-                                    <div className="font-medium">
-                                      {isOverdue ? 
-                                      `${daysSincePurchase - 7} day${(daysSincePurchase - 7) !== 1 ? 's' : ''} overdue` : 
-                                      isDueSoon ? 'Due soon' : 
-                                      'Upcoming'
-                                      }
-                                    </div>
-                                  </div>
+                                <div>
+                                  <div className="text-sm text-gray-600">Contact</div>
+                                  <div className="font-medium">{reminder.contactNo || 'N/A'}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-600">Down Payment</div>
+                                  <div className="font-medium">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-600">Days Since Payment</div>
+                                  <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
+                                </div>
+                                <div>
+                                  <div className="text-sm text-gray-600">Days Until Release</div>
+                                  <div className="font-medium">{daysUntilRelease} day{daysUntilRelease !== 1 ? 's' : ''}</div>
                                 </div>
                               </div>
-                              <div className="text-right ml-4">
-                                <div className="text-sm text-gray-600 mb-2">To: David Peries</div>
-                                <div className="text-xs text-gray-500 mb-3">
-                                  {chequeType}: LKR {chequeAmount.toLocaleString()}
-                                </div>
-                                <div className="text-xs text-blue-600 font-medium">
-                                  Go to AKR Easy Credit tab to release
-                                    </div>
-                                  </div>
-                                </div>
-                              </div>
-                            );
+                            </div>
+                          </div>
+                        </div>
+                      );
                     });
                   })()}
                 </div>

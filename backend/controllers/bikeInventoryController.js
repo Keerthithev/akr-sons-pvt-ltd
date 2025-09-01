@@ -6,9 +6,10 @@ const VehicleAllocationCoupon = require('../models/VehicleAllocationCoupon');
 const getAllBikeInventory = async (req, res) => {
   try {
     const page = parseInt(req.query.page) || 1;
-    const limit = parseInt(req.query.limit) || 1000;
+    const limit = parseInt(req.query.limit) || 20;
     const search = req.query.search || '';
     const dateFilter = req.query.dateFilter || '';
+    const statusFilter = req.query.statusFilter || '';
     const skip = (page - 1) * limit;
 
     let query = {};
@@ -65,6 +66,11 @@ const getAllBikeInventory = async (req, res) => {
       if (startDate && endDate) {
         query.date = { $gte: startDate, $lt: endDate };
       }
+    }
+
+    // Add status filtering
+    if (statusFilter) {
+      query.status = statusFilter;
     }
 
     const [bikes, total] = await Promise.all([
