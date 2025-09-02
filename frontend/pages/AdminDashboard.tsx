@@ -1679,8 +1679,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all account data at once
+        page: page.toString(),
+        limit: accountDataPagination.pageSize.toString(),
         search: search
       });
       
@@ -1696,11 +1696,7 @@ export default function AdminDashboard() {
       
       setAllAccountData(data.data);
       setAccountData(data.data);
-      setAccountDataPagination({
-        current: 1,
-        pageSize: data.data.length,
-        total: data.data.length
-      });
+      setAccountDataPagination(data.pagination);
       setAccountDataLoading(false);
     } catch (err: any) {
       setAccountDataError("Failed to load account data: " + err.message);
@@ -1769,8 +1765,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all installment plans at once
+        page: page.toString(),
+        limit: installmentPagination.pageSize.toString(),
         search: search
       });
       
@@ -1836,8 +1832,8 @@ export default function AdminDashboard() {
       
       setInstallmentPlans(transformedData);
       setInstallmentPagination({
-        current: 1,
-        pageSize: transformedData.length,
+        current: parseInt(page),
+        pageSize: installmentPagination.pageSize,
         total: transformedData.length
       });
       setInstallmentLoading(false);
@@ -3172,7 +3168,7 @@ export default function AdminDashboard() {
       fetchAdditionalInfoStats();
     }
     if (akrTab === 'vehicleAllocationCoupons') {
-      fetchVehicleAllocationCoupons();
+      fetchVehicleAllocationCoupons(1, '', '', '', 10000); // Load all records without pagination
       fetchVehicleAllocationCouponsStats();
       fetchVehicleAllocationCouponDropdownData();
     }
@@ -3187,6 +3183,8 @@ export default function AdminDashboard() {
       fetchAccountDataStats(); // Load account data stats for overview
       fetchBankDepositsStats(); // Load bank deposits stats for overview
       fetchCustomers(); // Load customers for overview
+      fetchAdvancedCustomers(); // Load advance customers for overview
+      fetchAdvancedCustomerStats(); // Load advance customer stats for overview
       fetchPreBookings(); // Load pre-bookings for overview
       fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders and installments
       fetchAkrEasyCreditStats(); // Load AKR Easy Credit stats
@@ -3218,12 +3216,12 @@ export default function AdminDashboard() {
       current: 1,
       total: filteredData.length
     }));
-  }, [akrEasyCreditPaymentMethodFilter, akrEasyCreditSearch, allAkrEasyCreditData]);
+  }, [akrEasyCreditFilter, akrEasyCreditPaymentMethodFilter, akrEasyCreditSearch, allAkrEasyCreditData]);
 
   // Load Advanced Customer data when tab is selected
   useEffect(() => {
     if (akrTab === 'advancedCustomer') {
-      fetchAdvancedCustomers();
+      fetchAdvancedCustomers(1, '', '', '', 10000); // Load all records without pagination
       fetchAdvancedCustomerStats();
       fetchAvailableBikeModels();
       fetchAvailableBikeColors();
@@ -3238,6 +3236,9 @@ export default function AdminDashboard() {
     fetchVehicleAllocationCouponsStats();
     fetchAccountDataStats(); // Load account data stats on initial load
     fetchBankDepositsStats(); // Load bank deposits stats on initial load
+    fetchCustomers(); // Load customers on initial load
+    fetchAdvancedCustomers(); // Load advance customers on initial load
+    fetchAdvancedCustomerStats(); // Load advance customer stats on initial load
     fetchAkrEasyCredit(); // Load AKR Easy Credit data for reminders
     fetchDetailedStockInfo(); // Load detailed stock information for overview
     fetchBikeInventory(); // Load bike inventory for accurate stock calculation
@@ -3261,8 +3262,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all coupons at once
+        page: page.toString(),
+        limit: (limit || vehicleAllocationCouponsPagination.pageSize).toString(),
         search: search,
         status: status,
         paymentType: paymentType
@@ -3280,9 +3281,9 @@ export default function AdminDashboard() {
       
       setVehicleAllocationCoupons(data.vehicleAllocationCoupons);
       setVehicleAllocationCouponsPagination({
-        current: 1,
-        pageSize: data.vehicleAllocationCoupons.length,
-        total: data.vehicleAllocationCoupons.length
+        current: parseInt(page),
+        pageSize: vehicleAllocationCouponsPagination.pageSize,
+        total: data.total
       });
       setVehicleAllocationCouponsLoading(false);
     } catch (err: any) {
@@ -3424,7 +3425,7 @@ export default function AdminDashboard() {
       }
 
       // Fetch all data for client-side filtering
-      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=1&limit=10000`; // Fetch all records
+      let url = `${import.meta.env.VITE_API_URL}/api/vehicle-allocation-coupons?page=1&limit=1000`;
       
       if (search) url += `&search=${encodeURIComponent(search)}`;
 
@@ -3471,7 +3472,7 @@ export default function AdminDashboard() {
       setAkrEasyCreditData(filteredData);
       setAkrEasyCreditPagination({
         current: 1,
-        pageSize: filteredData.length,
+        pageSize: 10,
         total: filteredData.length
       });
     } catch (err: any) {
@@ -3493,6 +3494,23 @@ export default function AdminDashboard() {
       );
     }
 
+    // Apply status filter
+    if (akrEasyCreditFilter === 'released') {
+      filteredData = filteredData.filter((coupon: any) => {
+        if (coupon.paymentMethod === 'Full Payment') {
+          return coupon.chequeReleased; // Released if cheque is released
+        }
+        return coupon.status === 'Completed'; // For leasing, use original status
+      });
+    } else if (akrEasyCreditFilter === 'unreleased') {
+      filteredData = filteredData.filter((coupon: any) => {
+        if (coupon.paymentMethod === 'Full Payment') {
+          return !coupon.chequeReleased; // Unreleased if cheque is not released
+        }
+        return coupon.status === 'Pending'; // For leasing, use original status
+      });
+    }
+
     // Apply search filter
     if (akrEasyCreditSearch) {
       filteredData = filteredData.filter((coupon: any) => 
@@ -3507,7 +3525,9 @@ export default function AdminDashboard() {
 
   const getPaginatedAkrEasyCreditData = () => {
     const filteredData = getFilteredAkrEasyCreditData();
-    return filteredData; // Return all data without pagination
+    const startIndex = (akrEasyCreditPagination.current - 1) * akrEasyCreditPagination.pageSize;
+    const endIndex = startIndex + akrEasyCreditPagination.pageSize;
+    return filteredData.slice(startIndex, endIndex);
   };
 
   // Advanced Customer API functions
@@ -3520,7 +3540,7 @@ export default function AdminDashboard() {
         return;
       }
 
-      let url = `${import.meta.env.VITE_API_URL}/api/advanced-customers?page=1&limit=10000`; // Always fetch page 1, all records
+      let url = `${import.meta.env.VITE_API_URL}/api/advanced-customers?page=${page}&limit=10`;
       
       if (search) url += `&search=${encodeURIComponent(search)}`;
       if (status) url += `&status=${encodeURIComponent(status)}`;
@@ -3539,9 +3559,9 @@ export default function AdminDashboard() {
       
       setAdvancedCustomers(data.advancedCustomers);
       setAdvancedCustomersPagination({
-        current: 1,
-        pageSize: data.advancedCustomers.length,
-        total: data.advancedCustomers.length
+        current: data.pagination.current,
+        pageSize: data.pagination.pageSize,
+        total: data.pagination.total
       });
     } catch (err: any) {
       console.error("Failed to load advanced customers:", err.message);
@@ -7502,8 +7522,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all deposits at once
+        page: '1',
+        limit: '1000', // Fetch all data for filtering
         search: search
       });
       
@@ -7518,11 +7538,7 @@ export default function AdminDashboard() {
       
       setAllBankDeposits(response.data);
       setBankDeposits(response.data);
-      setBankDepositsPagination({
-        current: 1,
-        pageSize: response.data.length,
-        total: response.data.length
-      });
+      setBankDepositsPagination(response.pagination);
       setBankDepositsLoading(false);
     } catch (err: any) {
       setBankDepositsError("Failed to load bank deposits: " + err.message);
@@ -10281,12 +10297,6 @@ export default function AdminDashboard() {
       sorter: (a: any, b: any) => new Date(a.date).getTime() - new Date(b.date).getTime()
     },
     { 
-      title: 'Bike ID', 
-      dataIndex: 'bikeId', 
-      key: 'bikeId',
-      render: (id: string) => id || '-'
-    },
-    { 
       title: 'Branch', 
       dataIndex: 'branch', 
       key: 'branch',
@@ -10489,8 +10499,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all customers at once
+        page: page.toString(),
+        limit: customersPagination.pageSize.toString(),
         search: search
       });
       
@@ -10504,11 +10514,7 @@ export default function AdminDashboard() {
       const response = await res.json();
       
       setCustomers(response.data);
-      setCustomersPagination({
-        current: 1,
-        pageSize: response.data.length,
-        total: response.data.length
-      });
+      setCustomersPagination(response.pagination);
       setCustomersLoading(false);
     } catch (err: any) {
       setCustomersError("Failed to load customers: " + err.message);
@@ -10561,10 +10567,10 @@ export default function AdminDashboard() {
   // Load data when tabs are selected
   useEffect(() => {
     if (akrTab === 'customers') {
-      fetchCustomers();
+      fetchCustomers(1, '', 10000); // Load all records without pagination
       fetchCustomersStats();
     } else if (akrTab === 'salesTransactions') {
-      fetchSalesTransactions();
+      fetchSalesTransactions(1, '', 10000); // Load all records without pagination
       fetchSalesTransactionsStats();
     } else if (akrTab === 'installmentPlans') {
       fetchInstallmentPlans();
@@ -10577,8 +10583,8 @@ export default function AdminDashboard() {
     try {
       const token = localStorage.getItem('adminToken');
       const params = new URLSearchParams({
-        page: '1', // Always fetch page 1
-        limit: '10000', // Fetch all transactions at once
+        page: page.toString(),
+        limit: salesTransactionsPagination.pageSize.toString(),
         search: search
       });
       
@@ -10636,11 +10642,7 @@ export default function AdminDashboard() {
       }));
       
       setSalesTransactions(transformedData);
-      setSalesTransactionsPagination({
-        current: 1,
-        pageSize: transformedData.length,
-        total: transformedData.length
-      });
+      setSalesTransactionsPagination(response.pagination);
       setSalesTransactionsLoading(false);
     } catch (err: any) {
       setSalesTransactionsError("Failed to load sales transactions: " + err.message);
@@ -10679,7 +10681,7 @@ export default function AdminDashboard() {
   // Load sales transactions when tab is selected
   useEffect(() => {
     if (akrTab === 'salesTransactions') {
-      fetchSalesTransactions();
+      fetchSalesTransactions(1, '', 10000); // Load all records without pagination
       fetchSalesTransactionsStats();
     }
   }, [akrTab]);
@@ -13374,7 +13376,13 @@ export default function AdminDashboard() {
                   loading={accountDataLoading}
                   columns={accountDataColumns.filter(col => !col.hidden)}
                   rowKey="_id"
-                  pagination={false}
+                  pagination={{
+                    current: 1,
+                    pageSize: 50,
+                    total: getFilteredAccountData().length,
+                    showSizeChanger: false,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
+                  }}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1500 }}
                 />
@@ -13710,32 +13718,234 @@ export default function AdminDashboard() {
             <div className="col-span-full">
               <h2 className="text-2xl font-bold mb-4">Bike Inventory Management</h2>
               
-              {/* Statistics Cards */}
-              <div className="grid grid-cols-1 md:grid-cols-6 gap-4 mb-6">
+              {/* Stock Aging Statistics */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4">Stock Aging Analysis</h3>
+                <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                  {/* New Stocks (Most Recent Update Date) */}
+                  <div className="bg-white rounded-lg shadow p-4">
+                    <h4 className="text-md font-semibold text-green-600 mb-3">🆕 New Stocks (Most Recent Update)</h4>
+                    {(() => {
+                      const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                      if (availableBikes.length === 0) {
+                        return (
+                          <div className="text-center py-4 text-gray-500">
+                            No available bikes found
+                          </div>
+                        );
+                      }
+
+                      // Find the most recent stock update date
+                      const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                      const mostRecentDate = new Date(sortedByDate[0].date);
+                      const today = new Date();
+                      
+                      // Get bikes with the most recent update date
+                      const newStocks = availableBikes
+                        .filter((bike: any) => new Date(bike.date).getTime() === mostRecentDate.getTime())
+                        .reduce((acc: any, bike: any) => {
+                          const model = bike.model || 'Unknown Model';
+                          const color = bike.color || 'Unknown Color';
+                          const daysOld = Math.floor((today.getTime() - new Date(bike.date).getTime()) / (1000 * 60 * 60 * 24));
+                          
+                          if (!acc[model]) {
+                            acc[model] = {};
+                          }
+                          if (!acc[model][color]) {
+                            acc[model][color] = [];
+                          }
+                          acc[model][color].push({ ...bike, daysOld });
+                          return acc;
+                        }, {});
+
+                      const newStockModels = Object.entries(newStocks)
+                        .map(([model, colors]: [string, any]) => ({
+                          model,
+                          colors,
+                          total: Object.values(colors).reduce((sum: any, bikes: any) => sum + bikes.length, 0)
+                        }))
+                        .sort((a, b) => b.total - a.total);
+
+                      if (newStockModels.length === 0) {
+                        return (
+                          <div className="text-center py-4 text-gray-500">
+                            No new stocks found
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="text-xs text-gray-500 mb-2">
+                            Latest Update: {mostRecentDate.toLocaleDateString()}
+                          </div>
+                          {newStockModels.map(({ model, colors, total }) => (
+                            <div key={model} className="border rounded p-3 bg-green-50">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium text-gray-800">{model}</span>
+                                <span className="text-sm font-bold text-green-600">{total}</span>
+                              </div>
+                              <div className="text-xs text-gray-600 space-y-1">
+                                {Object.entries(colors).map(([color, bikes]: [string, any]) => {
+                                  const avgDaysOld = Math.round(
+                                    bikes.reduce((sum: number, bike: any) => sum + bike.daysOld, 0) / bikes.length
+                                  );
+                                  return (
+                                    <div key={color} className="flex justify-between items-center">
+                                      <span className="capitalize">{color}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{bikes.length}</span>
+                                        <span className="text-green-500 text-xs">({avgDaysOld} days old)</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+
+                  {/* Old Stocks (Before Most Recent Update) */}
+                  <div className="bg-white rounded-lg shadow p-4">
+                    <h4 className="text-md font-semibold text-orange-600 mb-3">📦 Old Stocks (Before Latest Update)</h4>
+                    {(() => {
+                      const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                      if (availableBikes.length === 0) {
+                        return (
+                          <div className="text-center py-4 text-gray-500">
+                            No available bikes found
+                          </div>
+                        );
+                      }
+
+                      // Find the most recent stock update date
+                      const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                      const mostRecentDate = new Date(sortedByDate[0].date);
+                      const today = new Date();
+                      
+                      // Get bikes with dates before the most recent update
+                      const oldStocks = availableBikes
+                        .filter((bike: any) => new Date(bike.date).getTime() < mostRecentDate.getTime())
+                        .reduce((acc: any, bike: any) => {
+                          const model = bike.model || 'Unknown Model';
+                          const color = bike.color || 'Unknown Color';
+                          const daysOld = Math.floor((today.getTime() - new Date(bike.date).getTime()) / (1000 * 60 * 60 * 24));
+                          
+                          if (!acc[model]) {
+                            acc[model] = {};
+                          }
+                          if (!acc[model][color]) {
+                            acc[model][color] = [];
+                          }
+                          acc[model][color].push({ ...bike, daysOld });
+                          return acc;
+                        }, {});
+
+                      const oldStockModels = Object.entries(oldStocks)
+                        .map(([model, colors]: [string, any]) => ({
+                          model,
+                          colors,
+                          total: Object.values(colors).reduce((sum: any, bikes: any) => sum + bikes.length, 0)
+                        }))
+                        .sort((a, b) => b.total - a.total);
+
+                      if (oldStockModels.length === 0) {
+                        return (
+                          <div className="text-center py-4 text-gray-500">
+                            No old stocks found
+                          </div>
+                        );
+                      }
+
+                      return (
+                        <div className="space-y-3">
+                          <div className="text-xs text-gray-500 mb-2">
+                            Latest Update: {mostRecentDate.toLocaleDateString()}
+                          </div>
+                          {oldStockModels.map(({ model, colors, total }) => (
+                            <div key={model} className="border rounded p-3 bg-orange-50">
+                              <div className="flex justify-between items-center mb-2">
+                                <span className="font-medium text-gray-800">{model}</span>
+                                <span className="text-sm font-bold text-orange-600">{total}</span>
+                              </div>
+                              <div className="text-xs text-gray-600 space-y-1">
+                                {Object.entries(colors).map(([color, bikes]: [string, any]) => {
+                                  const avgDaysOld = Math.round(
+                                    bikes.reduce((sum: number, bike: any) => sum + bike.daysOld, 0) / bikes.length
+                                  );
+                                  return (
+                                    <div key={color} className="flex justify-between items-center">
+                                      <span className="capitalize">{color}</span>
+                                      <div className="flex items-center gap-2">
+                                        <span className="font-medium">{bikes.length}</span>
+                                        <span className="text-orange-500 text-xs">({avgDaysOld} days old)</span>
+                                      </div>
+                                    </div>
+                                  );
+                                })}
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      );
+                    })()}
+                  </div>
+                </div>
+              </div>
+
+              {/* Stock Update Summary */}
+              <div className="mb-6">
+                <h3 className="text-lg font-semibold mb-4">Stock Update Summary</h3>
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  {(() => {
+                    const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                    const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                    
+                    if (sortedByDate.length === 0) {
+                      return (
+                        <div className="col-span-full text-center py-4 text-gray-500">
+                          No stock data available
+                        </div>
+                      );
+                    }
+
+                    const latestUpdate = sortedByDate[0];
+                    const latestDate = new Date(latestUpdate.date);
+                    const today = new Date();
+                    const daysSinceUpdate = Math.floor((today.getTime() - latestDate.getTime()) / (1000 * 60 * 60 * 24));
+                    
+                    const newStocks = availableBikes.filter((bike: any) => new Date(bike.date).getTime() === latestDate.getTime()).length;
+                    const oldStocks = availableBikes.filter((bike: any) => new Date(bike.date).getTime() < latestDate.getTime()).length;
+
+                    return (
+                      <>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{bikeInventoryStats.newBikesLast30Days || 0}</div>
-                  <div className="text-sm text-gray-600">New Bikes (Last 30 Days)</div>
+                          <div className="text-lg font-bold text-blue-600">{latestDate.toLocaleDateString()}</div>
+                          <div className="text-sm text-gray-600">Latest Stock Update</div>
+                          <div className="text-xs text-gray-400 mt-1">{daysSinceUpdate} days ago</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-blue-600">{bikeInventoryStats.newBikesLast7Days || 0}</div>
-                  <div className="text-sm text-gray-600">New Bikes (Last 7 Days)</div>
+                          <div className="text-lg font-bold text-green-600">{newStocks}</div>
+                          <div className="text-sm text-gray-600">New Stocks (Latest Date)</div>
+                          <div className="text-xs text-gray-400 mt-1">Fresh inventory</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-purple-600">{bikeInventoryStats.newBikesToday || 0}</div>
-                  <div className="text-sm text-gray-600">New Bikes (Today)</div>
+                          <div className="text-lg font-bold text-orange-600">{oldStocks}</div>
+                          <div className="text-sm text-gray-600">Old Stocks (Before Latest)</div>
+                          <div className="text-xs text-gray-400 mt-1">Needs attention</div>
                 </Card>
                 <Card className="text-center">
-                  <div className="text-2xl font-bold text-green-600">{bikeInventoryStats.bikesIn || 0}</div>
-                  <div className="text-sm text-gray-600">Bikes IN (Available)</div>
+                          <div className="text-lg font-bold text-purple-600">{availableBikes.length}</div>
+                          <div className="text-sm text-gray-600">Total Available</div>
+                          <div className="text-xs text-gray-400 mt-1">All stocks</div>
                 </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-red-600">{bikeInventoryStats.bikesOut || 0}</div>
-                  <div className="text-sm text-gray-600">Bikes OUT (Sold/Allocated)</div>
-                </Card>
-                <Card className="text-center">
-                  <div className="text-2xl font-bold text-orange-600">{bikeInventoryStats.totalBikes || 0}</div>
-                  <div className="text-sm text-gray-600">Total Bikes in Inventory</div>
-                </Card>
+                      </>
+                    );
+                  })()}
+                </div>
               </div>
 
 
@@ -14109,7 +14319,13 @@ export default function AdminDashboard() {
                   loading={bankDepositsLoading}
                   columns={bankDepositColumns}
                   rowKey="_id"
-                  pagination={false}
+                  pagination={{
+                    current: 1,
+                    pageSize: 50,
+                    total: bankDeposits.length,
+                    showSizeChanger: false,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
+                  }}
                   className="rounded-xl overflow-hidden shadow-lg bg-white"
                   scroll={{ x: 1200 }}
                 />
@@ -14389,6 +14605,43 @@ export default function AdminDashboard() {
                         }`}
                       >
                         Leasing via Other Company ({allAkrEasyCreditData.filter((item: any) => item.paymentMethod === 'Leasing via Other Company').length})
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Status Filter */}
+                  <div>
+                    <h3 className="text-sm font-medium text-gray-700 mb-2">Status</h3>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        onClick={() => setAkrEasyCreditFilter('unreleased')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditFilter === 'unreleased'
+                            ? 'bg-orange-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Unreleased ({allAkrEasyCreditData.filter((item: any) => {
+                          if (item.paymentMethod === 'Full Payment') {
+                            return !item.chequeReleased;
+                          }
+                          return item.status === 'Pending';
+                        }).length})
+                      </button>
+                      <button
+                        onClick={() => setAkrEasyCreditFilter('released')}
+                        className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${
+                          akrEasyCreditFilter === 'released'
+                            ? 'bg-green-600 text-white'
+                            : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+                        }`}
+                      >
+                        Released ({allAkrEasyCreditData.filter((item: any) => {
+                          if (item.paymentMethod === 'Full Payment') {
+                            return item.chequeReleased;
+                          }
+                          return item.status === 'Completed';
+                        }).length})
                       </button>
                     </div>
                   </div>
@@ -14702,7 +14955,13 @@ export default function AdminDashboard() {
                       )
                     }
                   ]}
-                  pagination={false}
+                  pagination={{
+                    current: akrEasyCreditPagination?.current || 1,
+                    pageSize: akrEasyCreditPagination?.pageSize || 10,
+                    total: akrEasyCreditPagination?.total || 0,
+                    onChange: (page) => setAkrEasyCreditPagination(prev => ({ ...prev, current: page })),
+                    showSizeChanger: false
+                  }}
                   rowKey="_id"
                   scroll={{ x: true }}
                 />
@@ -16147,7 +16406,15 @@ export default function AdminDashboard() {
                     },
 
                   ]}
-                  pagination={false}
+                  pagination={{
+                    current: installmentPagination?.current || 1,
+                    pageSize: installmentPagination?.pageSize || 50,
+                    total: installmentPagination?.total || 0,
+                    onChange: (page) => fetchInstallmentPlans(page, installmentSearch, installmentStatusFilter, installmentMonthFilter),
+                    showSizeChanger: true,
+                    showQuickJumper: true,
+                    showTotal: (total, range) => `${range[0]}-${range[1]} of ${total} items`
+                  }}
                 />
                   </div>
                 </div>
@@ -18802,12 +19069,12 @@ export default function AdminDashboard() {
                 <div className="bg-gradient-to-br from-blue-500 to-blue-600 rounded-xl shadow-lg p-6 text-white">
                   <div className="flex items-center justify-between">
                     <div>
-                      <p className="text-blue-100 text-sm font-medium">Total Bookings</p>
-                      <p className="text-3xl font-bold">{preBookings.length}</p>
+                      <p className="text-blue-100 text-sm font-medium">Advance Customers</p>
+                      <p className="text-3xl font-bold">{advancedCustomers.length}</p>
                 </div>
                     <div className="bg-blue-400 bg-opacity-30 p-3 rounded-full">
                       <svg className="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5H7a2 2 0 00-2 2v10a2 2 0 002 2h8a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                        <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                       </svg>
               </div>
                 </div>
@@ -18982,7 +19249,7 @@ export default function AdminDashboard() {
                   </div>
                 </div>
 
-                {/* Detailed Stock Information by Model & Color */}
+                {/* Stock Aging Analysis */}
                 <div className="lg:col-span-2">
                   <div className="bg-white rounded-xl shadow-lg p-6">
                     <div className="flex justify-between items-center mb-4">
@@ -18990,7 +19257,7 @@ export default function AdminDashboard() {
                         <svg className="w-5 h-5 mr-2 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
-                        Available Stock by Model & Color
+                        Stock Aging Analysis
                       </h3>
                       <Button 
                         type="default" 
@@ -19014,59 +19281,181 @@ export default function AdminDashboard() {
                           <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2zm0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z" />
                         </svg>
                         <h3 className="text-xl font-semibold mb-2">No Stock Information</h3>
-                        <p>Add bikes to inventory to see detailed stock breakdown</p>
+                        <p>Add bikes to inventory to see stock aging analysis</p>
                       </div>
                     ) : (
-                      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 max-h-96 overflow-y-auto">
+                      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                        {/* New Stocks (Most Recent Update Date) */}
+                        <div className="bg-green-50 rounded-lg p-4">
+                          <h4 className="text-md font-semibold text-green-600 mb-3">🆕 New Stocks (Most Recent Update)</h4>
                         {(() => {
-                          // Calculate stock info from bike inventory data
-                          const stockByModel = {};
-                          
-                          bikeInventory
-                            .filter(bike => bike.status === 'in') // Only available bikes
-                            .forEach(bike => {
-                              if (!stockByModel[bike.model]) {
-                                stockByModel[bike.model] = {
-                                  model: bike.model,
-                                  totalStock: 0,
-                                  colors: {}
-                                };
-                              }
-                              
-                              stockByModel[bike.model].totalStock++;
-                              
-                              if (!stockByModel[bike.model].colors[bike.color]) {
-                                stockByModel[bike.model].colors[bike.color] = [];
-                              }
-                              stockByModel[bike.model].colors[bike.color].push(bike);
-                            });
-                          
-                          const stockArray = Object.values(stockByModel).sort((a: any, b: any) => b.totalStock - a.totalStock);
-                          
-                          return stockArray.map((model: any, index: number) => (
-                          <div key={index} className="bg-white border rounded-lg p-4 shadow-sm hover:shadow-md transition-shadow">
-                            <div className="flex justify-between items-start mb-3">
-                              <div className="flex-1">
-                                <h4 className="font-semibold text-gray-900 text-sm leading-tight">{model.model}</h4>
-                                  <p className="text-xs text-gray-500 mt-1">Available Stock</p>
-                              </div>
-                              <div className="text-right ml-2">
-                                <div className="text-lg font-bold text-blue-600">{model.totalStock}</div>
-                                  <div className="text-xs text-gray-500">Available</div>
-                              </div>
-                            </div>
+                            const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                            if (availableBikes.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-gray-500">
+                                  No available bikes found
+                                </div>
+                              );
+                            }
+
+                            // Find the most recent stock update date
+                            const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            const mostRecentDate = new Date(sortedByDate[0].date);
+                            const today = new Date();
                             
-                            <div className="space-y-2">
-                              {Object.entries(model.colors).map(([color, bikes]: [string, any]) => (
-                                <div key={color} className="flex justify-between items-center py-1 px-2 bg-gray-50 rounded text-xs">
-                                  <span className="font-medium text-gray-700">{color}</span>
-                                  <span className="font-bold text-green-600">{bikes.length}</span>
+                            // Get bikes with the most recent update date
+                            const newStocks = availableBikes
+                              .filter((bike: any) => new Date(bike.date).getTime() === mostRecentDate.getTime())
+                              .reduce((acc: any, bike: any) => {
+                                const model = bike.model || 'Unknown Model';
+                                const color = bike.color || 'Unknown Color';
+                                const daysOld = Math.floor((today.getTime() - new Date(bike.date).getTime()) / (1000 * 60 * 60 * 24));
+                                
+                                if (!acc[model]) {
+                                  acc[model] = {};
+                                }
+                                if (!acc[model][color]) {
+                                  acc[model][color] = [];
+                                }
+                                acc[model][color].push({ ...bike, daysOld });
+                                return acc;
+                              }, {});
+
+                            const newStockModels = Object.entries(newStocks)
+                              .map(([model, colors]: [string, any]) => ({
+                                model,
+                                colors,
+                                total: Object.values(colors).reduce((sum: any, bikes: any) => sum + bikes.length, 0)
+                              }))
+                              .sort((a, b) => b.total - a.total);
+
+                            if (newStockModels.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-gray-500">
+                                  No new stocks found
+                              </div>
+                              );
+                            }
+
+                            return (
+                              <div className="space-y-3">
+                                <div className="text-xs text-gray-500 mb-2">
+                                  Latest Update: {mostRecentDate.toLocaleDateString()}
+                              </div>
+                                {newStockModels.map(({ model, colors, total }) => (
+                                  <div key={model} className="border rounded p-3 bg-white">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="font-medium text-gray-800 text-sm">{model}</span>
+                                      <span className="text-sm font-bold text-green-600">{total}</span>
+                            </div>
+                                    <div className="text-xs text-gray-600 space-y-1">
+                                      {Object.entries(colors).map(([color, bikes]: [string, any]) => {
+                                        const avgDaysOld = Math.round(
+                                          bikes.reduce((sum: number, bike: any) => sum + bike.daysOld, 0) / bikes.length
+                                        );
+                                        return (
+                                          <div key={color} className="flex justify-between items-center">
+                                            <span className="capitalize">{color}</span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium">{bikes.length}</span>
+                                              <span className="text-green-500 text-xs">({avgDaysOld} days old)</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
                                 </div>
                               ))}
                             </div>
+                            );
+                          })()}
                           </div>
-                          ));
+
+                        {/* Old Stocks (Before Most Recent Update) */}
+                        <div className="bg-orange-50 rounded-lg p-4">
+                          <h4 className="text-md font-semibold text-orange-600 mb-3">📦 Old Stocks (Before Latest Update)</h4>
+                          {(() => {
+                            const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                            if (availableBikes.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-gray-500">
+                                  No available bikes found
+                                </div>
+                              );
+                            }
+
+                            // Find the most recent stock update date
+                            const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            const mostRecentDate = new Date(sortedByDate[0].date);
+                            const today = new Date();
+                            
+                            // Get bikes with dates before the most recent update
+                            const oldStocks = availableBikes
+                              .filter((bike: any) => new Date(bike.date).getTime() < mostRecentDate.getTime())
+                              .reduce((acc: any, bike: any) => {
+                                const model = bike.model || 'Unknown Model';
+                                const color = bike.color || 'Unknown Color';
+                                const daysOld = Math.floor((today.getTime() - new Date(bike.date).getTime()) / (1000 * 60 * 60 * 24));
+                                
+                                if (!acc[model]) {
+                                  acc[model] = {};
+                                }
+                                if (!acc[model][color]) {
+                                  acc[model][color] = [];
+                                }
+                                acc[model][color].push({ ...bike, daysOld });
+                                return acc;
+                              }, {});
+
+                            const oldStockModels = Object.entries(oldStocks)
+                              .map(([model, colors]: [string, any]) => ({
+                                model,
+                                colors,
+                                total: Object.values(colors).reduce((sum: any, bikes: any) => sum + bikes.length, 0)
+                              }))
+                              .sort((a, b) => b.total - a.total);
+
+                            if (oldStockModels.length === 0) {
+                              return (
+                                <div className="text-center py-4 text-gray-500">
+                                  No old stocks found
+                                </div>
+                              );
+                            }
+
+                            return (
+                              <div className="space-y-3">
+                                <div className="text-xs text-gray-500 mb-2">
+                                  Before: {mostRecentDate.toLocaleDateString()}
+                                </div>
+                                {oldStockModels.map(({ model, colors, total }) => (
+                                  <div key={model} className="border rounded p-3 bg-white">
+                                    <div className="flex justify-between items-center mb-2">
+                                      <span className="font-medium text-gray-800 text-sm">{model}</span>
+                                      <span className="text-sm font-bold text-orange-600">{total}</span>
+                                    </div>
+                                    <div className="text-xs text-gray-600 space-y-1">
+                                      {Object.entries(colors).map(([color, bikes]: [string, any]) => {
+                                        const avgDaysOld = Math.round(
+                                          bikes.reduce((sum: number, bike: any) => sum + bike.daysOld, 0) / bikes.length
+                                        );
+                                        return (
+                                          <div key={color} className="flex justify-between items-center">
+                                            <span className="capitalize">{color}</span>
+                                            <div className="flex items-center gap-2">
+                                              <span className="font-medium">{bikes.length}</span>
+                                              <span className="text-orange-500 text-xs">({avgDaysOld} days old)</span>
+                                            </div>
+                                          </div>
+                                        );
+                                      })}
+                                    </div>
+                                  </div>
+                                ))}
+                              </div>
+                            );
                         })()}
+                        </div>
                       </div>
                     )}
                     
@@ -19074,36 +19463,27 @@ export default function AdminDashboard() {
                       <div className="flex flex-wrap justify-center gap-6 text-sm">
                         <div className="flex items-center">
                           <div className="w-3 h-3 bg-green-500 rounded-full mr-2"></div>
-                          <span>Good Stock ({(() => {
-                            const stockByModel = {};
-                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
-                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
-                              stockByModel[bike.model]++;
-                            });
-                            return Object.values(stockByModel).filter(count => count > 2).length;
+                          <span>New Stocks ({(() => {
+                            const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                            if (availableBikes.length === 0) return 0;
+                            const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            const mostRecentDate = new Date(sortedByDate[0].date);
+                            return availableBikes.filter((bike: any) => new Date(bike.date).getTime() === mostRecentDate.getTime()).length;
                           })()})</span>
                         </div>
                         <div className="flex items-center">
-                          <div className="w-3 h-3 bg-yellow-500 rounded-full mr-2"></div>
-                          <span>Low Stock ({(() => {
-                            const stockByModel = {};
-                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
-                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
-                              stockByModel[bike.model]++;
-                            });
-                            return Object.values(stockByModel).filter(count => count > 0 && count <= 2).length;
+                          <div className="w-3 h-3 bg-orange-500 rounded-full mr-2"></div>
+                          <span>Old Stocks ({(() => {
+                            const availableBikes = bikeInventory.filter((bike: any) => bike.status === 'in');
+                            if (availableBikes.length === 0) return 0;
+                            const sortedByDate = availableBikes.sort((a: any, b: any) => new Date(b.date).getTime() - new Date(a.date).getTime());
+                            const mostRecentDate = new Date(sortedByDate[0].date);
+                            return availableBikes.filter((bike: any) => new Date(bike.date).getTime() < mostRecentDate.getTime()).length;
                           })()})</span>
                         </div>
                         <div className="flex items-center">
-                          <div className="w-3 h-3 bg-red-500 rounded-full mr-2"></div>
-                          <span>Out of Stock ({(() => {
-                            const stockByModel = {};
-                            bikeInventory.filter(bike => bike.status === 'in').forEach(bike => {
-                              if (!stockByModel[bike.model]) stockByModel[bike.model] = 0;
-                              stockByModel[bike.model]++;
-                            });
-                            return Object.values(stockByModel).filter(count => count === 0).length;
-                          })()})</span>
+                          <div className="w-3 h-3 bg-blue-500 rounded-full mr-2"></div>
+                          <span>Total Available ({bikeInventory.filter(bike => bike.status === 'in').length})</span>
                         </div>
                       </div>
                     </div>
@@ -19359,33 +19739,6 @@ export default function AdminDashboard() {
                       <div className="text-sm text-gray-500">
                         {chequeReleaseRemindersLoading ? 'Loading...' : `${chequeReleaseReminders.filter((r: any) => r.status === 'pending').length} pending`}
                       </div>
-                      <Button 
-                        type="link" 
-                        size="small" 
-                        onClick={() => {
-                          console.log('=== CHEQUE RELEASE REMINDERS DEBUG ===');
-                          console.log('Total Cheque Release Reminders:', chequeReleaseReminders.length);
-                          console.log('Loading State:', chequeReleaseRemindersLoading);
-                          console.log('All reminders:', chequeReleaseReminders);
-                          
-                          // Check each reminder
-                          chequeReleaseReminders.forEach((reminder: any, index: number) => {
-                            console.log(`Reminder ${index + 1}:`, {
-                              couponId: reminder.couponId,
-                              fullName: reminder.fullName,
-                              downPayment: reminder.downPayment,
-                              daysSinceDownPayment: reminder.daysSinceDownPayment,
-                              daysUntilRelease: reminder.daysUntilRelease,
-                              isOverdue: reminder.isOverdue,
-                              status: reminder.status,
-                              chequeReleaseDate: reminder.chequeReleaseDate
-                            });
-                          });
-                        }}
-                        className="text-orange-600 hover:text-orange-800"
-                      >
-                        Debug
-                      </Button>
                       <Button 
                         type="link" 
                         size="small" 
@@ -19802,7 +20155,7 @@ export default function AdminDashboard() {
               <div className="bg-white rounded-xl shadow-lg p-6">
                 <div className="flex justify-between items-center mb-6">
                   <div className="text-sm text-gray-500">
-                    {chequeReleaseRemindersLoading ? 'Loading...' : `Total: ${chequeReleaseReminders.filter((r: any) => r.status === 'pending').length} reminders`}
+                    {chequeReleaseRemindersLoading ? 'Loading...' : `Total: ${chequeReleaseReminders.length} reminders`}
                   </div>
                   <Button 
                     type="primary" 
@@ -19814,12 +20167,12 @@ export default function AdminDashboard() {
                 </div>
                 
                 <div className="space-y-4">
-                  {(() => {
-                    // Use the chequeReleaseReminders data from the API
-                    const pendingReminders = chequeReleaseReminders.filter((reminder: any) => reminder.status === 'pending');
-
-                    if (pendingReminders.length === 0) {
-                      return (
+                  {chequeReleaseRemindersLoading ? (
+                    <div className="text-center py-12">
+                      <Spin size="large" />
+                      <p className="text-gray-500 mt-2">Loading cheque release reminders...</p>
+                    </div>
+                  ) : chequeReleaseReminders.length === 0 ? (
                     <div className="text-center py-12 text-gray-500">
                       <svg className="w-16 h-16 mx-auto mb-4 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
@@ -19827,10 +20180,8 @@ export default function AdminDashboard() {
                       <h3 className="text-xl font-semibold mb-2">No Cheque Release Reminders</h3>
                       <p>All cheques are up to date</p>
                     </div>
-                      );
-                    }
-
-                    return pendingReminders.map((reminder: any) => {
+                  ) : (
+                    chequeReleaseReminders.map((reminder: any) => {
                       const isOverdue = reminder.isOverdue;
                       const daysSinceDownPayment = reminder.daysSinceDownPayment || 0;
                       const daysUntilRelease = reminder.daysUntilRelease || 0;
@@ -19866,21 +20217,42 @@ export default function AdminDashboard() {
                                   <div className="text-sm text-gray-600">Down Payment</div>
                                   <div className="font-medium">LKR {parseFloat(reminder.downPayment).toLocaleString()}</div>
                                 </div>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
                                 <div>
-                                  <div className="text-sm text-gray-600">Days Since Payment</div>
+                                  <div className="text-gray-600">Days since payment</div>
                                   <div className="font-medium">{daysSinceDownPayment} day{daysSinceDownPayment !== 1 ? 's' : ''}</div>
                                 </div>
                                 <div>
-                                  <div className="text-sm text-gray-600">Days Until Release</div>
-                                  <div className="font-medium">{daysUntilRelease} day{daysUntilRelease !== 1 ? 's' : ''}</div>
+                                  <div className="text-gray-600">Expected release</div>
+                                  <div className="font-medium">{reminder.chequeReleaseDate ? new Date(reminder.chequeReleaseDate).toLocaleDateString() : 'N/A'}</div>
                                 </div>
+                                <div>
+                                  <div className="text-gray-600">Status</div>
+                                  <div className="font-medium">{reminder.status}</div>
+                                </div>
+                              </div>
+                            </div>
+                            <div className="text-right">
+                              <div className={`font-bold ${
+                                isOverdue ? 'text-red-600' : daysUntilRelease <= 1 ? 'text-orange-600' : 'text-blue-600'
+                              }`}>
+                                {isOverdue ? 
+                                  `${reminder.daysOverdue} day${reminder.daysOverdue !== 1 ? 's' : ''} overdue` : 
+                                  daysUntilRelease === 0 ? 'Due today' : 
+                                  daysUntilRelease === 1 ? 'Due tomorrow' : 
+                                  `Due in ${daysUntilRelease} day${daysUntilRelease !== 1 ? 's' : ''}`
+                                }
+                              </div>
+                              <div className="text-xs text-gray-500 mt-1">
+                                To: David Peries
                               </div>
                             </div>
                           </div>
                         </div>
                       );
-                    });
-                  })()}
+                    })
+                  )}
                 </div>
               </div>
             </div>
